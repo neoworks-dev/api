@@ -24,7 +24,9 @@ import (
 	keyhandlers "github.com/neoworks/auth/handlers/keys"
 	linkpreviewhandlers "github.com/neoworks/auth/handlers/linkpreview"
 	mediahandlers "github.com/neoworks/auth/handlers/media"
+	molliehandlers "github.com/neoworks/auth/handlers/mollie"
 	"github.com/neoworks/auth/middleware"
+	"github.com/neoworks/auth/mollie"
 	"github.com/neoworks/auth/oauth"
 	"github.com/neoworks/auth/push"
 	"github.com/neoworks/auth/scheduler"
@@ -114,7 +116,8 @@ func main() {
 	mailer := email.NewSender(email.ConfigFromEnv())
 	dataEngine := dataplane.NewEngine(surreal)
 	embedder := embeddings.NewClient(embeddings.ConfigFromEnv())
-	resolver := resolvers.NewGqlResolver(surreal, mailer, pushSender, dataEngine, embedder)
+	mollieClient := mollie.NewClient(mollie.ConfigFromEnv())
+	resolver := resolvers.NewGqlResolver(surreal, mailer, pushSender, dataEngine, embedder, mollieClient)
 
 	// Provision the OpenSchema public registry's client database + seed its
 	// catalog (idempotent). Non-fatal: a transient DB hiccup must not block boot.
@@ -146,6 +149,10 @@ func main() {
 	// Key management — public endpoints (no auth)
 	keysHandler := keyhandlers.NewHandler(surreal, redis)
 	keysHandler.RegisterPublic(router)
+
+	// Mollie payment webhook — public (Mollie calls it server-to-server; the
+	// handler authenticates by fetching the referenced payment from Mollie).
+	molliehandlers.NewHandler(surreal, mollieClient).RegisterPublic(router)
 
 	// Per-database data plane: schema introspection is public; data operations
 	// authenticate inside the handler (bearer + tenant match).

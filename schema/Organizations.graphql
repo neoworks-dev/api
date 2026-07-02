@@ -22,6 +22,20 @@ type OrgInvite {
   expires_at: String!
 }
 
+"""Result of starting Mollie payment-method setup for an organization."""
+type PaymentSetup {
+  """Hosted Mollie checkout the caller must be redirected to."""
+  checkout_url: String!
+}
+
+"""An organization's billing / payment-method state."""
+type OrgBillingStatus {
+  """One of none, pending, valid, invalid."""
+  status: String!
+  """True once a reusable payment mandate has been captured."""
+  has_payment_method: Boolean!
+}
+
 input CreateOrganizationInput {
   name: String!
   """Used as the organization token in scopes (e.g. "org_123"). Must be unique."""
@@ -44,6 +58,8 @@ extend type Query {
   organizationMembers(id: ID!): [OrganizationMember!]!
   """Pending invitations for an organization. Caller must be an owner or admin."""
   organizationInvites(id: ID!): [OrgInvite!]!
+  """Billing / payment-method state for an organization. Caller must be a member."""
+  orgBillingStatus(organizationId: ID!): OrgBillingStatus!
 }
 
 extend type Mutation {
@@ -58,4 +74,7 @@ extend type Mutation {
   revokeOrgInvite(id: ID!): Boolean!
   """Accepts a pending invite addressed to the caller's email, joining the org."""
   acceptOrgInvite(token: String!): Organization!
+  """Starts Mollie payment-method setup for an organization and returns a
+     hosted checkout URL. Caller must be an owner or admin."""
+  createOrgPaymentSetup(organizationId: ID!): PaymentSetup!
 }

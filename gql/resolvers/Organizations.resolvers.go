@@ -277,6 +277,11 @@ func (r *mutationResolver) AcceptOrgInvite(ctx context.Context, token string) (*
 	return organizationToGQL(org), nil
 }
 
+// CreateOrgPaymentSetup is the resolver for the createOrgPaymentSetup field.
+func (r *mutationResolver) CreateOrgPaymentSetup(ctx context.Context, organizationID string) (*gql_model.PaymentSetup, error) {
+	return r.startOrgPayment(ctx, organizationID)
+}
+
 // MyOrganizations is the resolver for the myOrganizations field.
 func (r *queryResolver) MyOrganizations(ctx context.Context) ([]*gql_model.Organization, error) {
 	claim := middleware.ClaimFromContext(ctx)
@@ -378,4 +383,9 @@ func (r *queryResolver) OrganizationInvites(ctx context.Context, id string) ([]*
 		}
 	}
 	return out, nil
+}
+
+// OrgBillingStatus is the resolver for the orgBillingStatus field.
+func (r *queryResolver) OrgBillingStatus(ctx context.Context, organizationID string) (*gql_model.OrgBillingStatus, error) {
+	return r.loadOrgBillingStatus(ctx, organizationID)
 }

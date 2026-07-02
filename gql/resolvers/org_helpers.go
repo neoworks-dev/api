@@ -14,13 +14,15 @@ import (
 var errUnauthenticated = Public("unauthenticated")
 
 type dbOrganization struct {
-	ID           *models.RecordID `json:"id,omitempty"`
-	Name         string           `json:"name"`
-	Slug         string           `json:"slug"`
-	Description  *string          `json:"description,omitempty"`
-	LogoURL      *string          `json:"logo_url,omitempty"`
-	BillingEmail *string          `json:"billing_email,omitempty"`
-	CreatedAt    time.Time        `json:"created_at"`
+	ID                  *models.RecordID `json:"id,omitempty"`
+	Name                string           `json:"name"`
+	Slug                string           `json:"slug"`
+	Description         *string          `json:"description,omitempty"`
+	LogoURL             *string          `json:"logo_url,omitempty"`
+	BillingEmail        *string          `json:"billing_email,omitempty"`
+	MollieCustomerID    *string          `json:"mollie_customer_id,omitempty"`
+	MollieMandateStatus *string          `json:"mollie_mandate_status,omitempty"`
+	CreatedAt           time.Time        `json:"created_at"`
 }
 
 type dbMembership struct {

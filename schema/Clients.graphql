@@ -33,7 +33,8 @@ input CreateClientInput {
 }
 
 extend type Query {
-  clients(limit: Int, offset: Int): [OAuthClient!]!
+  """Clients owned by an organization. Caller must be a member of it."""
+  clients(organizationId: ID!, limit: Int, offset: Int): [OAuthClient!]!
   oauthClient(id: ID!): OAuthClient
 }
 

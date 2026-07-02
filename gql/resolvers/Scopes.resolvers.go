@@ -118,3 +118,8 @@ func (r *queryResolver) MyScopeGrants(ctx context.Context) ([]*gql_model.ScopeGr
 	}
 	return out, nil
 }
+
+// OrganizationScopeEntities is the resolver for the organizationScopeEntities field.
+func (r *queryResolver) OrganizationScopeEntities(ctx context.Context, organizationID string) ([]*gql_model.ScopeEntity, error) {
+	return r.loadOrganizationScopeEntities(ctx, organizationID)
+}

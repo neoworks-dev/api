@@ -315,6 +315,7 @@ type ComplexityRoot struct {
 		CreateEvent                   func(childComplexity int, input gql_model.CreateEventInput) int
 		CreateMemory                  func(childComplexity int, input gql_model.CreateMemoryInput) int
 		CreateOrgInvite               func(childComplexity int, organizationID string, email string, role string) int
+		CreateOrgPaymentSetup         func(childComplexity int, organizationID string) int
 		CreateOrganization            func(childComplexity int, input gql_model.CreateOrganizationInput) int
 		DeleteAlbum                   func(childComplexity int, id string) int
 		DeleteCalendar                func(childComplexity int, id string) int
@@ -389,6 +390,11 @@ type ComplexityRoot struct {
 		Scopes          func(childComplexity int) int
 	}
 
+	OrgBillingStatus struct {
+		HasPaymentMethod func(childComplexity int) int
+		Status           func(childComplexity int) int
+	}
+
 	OrgInvite struct {
 		CreatedAt func(childComplexity int) int
 		Email     func(childComplexity int) int
@@ -413,45 +419,51 @@ type ComplexityRoot struct {
 		UserID func(childComplexity int) int
 	}
 
+	PaymentSetup struct {
+		CheckoutURL func(childComplexity int) int
+	}
+
 	Query struct {
-		Album               func(childComplexity int, id string) int
-		AlbumMedia          func(childComplexity int, id string, sort []*gql_model.MediaSort, limit *int, offset *int) int
-		Albums              func(childComplexity int) int
-		Calendars           func(childComplexity int) int
-		ClientDatabases     func(childComplexity int, clientID string) int
-		Clients             func(childComplexity int, limit *int, offset *int) int
-		ConnectionProfile   func(childComplexity int, userID string) int
-		Contact             func(childComplexity int, id string) int
-		ContactCount        func(childComplexity int, scope *gql_model.ContactScope, favorite *bool, search *string, filter *gql_model.ContactFilter) int
-		ContactHistory      func(childComplexity int, id string, filter *gql_model.ContactVersionFilter) int
-		Contacts            func(childComplexity int, scope *gql_model.ContactScope, favorite *bool, search *string, filter *gql_model.ContactFilter, sort []*gql_model.ContactSort, limit *int, offset *int) int
-		Event               func(childComplexity int, id string) int
-		Events              func(childComplexity int, from *string, to *string, filter *gql_model.EventFilter) int
-		FavoriteMedia       func(childComplexity int, sort []*gql_model.MediaSort, limit *int, offset *int) int
-		Media               func(childComplexity int, filter *gql_model.MediaFilter, sort []*gql_model.MediaSort, limit *int, offset *int) int
-		MediaCount          func(childComplexity int, filter *gql_model.MediaFilter) int
-		MediaSearch         func(childComplexity int, query string, limit *int, queryVector []float64) int
-		Memories            func(childComplexity int, filter *gql_model.MemoryFilter, sort []*gql_model.MemorySort, limit *int, offset *int) int
-		Memory              func(childComplexity int, id string) int
-		MemoryCount         func(childComplexity int, filter *gql_model.MemoryFilter) int
-		MyConnections       func(childComplexity int, status *string) int
-		MyInvitePolicies    func(childComplexity int) int
-		MyNotifications     func(childComplexity int) int
-		MyOrganizations     func(childComplexity int) int
-		MyScopeGrants       func(childComplexity int) int
-		MySharingGrants     func(childComplexity int) int
-		OauthClient         func(childComplexity int, id string) int
-		Organization        func(childComplexity int, id string) int
-		OrganizationInvites func(childComplexity int, id string) int
-		OrganizationMembers func(childComplexity int, id string) int
-		RefreshTokens       func(childComplexity int, limit *int, offset *int) int
-		SearchMemories      func(childComplexity int, query string, limit *int, queryVector []float64) int
-		SearchUsers         func(childComplexity int, query string, limit *int) int
-		Setting             func(childComplexity int, key string, clientID *string) int
-		Settings            func(childComplexity int, clientID *string) int
-		SharedMedia         func(childComplexity int, filter *gql_model.MediaFilter, sort []*gql_model.MediaSort, limit *int, offset *int) int
-		SharedMediaCount    func(childComplexity int, filter *gql_model.MediaFilter) int
-		StorageUsage        func(childComplexity int) int
+		Album                     func(childComplexity int, id string) int
+		AlbumMedia                func(childComplexity int, id string, sort []*gql_model.MediaSort, limit *int, offset *int) int
+		Albums                    func(childComplexity int) int
+		Calendars                 func(childComplexity int) int
+		ClientDatabases           func(childComplexity int, clientID string) int
+		Clients                   func(childComplexity int, organizationID string, limit *int, offset *int) int
+		ConnectionProfile         func(childComplexity int, userID string) int
+		Contact                   func(childComplexity int, id string) int
+		ContactCount              func(childComplexity int, scope *gql_model.ContactScope, favorite *bool, search *string, filter *gql_model.ContactFilter) int
+		ContactHistory            func(childComplexity int, id string, filter *gql_model.ContactVersionFilter) int
+		Contacts                  func(childComplexity int, scope *gql_model.ContactScope, favorite *bool, search *string, filter *gql_model.ContactFilter, sort []*gql_model.ContactSort, limit *int, offset *int) int
+		Event                     func(childComplexity int, id string) int
+		Events                    func(childComplexity int, from *string, to *string, filter *gql_model.EventFilter) int
+		FavoriteMedia             func(childComplexity int, sort []*gql_model.MediaSort, limit *int, offset *int) int
+		Media                     func(childComplexity int, filter *gql_model.MediaFilter, sort []*gql_model.MediaSort, limit *int, offset *int) int
+		MediaCount                func(childComplexity int, filter *gql_model.MediaFilter) int
+		MediaSearch               func(childComplexity int, query string, limit *int, queryVector []float64) int
+		Memories                  func(childComplexity int, filter *gql_model.MemoryFilter, sort []*gql_model.MemorySort, limit *int, offset *int) int
+		Memory                    func(childComplexity int, id string) int
+		MemoryCount               func(childComplexity int, filter *gql_model.MemoryFilter) int
+		MyConnections             func(childComplexity int, status *string) int
+		MyInvitePolicies          func(childComplexity int) int
+		MyNotifications           func(childComplexity int) int
+		MyOrganizations           func(childComplexity int) int
+		MyScopeGrants             func(childComplexity int) int
+		MySharingGrants           func(childComplexity int) int
+		OauthClient               func(childComplexity int, id string) int
+		OrgBillingStatus          func(childComplexity int, organizationID string) int
+		Organization              func(childComplexity int, id string) int
+		OrganizationInvites       func(childComplexity int, id string) int
+		OrganizationMembers       func(childComplexity int, id string) int
+		OrganizationScopeEntities func(childComplexity int, organizationID string) int
+		RefreshTokens             func(childComplexity int, limit *int, offset *int) int
+		SearchMemories            func(childComplexity int, query string, limit *int, queryVector []float64) int
+		SearchUsers               func(childComplexity int, query string, limit *int) int
+		Setting                   func(childComplexity int, key string, clientID *string) int
+		Settings                  func(childComplexity int, clientID *string) int
+		SharedMedia               func(childComplexity int, filter *gql_model.MediaFilter, sort []*gql_model.MediaSort, limit *int, offset *int) int
+		SharedMediaCount          func(childComplexity int, filter *gql_model.MediaFilter) int
+		StorageUsage              func(childComplexity int) int
 	}
 
 	RecurrenceRule struct {
@@ -474,6 +486,12 @@ type ComplexityRoot struct {
 		Revoked   func(childComplexity int) int
 		Scopes    func(childComplexity int) int
 		Used      func(childComplexity int) int
+	}
+
+	ScopeEntity struct {
+		Database func(childComplexity int) int
+		Entity   func(childComplexity int) int
+		Kind     func(childComplexity int) int
 	}
 
 	ScopeGrant struct {
@@ -574,6 +592,7 @@ type MutationResolver interface {
 	CreateOrgInvite(ctx context.Context, organizationID string, email string, role string) (*gql_model.OrgInvite, error)
 	RevokeOrgInvite(ctx context.Context, id string) (bool, error)
 	AcceptOrgInvite(ctx context.Context, token string) (*gql_model.Organization, error)
+	CreateOrgPaymentSetup(ctx context.Context, organizationID string) (*gql_model.PaymentSetup, error)
 	GrantScope(ctx context.Context, clientID string, scope string) (*gql_model.ScopeGrant, error)
 	RevokeScope(ctx context.Context, id string) (bool, error)
 	SendEmail(ctx context.Context, input gql_model.SendEmailInput) (*gql_model.SendEmailResult, error)
@@ -606,14 +625,16 @@ type QueryResolver interface {
 	MySharingGrants(ctx context.Context) ([]*gql_model.SharingGrant, error)
 	MyInvitePolicies(ctx context.Context) ([]*gql_model.InvitePolicy, error)
 	RefreshTokens(ctx context.Context, limit *int, offset *int) ([]*gql_model.RefreshToken, error)
-	Clients(ctx context.Context, limit *int, offset *int) ([]*gql_model.OAuthClient, error)
+	Clients(ctx context.Context, organizationID string, limit *int, offset *int) ([]*gql_model.OAuthClient, error)
 	OauthClient(ctx context.Context, id string) (*gql_model.OAuthClient, error)
 	ClientDatabases(ctx context.Context, clientID string) ([]*gql_model.ClientDatabase, error)
 	MyOrganizations(ctx context.Context) ([]*gql_model.Organization, error)
 	Organization(ctx context.Context, id string) (*gql_model.Organization, error)
 	OrganizationMembers(ctx context.Context, id string) ([]*gql_model.OrganizationMember, error)
 	OrganizationInvites(ctx context.Context, id string) ([]*gql_model.OrgInvite, error)
+	OrgBillingStatus(ctx context.Context, organizationID string) (*gql_model.OrgBillingStatus, error)
 	MyScopeGrants(ctx context.Context) ([]*gql_model.ScopeGrant, error)
+	OrganizationScopeEntities(ctx context.Context, organizationID string) ([]*gql_model.ScopeEntity, error)
 	MyNotifications(ctx context.Context) ([]*gql_model.Notification, error)
 	Memories(ctx context.Context, filter *gql_model.MemoryFilter, sort []*gql_model.MemorySort, limit *int, offset *int) ([]*gql_model.Memory, error)
 	MemoryCount(ctx context.Context, filter *gql_model.MemoryFilter) (int, error)
@@ -2005,6 +2026,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateOrgInvite(childComplexity, args["organizationId"].(string), args["email"].(string), args["role"].(string)), true
+	case "Mutation.createOrgPaymentSetup":
+		if e.ComplexityRoot.Mutation.CreateOrgPaymentSetup == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createOrgPaymentSetup_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CreateOrgPaymentSetup(childComplexity, args["organizationId"].(string)), true
 	case "Mutation.createOrganization":
 		if e.ComplexityRoot.Mutation.CreateOrganization == nil {
 			break
@@ -2575,6 +2607,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.OAuthClient.Scopes(childComplexity), true
 
+	case "OrgBillingStatus.has_payment_method":
+		if e.ComplexityRoot.OrgBillingStatus.HasPaymentMethod == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrgBillingStatus.HasPaymentMethod(childComplexity), true
+	case "OrgBillingStatus.status":
+		if e.ComplexityRoot.OrgBillingStatus.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrgBillingStatus.Status(childComplexity), true
+
 	case "OrgInvite.created_at":
 		if e.ComplexityRoot.OrgInvite.CreatedAt == nil {
 			break
@@ -2668,6 +2713,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.OrganizationMember.UserID(childComplexity), true
 
+	case "PaymentSetup.checkout_url":
+		if e.ComplexityRoot.PaymentSetup.CheckoutURL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PaymentSetup.CheckoutURL(childComplexity), true
+
 	case "Query.album":
 		if e.ComplexityRoot.Query.Album == nil {
 			break
@@ -2723,7 +2775,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.Clients(childComplexity, args["limit"].(*int), args["offset"].(*int)), true
+		return e.ComplexityRoot.Query.Clients(childComplexity, args["organizationId"].(string), args["limit"].(*int), args["offset"].(*int)), true
 	case "Query.connectionProfile":
 		if e.ComplexityRoot.Query.ConnectionProfile == nil {
 			break
@@ -2931,6 +2983,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.OauthClient(childComplexity, args["id"].(string)), true
+	case "Query.orgBillingStatus":
+		if e.ComplexityRoot.Query.OrgBillingStatus == nil {
+			break
+		}
+
+		args, err := ec.field_Query_orgBillingStatus_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.OrgBillingStatus(childComplexity, args["organizationId"].(string)), true
 	case "Query.organization":
 		if e.ComplexityRoot.Query.Organization == nil {
 			break
@@ -2964,6 +3027,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.OrganizationMembers(childComplexity, args["id"].(string)), true
+	case "Query.organizationScopeEntities":
+		if e.ComplexityRoot.Query.OrganizationScopeEntities == nil {
+			break
+		}
+
+		args, err := ec.field_Query_organizationScopeEntities_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.OrganizationScopeEntities(childComplexity, args["organizationId"].(string)), true
 	case "Query.refreshTokens":
 		if e.ComplexityRoot.Query.RefreshTokens == nil {
 			break
@@ -3145,6 +3219,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.RefreshToken.Used(childComplexity), true
+
+	case "ScopeEntity.database":
+		if e.ComplexityRoot.ScopeEntity.Database == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ScopeEntity.Database(childComplexity), true
+	case "ScopeEntity.entity":
+		if e.ComplexityRoot.ScopeEntity.Entity == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ScopeEntity.Entity(childComplexity), true
+	case "ScopeEntity.kind":
+		if e.ComplexityRoot.ScopeEntity.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ScopeEntity.Kind(childComplexity), true
 
 	case "ScopeGrant.action":
 		if e.ComplexityRoot.ScopeGrant.Action == nil {
@@ -4306,7 +4399,8 @@ input CreateClientInput {
 }
 
 extend type Query {
-  clients(limit: Int, offset: Int): [OAuthClient!]!
+  """Clients owned by an organization. Caller must be a member of it."""
+  clients(organizationId: ID!, limit: Int, offset: Int): [OAuthClient!]!
   oauthClient(id: ID!): OAuthClient
 }
 
@@ -4456,6 +4550,20 @@ type OrgInvite {
   expires_at: String!
 }
 
+"""Result of starting Mollie payment-method setup for an organization."""
+type PaymentSetup {
+  """Hosted Mollie checkout the caller must be redirected to."""
+  checkout_url: String!
+}
+
+"""An organization's billing / payment-method state."""
+type OrgBillingStatus {
+  """One of none, pending, valid, invalid."""
+  status: String!
+  """True once a reusable payment mandate has been captured."""
+  has_payment_method: Boolean!
+}
+
 input CreateOrganizationInput {
   name: String!
   """Used as the organization token in scopes (e.g. "org_123"). Must be unique."""
@@ -4478,6 +4586,8 @@ extend type Query {
   organizationMembers(id: ID!): [OrganizationMember!]!
   """Pending invitations for an organization. Caller must be an owner or admin."""
   organizationInvites(id: ID!): [OrgInvite!]!
+  """Billing / payment-method state for an organization. Caller must be a member."""
+  orgBillingStatus(organizationId: ID!): OrgBillingStatus!
 }
 
 extend type Mutation {
@@ -4492,6 +4602,9 @@ extend type Mutation {
   revokeOrgInvite(id: ID!): Boolean!
   """Accepts a pending invite addressed to the caller's email, joining the org."""
   acceptOrgInvite(token: String!): Organization!
+  """Starts Mollie payment-method setup for an organization and returns a
+     hosted checkout URL. Caller must be an owner or admin."""
+  createOrgPaymentSetup(organizationId: ID!): PaymentSetup!
 }
 `, BuiltIn: false},
 	{Name: "../schema/Scopes.graphql", Input: `type ScopeGrant {
@@ -4505,9 +4618,22 @@ extend type Mutation {
   enabled: Boolean!
 }
 
+"""A data entity an organization owns, usable as a scope target (entity:action)."""
+type ScopeEntity {
+  """The client database the entity belongs to."""
+  database: String!
+  """The entity/table name — the scope's entity segment."""
+  entity: String!
+  """Table kind: data, org, relation, helper."""
+  kind: String!
+}
+
 extend type Query {
   """Scope grants the authenticated user has given to clients."""
   myScopeGrants: [ScopeGrant!]!
+  """Data entities across an organization's client databases, for building
+     scope selections. Caller must be a member of the organization."""
+  organizationScopeEntities(organizationId: ID!): [ScopeEntity!]!
 }
 
 extend type Mutation {
@@ -5085,6 +5211,17 @@ func (ec *executionContext) field_Mutation_createOrgInvite_args(ctx context.Cont
 		return nil, err
 	}
 	args["role"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_createOrgPaymentSetup_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
 	return args, nil
 }
 
@@ -5731,16 +5868,21 @@ func (ec *executionContext) field_Query_clientDatabases_args(ctx context.Context
 func (ec *executionContext) field_Query_clients_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId", ec.unmarshalNID2string)
 	if err != nil {
 		return nil, err
 	}
-	args["limit"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "offset", ec.unmarshalOInt2ᚖint)
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint)
 	if err != nil {
 		return nil, err
 	}
-	args["offset"] = arg1
+	args["limit"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "offset", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg2
 	return args, nil
 }
 
@@ -6030,6 +6172,17 @@ func (ec *executionContext) field_Query_oauthClient_args(ctx context.Context, ra
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_orgBillingStatus_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_organizationInvites_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -6049,6 +6202,17 @@ func (ec *executionContext) field_Query_organizationMembers_args(ctx context.Con
 		return nil, err
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_organizationScopeEntities_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
 	return args, nil
 }
 
@@ -14824,6 +14988,51 @@ func (ec *executionContext) fieldContext_Mutation_acceptOrgInvite(ctx context.Co
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_createOrgPaymentSetup(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_createOrgPaymentSetup,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CreateOrgPaymentSetup(ctx, fc.Args["organizationId"].(string))
+		},
+		nil,
+		ec.marshalNPaymentSetup2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐPaymentSetup,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_createOrgPaymentSetup(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "checkout_url":
+				return ec.fieldContext_PaymentSetup_checkout_url(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PaymentSetup", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createOrgPaymentSetup_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_grantScope(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -16264,6 +16473,64 @@ func (ec *executionContext) fieldContext_OAuthClient_auto_grant_scopes(_ context
 	return fc, nil
 }
 
+func (ec *executionContext) _OrgBillingStatus_status(ctx context.Context, field graphql.CollectedField, obj *gql_model.OrgBillingStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OrgBillingStatus_status,
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OrgBillingStatus_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OrgBillingStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OrgBillingStatus_has_payment_method(ctx context.Context, field graphql.CollectedField, obj *gql_model.OrgBillingStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OrgBillingStatus_has_payment_method,
+		func(ctx context.Context) (any, error) {
+			return obj.HasPaymentMethod, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OrgBillingStatus_has_payment_method(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OrgBillingStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _OrgInvite_id(ctx context.Context, field graphql.CollectedField, obj *gql_model.OrgInvite) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -16689,6 +16956,35 @@ func (ec *executionContext) _OrganizationMember_role(ctx context.Context, field 
 func (ec *executionContext) fieldContext_OrganizationMember_role(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "OrganizationMember",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PaymentSetup_checkout_url(ctx context.Context, field graphql.CollectedField, obj *gql_model.PaymentSetup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PaymentSetup_checkout_url,
+		func(ctx context.Context) (any, error) {
+			return obj.CheckoutURL, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PaymentSetup_checkout_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PaymentSetup",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -17640,7 +17936,7 @@ func (ec *executionContext) _Query_clients(ctx context.Context, field graphql.Co
 		ec.fieldContext_Query_clients,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().Clients(ctx, fc.Args["limit"].(*int), fc.Args["offset"].(*int))
+			return ec.Resolvers.Query().Clients(ctx, fc.Args["organizationId"].(string), fc.Args["limit"].(*int), fc.Args["offset"].(*int))
 		},
 		nil,
 		ec.marshalNOAuthClient2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐOAuthClientᚄ,
@@ -18003,6 +18299,53 @@ func (ec *executionContext) fieldContext_Query_organizationInvites(ctx context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_orgBillingStatus(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_orgBillingStatus,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().OrgBillingStatus(ctx, fc.Args["organizationId"].(string))
+		},
+		nil,
+		ec.marshalNOrgBillingStatus2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐOrgBillingStatus,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_orgBillingStatus(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "status":
+				return ec.fieldContext_OrgBillingStatus_status(ctx, field)
+			case "has_payment_method":
+				return ec.fieldContext_OrgBillingStatus_has_payment_method(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type OrgBillingStatus", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_orgBillingStatus_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_myScopeGrants(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -18044,6 +18387,55 @@ func (ec *executionContext) fieldContext_Query_myScopeGrants(_ context.Context, 
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ScopeGrant", field.Name)
 		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_organizationScopeEntities(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_organizationScopeEntities,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().OrganizationScopeEntities(ctx, fc.Args["organizationId"].(string))
+		},
+		nil,
+		ec.marshalNScopeEntity2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐScopeEntityᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_organizationScopeEntities(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "database":
+				return ec.fieldContext_ScopeEntity_database(ctx, field)
+			case "entity":
+				return ec.fieldContext_ScopeEntity_entity(ctx, field)
+			case "kind":
+				return ec.fieldContext_ScopeEntity_kind(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ScopeEntity", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_organizationScopeEntities_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -19550,6 +19942,93 @@ func (ec *executionContext) fieldContext_RefreshToken_used(_ context.Context, fi
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ScopeEntity_database(ctx context.Context, field graphql.CollectedField, obj *gql_model.ScopeEntity) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ScopeEntity_database,
+		func(ctx context.Context) (any, error) {
+			return obj.Database, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ScopeEntity_database(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ScopeEntity",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ScopeEntity_entity(ctx context.Context, field graphql.CollectedField, obj *gql_model.ScopeEntity) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ScopeEntity_entity,
+		func(ctx context.Context) (any, error) {
+			return obj.Entity, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ScopeEntity_entity(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ScopeEntity",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ScopeEntity_kind(ctx context.Context, field graphql.CollectedField, obj *gql_model.ScopeEntity) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ScopeEntity_kind,
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ScopeEntity_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ScopeEntity",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -26783,6 +27262,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "createOrgPaymentSetup":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createOrgPaymentSetup(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "grantScope":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_grantScope(ctx, field)
@@ -27132,6 +27618,50 @@ func (ec *executionContext) _OAuthClient(ctx context.Context, sel ast.SelectionS
 	return out
 }
 
+var orgBillingStatusImplementors = []string{"OrgBillingStatus"}
+
+func (ec *executionContext) _OrgBillingStatus(ctx context.Context, sel ast.SelectionSet, obj *gql_model.OrgBillingStatus) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, orgBillingStatusImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("OrgBillingStatus")
+		case "status":
+			out.Values[i] = ec._OrgBillingStatus_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "has_payment_method":
+			out.Values[i] = ec._OrgBillingStatus_has_payment_method(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var orgInviteImplementors = []string{"OrgInvite"}
 
 func (ec *executionContext) _OrgInvite(ctx context.Context, sel ast.SelectionSet, obj *gql_model.OrgInvite) graphql.Marshaler {
@@ -27274,6 +27804,45 @@ func (ec *executionContext) _OrganizationMember(ctx context.Context, sel ast.Sel
 			}
 		case "role":
 			out.Values[i] = ec._OrganizationMember_role(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var paymentSetupImplementors = []string{"PaymentSetup"}
+
+func (ec *executionContext) _PaymentSetup(ctx context.Context, sel ast.SelectionSet, obj *gql_model.PaymentSetup) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, paymentSetupImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("PaymentSetup")
+		case "checkout_url":
+			out.Values[i] = ec._PaymentSetup_checkout_url(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -27744,6 +28313,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "orgBillingStatus":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_orgBillingStatus(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "myScopeGrants":
 			field := field
 
@@ -27754,6 +28345,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_myScopeGrants(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "organizationScopeEntities":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_organizationScopeEntities(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -28260,6 +28873,55 @@ func (ec *executionContext) _RefreshToken(ctx context.Context, sel ast.Selection
 			}
 		case "used":
 			out.Values[i] = ec._RefreshToken_used(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var scopeEntityImplementors = []string{"ScopeEntity"}
+
+func (ec *executionContext) _ScopeEntity(ctx context.Context, sel ast.SelectionSet, obj *gql_model.ScopeEntity) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, scopeEntityImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ScopeEntity")
+		case "database":
+			out.Values[i] = ec._ScopeEntity_database(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "entity":
+			out.Values[i] = ec._ScopeEntity_entity(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._ScopeEntity_kind(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -29831,6 +30493,20 @@ func (ec *executionContext) marshalNOAuthClient2ᚖgithubᚗcomᚋneoworksᚋaut
 	return ec._OAuthClient(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNOrgBillingStatus2githubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐOrgBillingStatus(ctx context.Context, sel ast.SelectionSet, v gql_model.OrgBillingStatus) graphql.Marshaler {
+	return ec._OrgBillingStatus(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNOrgBillingStatus2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐOrgBillingStatus(ctx context.Context, sel ast.SelectionSet, v *gql_model.OrgBillingStatus) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._OrgBillingStatus(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNOrgInvite2githubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐOrgInvite(ctx context.Context, sel ast.SelectionSet, v gql_model.OrgInvite) graphql.Marshaler {
 	return ec._OrgInvite(ctx, sel, &v)
 }
@@ -29921,6 +30597,20 @@ func (ec *executionContext) marshalNOrganizationMember2ᚖgithubᚗcomᚋneowork
 	return ec._OrganizationMember(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNPaymentSetup2githubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐPaymentSetup(ctx context.Context, sel ast.SelectionSet, v gql_model.PaymentSetup) graphql.Marshaler {
+	return ec._PaymentSetup(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNPaymentSetup2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐPaymentSetup(ctx context.Context, sel ast.SelectionSet, v *gql_model.PaymentSetup) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._PaymentSetup(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNRecurrenceRule2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐRecurrenceRule(ctx context.Context, sel ast.SelectionSet, v *gql_model.RecurrenceRule) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -29960,6 +30650,32 @@ func (ec *executionContext) marshalNRefreshToken2ᚖgithubᚗcomᚋneoworksᚋau
 		return graphql.Null
 	}
 	return ec._RefreshToken(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNScopeEntity2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐScopeEntityᚄ(ctx context.Context, sel ast.SelectionSet, v []*gql_model.ScopeEntity) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNScopeEntity2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐScopeEntity(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNScopeEntity2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐScopeEntity(ctx context.Context, sel ast.SelectionSet, v *gql_model.ScopeEntity) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ScopeEntity(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNScopeGrant2githubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐScopeGrant(ctx context.Context, sel ast.SelectionSet, v gql_model.ScopeGrant) graphql.Marshaler {

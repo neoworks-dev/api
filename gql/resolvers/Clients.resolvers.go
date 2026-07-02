@@ -33,7 +33,12 @@ func (r *mutationResolver) CreateClient(ctx context.Context, input gql_model.Cre
 		return nil, fmt.Errorf("forbidden: caller is not a member of organization %q", input.OrganizationID)
 	}
 
-	autoGrant := input.AutoGrantScopes != nil && *input.AutoGrantScopes
+	// Auto-grant skips the consent screen entirely, so it is reserved for
+	// first-party Neoworks clients — which are provisioned via seed migrations,
+	// never through this public mutation. Reject any attempt to enable it here.
+	if input.AutoGrantScopes != nil && *input.AutoGrantScopes {
+		return nil, Public("auto-grant is reserved for first-party clients and cannot be enabled here")
+	}
 	public := input.Public != nil && *input.Public
 
 	// Confidential clients get a server-generated secret (shown once, stored as bcrypt hash).
@@ -74,7 +79,7 @@ func (r *mutationResolver) CreateClient(ctx context.Context, input gql_model.Cre
 		"created_by":        models.NewRecordID("user", claim.Subject),
 		"redirect_uris":     input.RedirectUris,
 		"scopes":            input.Scopes,
-		"auto_grant_scopes": autoGrant,
+		"auto_grant_scopes": false,
 		"public":            public,
 	}
 	if secretHash != nil {
@@ -122,7 +127,17 @@ func (r *mutationResolver) DeleteClient(ctx context.Context, id string) (bool, e
 }
 
 // Clients is the resolver for the clients field.
-func (r *queryResolver) Clients(ctx context.Context, limit *int, offset *int) ([]*gql_model.OAuthClient, error) {
+func (r *queryResolver) Clients(ctx context.Context, organizationID string, limit *int, offset *int) ([]*gql_model.OAuthClient, error) {
+	claim := middleware.ClaimFromContext(ctx)
+	if claim == nil {
+		return nil, errUnauthenticated
+	}
+	// Clients are owned by an organization; only its members may list them.
+	orgRef := models.NewRecordID("organization", organizationID)
+	if !r.callerIsMember(ctx, claim.Subject, orgRef) {
+		return nil, Public("forbidden: caller is not a member of this organization")
+	}
+
 	l := 50
 	if limit != nil {
 		l = *limit
@@ -133,8 +148,8 @@ func (r *queryResolver) Clients(ctx context.Context, limit *int, offset *int) ([
 	}
 
 	results, err := surrealdb.Query[[]oauth.Client](ctx, r.store.DB,
-		"SELECT * FROM client ORDER BY id ASC LIMIT $limit START $offset",
-		map[string]any{"limit": l, "offset": o},
+		"SELECT * FROM client WHERE organization = $org ORDER BY id ASC LIMIT $limit START $offset",
+		map[string]any{"org": orgRef, "limit": l, "offset": o},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list clients: %w", err)

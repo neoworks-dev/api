@@ -718,6 +718,14 @@ type OAuthClient struct {
 	AutoGrantScopes bool `json:"auto_grant_scopes"`
 }
 
+// An organization's billing / payment-method state.
+type OrgBillingStatus struct {
+	// One of none, pending, valid, invalid.
+	Status string `json:"status"`
+	// True once a reusable payment mandate has been captured.
+	HasPaymentMethod bool `json:"has_payment_method"`
+}
+
 type OrgInvite struct {
 	ID        string `json:"id"`
 	Email     string `json:"email"`
@@ -740,6 +748,12 @@ type Organization struct {
 type OrganizationMember struct {
 	UserID string `json:"user_id"`
 	Role   string `json:"role"`
+}
+
+// Result of starting Mollie payment-method setup for an organization.
+type PaymentSetup struct {
+	// Hosted Mollie checkout the caller must be redirected to.
+	CheckoutURL string `json:"checkout_url"`
 }
 
 type Query struct {
@@ -780,6 +794,16 @@ type RefreshToken struct {
 	CreatedAt string       `json:"created_at"`
 	Revoked   bool         `json:"revoked"`
 	Used      bool         `json:"used"`
+}
+
+// A data entity an organization owns, usable as a scope target (entity:action).
+type ScopeEntity struct {
+	// The client database the entity belongs to.
+	Database string `json:"database"`
+	// The entity/table name — the scope's entity segment.
+	Entity string `json:"entity"`
+	// Table kind: data, org, relation, helper.
+	Kind string `json:"kind"`
 }
 
 type ScopeGrant struct {

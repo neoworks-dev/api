@@ -9,9 +9,22 @@ type ScopeGrant {
   enabled: Boolean!
 }
 
+"""A data entity an organization owns, usable as a scope target (entity:action)."""
+type ScopeEntity {
+  """The client database the entity belongs to."""
+  database: String!
+  """The entity/table name — the scope's entity segment."""
+  entity: String!
+  """Table kind: data, org, relation, helper."""
+  kind: String!
+}
+
 extend type Query {
   """Scope grants the authenticated user has given to clients."""
   myScopeGrants: [ScopeGrant!]!
+  """Data entities across an organization's client databases, for building
+     scope selections. Caller must be a member of the organization."""
+  organizationScopeEntities(organizationId: ID!): [ScopeEntity!]!
 }
 
 extend type Mutation {

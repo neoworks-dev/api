@@ -6,6 +6,7 @@ import (
 	"github.com/neoworks/auth/dataplane"
 	"github.com/neoworks/auth/email"
 	"github.com/neoworks/auth/embeddings"
+	"github.com/neoworks/auth/mollie"
 	"github.com/neoworks/auth/oauth"
 	"github.com/neoworks/auth/push"
 	"github.com/neoworks/auth/storage/database"
@@ -23,15 +24,17 @@ type Resolver struct {
 	pusher   push.Sender
 	engine   *dataplane.Engine
 	embedder embeddings.Embedder
+	mollie   mollie.Client
 }
 
-func NewGqlResolver(db *database.SurrealStore, mailer email.Sender, pusher push.Sender, engine *dataplane.Engine, embedder embeddings.Embedder) *Resolver {
+func NewGqlResolver(db *database.SurrealStore, mailer email.Sender, pusher push.Sender, engine *dataplane.Engine, embedder embeddings.Embedder, mollieClient mollie.Client) *Resolver {
 	return &Resolver{
 		store:    db,
 		mailer:   mailer,
 		pusher:   pusher,
 		engine:   engine,
 		embedder: embedder,
+		mollie:   mollieClient,
 	}
 }
 

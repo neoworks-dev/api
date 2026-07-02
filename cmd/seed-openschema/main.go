@@ -36,7 +36,7 @@ func main() {
 	}
 
 	engine := dataplane.NewEngine(store)
-	resolver := resolvers.NewGqlResolver(store, nil, nil, engine, nil)
+	resolver := resolvers.NewGqlResolver(store, nil, nil, engine, nil, nil)
 
 	if err := resolver.SeedOpenschemaRegistry(context.Background()); err != nil {
 		log.Fatalf("seed: %v", err)
