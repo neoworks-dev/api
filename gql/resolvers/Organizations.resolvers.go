@@ -338,10 +338,11 @@ func (r *queryResolver) OrganizationMembers(ctx context.Context, id string) ([]*
 		return nil, Public("forbidden: caller is not a member of this organization")
 	}
 
-	results, err := surrealdb.Query[[]dbMembership](ctx, r.store.DB,
-		"SELECT in AS user, role FROM membership WHERE out = $org",
-		map[string]any{"org": orgRef},
-	)
+	results, err := surrealdb.Query[[]dbMembership](ctx, r.store.DB, `
+		SELECT in AS user, in.display_name AS display_name, in.first_name AS first_name,
+		       in.last_name AS last_name, in.email AS email, role
+		FROM membership WHERE out = $org
+	`, map[string]any{"org": orgRef})
 	if err != nil {
 		return nil, fmt.Errorf("list members: %w", err)
 	}
@@ -352,7 +353,13 @@ func (r *queryResolver) OrganizationMembers(ctx context.Context, id string) ([]*
 			if m.User != nil {
 				userID = fmt.Sprintf("%v", m.User.ID)
 			}
-			out = append(out, &gql_model.OrganizationMember{UserID: userID, Role: m.Role})
+			name := memberDisplayName(m)
+			out = append(out, &gql_model.OrganizationMember{
+				UserID: userID,
+				Name:   &name,
+				Email:  m.Email,
+				Role:   m.Role,
+			})
 		}
 	}
 	return out, nil

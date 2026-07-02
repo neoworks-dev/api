@@ -415,6 +415,8 @@ type ComplexityRoot struct {
 	}
 
 	OrganizationMember struct {
+		Email  func(childComplexity int) int
+		Name   func(childComplexity int) int
 		Role   func(childComplexity int) int
 		UserID func(childComplexity int) int
 	}
@@ -2700,6 +2702,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Organization.Slug(childComplexity), true
 
+	case "OrganizationMember.email":
+		if e.ComplexityRoot.OrganizationMember.Email == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationMember.Email(childComplexity), true
+	case "OrganizationMember.name":
+		if e.ComplexityRoot.OrganizationMember.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationMember.Name(childComplexity), true
 	case "OrganizationMember.role":
 		if e.ComplexityRoot.OrganizationMember.Role == nil {
 			break
@@ -4538,6 +4552,9 @@ extend type Mutation {
 
 type OrganizationMember {
   user_id: ID!
+  """Display name for the member (display name, full name, or email)."""
+  name: String
+  email: String
   role: String!
 }
 
@@ -14774,6 +14791,10 @@ func (ec *executionContext) fieldContext_Mutation_addOrganizationMember(ctx cont
 			switch field.Name {
 			case "user_id":
 				return ec.fieldContext_OrganizationMember_user_id(ctx, field)
+			case "name":
+				return ec.fieldContext_OrganizationMember_name(ctx, field)
+			case "email":
+				return ec.fieldContext_OrganizationMember_email(ctx, field)
 			case "role":
 				return ec.fieldContext_OrganizationMember_role(ctx, field)
 			}
@@ -16937,6 +16958,64 @@ func (ec *executionContext) fieldContext_OrganizationMember_user_id(_ context.Co
 	return fc, nil
 }
 
+func (ec *executionContext) _OrganizationMember_name(ctx context.Context, field graphql.CollectedField, obj *gql_model.OrganizationMember) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OrganizationMember_name,
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_OrganizationMember_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OrganizationMember",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OrganizationMember_email(ctx context.Context, field graphql.CollectedField, obj *gql_model.OrganizationMember) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OrganizationMember_email,
+		func(ctx context.Context) (any, error) {
+			return obj.Email, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_OrganizationMember_email(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OrganizationMember",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _OrganizationMember_role(ctx context.Context, field graphql.CollectedField, obj *gql_model.OrganizationMember) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -18224,6 +18303,10 @@ func (ec *executionContext) fieldContext_Query_organizationMembers(ctx context.C
 			switch field.Name {
 			case "user_id":
 				return ec.fieldContext_OrganizationMember_user_id(ctx, field)
+			case "name":
+				return ec.fieldContext_OrganizationMember_name(ctx, field)
+			case "email":
+				return ec.fieldContext_OrganizationMember_email(ctx, field)
 			case "role":
 				return ec.fieldContext_OrganizationMember_role(ctx, field)
 			}
@@ -27802,6 +27885,10 @@ func (ec *executionContext) _OrganizationMember(ctx context.Context, sel ast.Sel
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "name":
+			out.Values[i] = ec._OrganizationMember_name(ctx, field, obj)
+		case "email":
+			out.Values[i] = ec._OrganizationMember_email(ctx, field, obj)
 		case "role":
 			out.Values[i] = ec._OrganizationMember_role(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

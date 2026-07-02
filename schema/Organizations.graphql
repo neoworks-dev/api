@@ -10,6 +10,9 @@ type Organization {
 
 type OrganizationMember {
   user_id: ID!
+  """Display name for the member (display name, full name, or email)."""
+  name: String
+  email: String
   role: String!
 }
 

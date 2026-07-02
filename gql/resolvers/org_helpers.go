@@ -3,6 +3,7 @@ package gql
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	gql_model "github.com/neoworks/auth/gql/model"
@@ -26,8 +27,36 @@ type dbOrganization struct {
 }
 
 type dbMembership struct {
-	User *models.RecordID `json:"user"`
-	Role string           `json:"role"`
+	User        *models.RecordID `json:"user"`
+	DisplayName *string          `json:"display_name,omitempty"`
+	FirstName   *string          `json:"first_name,omitempty"`
+	LastName    *string          `json:"last_name,omitempty"`
+	Email       *string          `json:"email,omitempty"`
+	Role        string           `json:"role"`
+}
+
+// memberDisplayName picks the friendliest available name for a member: an
+// explicit display name, then a full name, then the email.
+func memberDisplayName(m dbMembership) string {
+	if m.DisplayName != nil && *m.DisplayName != "" {
+		return *m.DisplayName
+	}
+	first := ""
+	if m.FirstName != nil {
+		first = *m.FirstName
+	}
+	last := ""
+	if m.LastName != nil {
+		last = *m.LastName
+	}
+	full := strings.TrimSpace(first + " " + last)
+	if full != "" {
+		return full
+	}
+	if m.Email != nil {
+		return *m.Email
+	}
+	return ""
 }
 
 func firstOrganization(results *[]surrealdb.QueryResult[[]dbOrganization]) *dbOrganization {

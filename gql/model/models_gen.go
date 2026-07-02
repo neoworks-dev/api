@@ -747,7 +747,10 @@ type Organization struct {
 
 type OrganizationMember struct {
 	UserID string `json:"user_id"`
-	Role   string `json:"role"`
+	// Display name for the member (display name, full name, or email).
+	Name  *string `json:"name,omitempty"`
+	Email *string `json:"email,omitempty"`
+	Role  string  `json:"role"`
 }
 
 // Result of starting Mollie payment-method setup for an organization.
