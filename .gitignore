@@ -1,0 +1,13 @@
+# Local environment & secrets
+.env
+
+# Signing keys — never commit
+keys/
+*.pem
+*.key
+
+# Air hot-reload build artifacts
+/tmp/
+
+# Runtime data
+/data/

@@ -1,0 +1,9 @@
+{
+  "currency": "USD",
+  "storage_hot_per_gb_month": 0.02,
+  "storage_cold_per_gb_month": 0.004,
+  "storage_archive_per_gb_month": 0.001,
+  "compute_per_second": 0.0,
+  "api_per_call": 0.0,
+  "provisioning_database": 0.0
+}

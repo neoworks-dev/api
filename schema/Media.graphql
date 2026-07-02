@@ -1,0 +1,77 @@
+# Encrypted media (images/files). Bytes are uploaded + decrypted via the REST
+# media API (content-addressed, AMK-sealed chunks); this GraphQL surface is the
+# queryable metadata layer — list/count/search over media a user owns or has been
+# granted. Filters reuse the shared primitives (see _shared.graphql).
+
+type Media {
+  id: ID!
+  filename: String!
+  mime_type: String!
+  size: Int!
+  created_at: String!
+  updated_at: String!
+  """The linked thumbnail media id, if one was generated. Load this for grids;
+  load the original (id) only for fullsize viewing."""
+  thumbnailId: ID
+  """Embedding lifecycle for visual/text search: pending | ready | failed | none."""
+  embeddingStatus: String
+  """Original capture time from the photo's EXIF (DateTimeOriginal), if present.
+  Distinct from created_at, which is when the upload reached the server."""
+  captureDate: String
+  """GPS coordinate from the photo's EXIF, if present. Stored unencrypted."""
+  location: GeoPoint
+  """Full parsed EXIF tag set, stored unencrypted. Shape varies by camera."""
+  exif: Map
+}
+
+"""A GPS coordinate (decimal degrees)."""
+type GeoPoint {
+  lat: Float!
+  lng: Float!
+}
+
+input MediaFilter {
+  filename: StringFilter
+  mime_type: StringFilter
+  size: IntFilter
+  created_at: DateFilter
+  updated_at: DateFilter
+  captureDate: DateFilter
+  location: GeoFilter
+
+  and: [MediaFilter!]
+  or: [MediaFilter!]
+  not: MediaFilter
+}
+
+"""Sortable media columns (whitelisted)."""
+enum MediaSortField {
+  FILENAME
+  CREATED_AT
+  UPDATED_AT
+  SIZE
+  CAPTURE_DATE
+}
+
+"""One sort key. Pass a list to sort by several columns in order."""
+input MediaSort {
+  field: MediaSortField!
+  direction: SortDirection = ASC
+}
+
+extend type Query {
+  """Media the caller owns."""
+  media(filter: MediaFilter, sort: [MediaSort!], limit: Int, offset: Int): [Media!]!
+  """Total owned media matching the same filter (ignores paging)."""
+  mediaCount(filter: MediaFilter): Int!
+  """Media shared with the caller via a media grant."""
+  sharedMedia(filter: MediaFilter, sort: [MediaSort!], limit: Int, offset: Int): [Media!]!
+  """Total media shared with the caller matching the same filter (ignores paging)."""
+  sharedMediaCount(filter: MediaFilter): Int!
+  """Hybrid (vector + BM25) search over the caller's media. When the user's
+  `search_embedding_mode` setting is `client`, pass `queryVector` (a normalized
+  query embedding computed in the browser); otherwise the server embeds the query
+  text. Falls back to lexical-only when neither a vector nor a model server is
+  available."""
+  mediaSearch(query: String!, limit: Int, queryVector: [Float!]): [Media!]!
+}

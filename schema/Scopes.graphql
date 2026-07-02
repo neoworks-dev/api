@@ -1,0 +1,24 @@
+type ScopeGrant {
+  id: ID!
+  client_id: ID!
+  raw: String!
+  """The org token from the scope, or null when the scope targets the user's personal data."""
+  organization_slug: String
+  entity: String!
+  action: String!
+  enabled: Boolean!
+}
+
+extend type Query {
+  """Scope grants the authenticated user has given to clients."""
+  myScopeGrants: [ScopeGrant!]!
+}
+
+extend type Mutation {
+  """
+  Grants a client access on behalf of the authenticated user.
+  Scope format: organization?:entity:action (e.g. "contacts:read", "org_123:documents:write").
+  """
+  grantScope(clientId: ID!, scope: String!): ScopeGrant!
+  revokeScope(id: ID!): Boolean!
+}

@@ -1,0 +1,415 @@
+# Contacts aligned to vCard 4.0 (RFC 6350), versioned (contact / contact_version)
+# and user-scoped. Multi-valued properties are typed lists; PHOTO/LOGO/SOUND/KEY
+# are media references (ID), not inline base64. Beyond vCard: custom_fields, and
+# the favorite / archived / deleted flags (deleted drives the Trash tab).
+
+# ── Structured value objects ──────────────────────────────────────────────────
+
+"""vCard N — the structured name."""
+type Name {
+  family: String
+  given: String
+  additional: [String!]
+  prefixes: [String!]
+  suffixes: [String!]
+}
+
+"""vCard GENDER."""
+type Gender {
+  """vCard sex component: M F O N U."""
+  sex: String
+  """Free-text gender identity."""
+  identity: String
+}
+
+"""vCard GEO."""
+type Geo {
+  lat: Float!
+  lng: Float!
+}
+
+"""A typed, repeatable value (EMAIL, TEL, IMPP, URL, LANG). `types` carries the
+vCard TYPE parameter (home, work, cell, …); `pref` the PREF (1 = most preferred)."""
+type ContactField {
+  value: String!
+  types: [String!]
+  pref: Int
+  label: String
+}
+
+"""vCard ADR."""
+type Address {
+  types: [String!]
+  pref: Int
+  label: String
+  po_box: String
+  ext: String
+  street: String
+  locality: String
+  region: String
+  postal_code: String
+  country: String
+}
+
+"""vCard ORG (name plus organisational units)."""
+type ContactOrganization {
+  name: String!
+  units: [String!]
+}
+
+"""A labelled key/value pair beyond the vCard surface (replaces X- extensions)."""
+type CustomField {
+  label: String!
+  value: String!
+}
+
+"""A vCard RELATED edge to another contact."""
+type ContactRelation {
+  contact_id: ID!
+  types: [String!]
+  pref: Int
+}
+
+# ── Contact ───────────────────────────────────────────────────────────────────
+
+type Contact {
+  id: ID!
+  """vCard UID — stable across imports/sync."""
+  uid: String!
+  """vCard KIND: individual | group | org | location."""
+  kind: String!
+  """vCard FN — the display name (required)."""
+  formatted_name: String!
+  name: Name
+  nicknames: [String!]
+  birthday: String
+  anniversary: String
+  gender: Gender
+
+  emails: [ContactField!]
+  phones: [ContactField!]
+  impps: [ContactField!]
+  languages: [ContactField!]
+  addresses: [Address!]
+
+  organizations: [ContactOrganization!]
+  title: String
+  role: String
+
+  timezone: String
+  geo: Geo
+
+  categories: [String!]
+  notes: [String!]
+  urls: [ContactField!]
+  source: String
+  prodid: String
+
+  fburl: String
+  caluri: String
+  caladruri: String
+
+  """Media handler id for the encrypted PHOTO/LOGO/SOUND/KEY (null = none)."""
+  photo: ID
+  logo: ID
+  sound: ID
+  key: ID
+
+  custom_fields: [CustomField!]
+  favorite: Boolean!
+  archived: Boolean!
+  deleted: Boolean!
+
+  """vCard RELATED edges and KIND=group MEMBER ids, from the graph."""
+  related: [ContactRelation!]
+  member_ids: [ID!]
+
+  created_at: String!
+  updated_at: String!
+}
+
+"""A point-in-time snapshot from the append-only history. Mirrors Contact's data
+fields (graph relations are not versioned)."""
+type ContactVersion {
+  id: ID!
+  contact_id: ID!
+  uid: String!
+  kind: String!
+  formatted_name: String!
+  name: Name
+  nicknames: [String!]
+  birthday: String
+  anniversary: String
+  gender: Gender
+  emails: [ContactField!]
+  phones: [ContactField!]
+  impps: [ContactField!]
+  languages: [ContactField!]
+  addresses: [Address!]
+  organizations: [ContactOrganization!]
+  title: String
+  role: String
+  timezone: String
+  geo: Geo
+  categories: [String!]
+  notes: [String!]
+  urls: [ContactField!]
+  source: String
+  prodid: String
+  fburl: String
+  caluri: String
+  caladruri: String
+  photo: ID
+  logo: ID
+  sound: ID
+  key: ID
+  custom_fields: [CustomField!]
+  favorite: Boolean!
+  archived: Boolean!
+  deleted: Boolean!
+  created_at: String!
+  """Version ids this one derives from (edit lineage; 2 entries on a merge)."""
+  parent_ids: [ID!]
+}
+
+"""Which set of contacts to return. ACTIVE excludes archived and trashed."""
+enum ContactScope {
+  ACTIVE
+  ARCHIVED
+  TRASHED
+  ALL
+}
+
+input ContactVersionFilter {
+  formatted_name: String
+  before: String
+}
+
+# ── Inputs ────────────────────────────────────────────────────────────────────
+
+input NameInput {
+  family: String
+  given: String
+  additional: [String!]
+  prefixes: [String!]
+  suffixes: [String!]
+}
+
+input GenderInput {
+  sex: String
+  identity: String
+}
+
+input GeoInput {
+  lat: Float!
+  lng: Float!
+}
+
+input ContactFieldInput {
+  value: String!
+  types: [String!]
+  pref: Int
+  label: String
+}
+
+input AddressInput {
+  types: [String!]
+  pref: Int
+  label: String
+  po_box: String
+  ext: String
+  street: String
+  locality: String
+  region: String
+  postal_code: String
+  country: String
+}
+
+input ContactOrganizationInput {
+  name: String!
+  units: [String!]
+}
+
+input CustomFieldInput {
+  label: String!
+  value: String!
+}
+
+"""Create a contact. Only formatted_name is required; kind defaults to individual.
+A uid is generated when omitted."""
+input CreateContactInput {
+  uid: String
+  kind: String
+  formatted_name: String!
+  name: NameInput
+  nicknames: [String!]
+  birthday: String
+  anniversary: String
+  gender: GenderInput
+  emails: [ContactFieldInput!]
+  phones: [ContactFieldInput!]
+  impps: [ContactFieldInput!]
+  languages: [ContactFieldInput!]
+  addresses: [AddressInput!]
+  organizations: [ContactOrganizationInput!]
+  title: String
+  role: String
+  timezone: String
+  geo: GeoInput
+  categories: [String!]
+  notes: [String!]
+  urls: [ContactFieldInput!]
+  source: String
+  prodid: String
+  fburl: String
+  caluri: String
+  caladruri: String
+  photo: ID
+  logo: ID
+  sound: ID
+  key: ID
+  custom_fields: [CustomFieldInput!]
+  favorite: Boolean
+}
+
+"""Partial update — omitted fields are left unchanged. Collection fields replace
+the whole list when present (send the full array, or [] to clear)."""
+input UpdateContactInput {
+  kind: String
+  formatted_name: String
+  name: NameInput
+  nicknames: [String!]
+  birthday: String
+  anniversary: String
+  gender: GenderInput
+  emails: [ContactFieldInput!]
+  phones: [ContactFieldInput!]
+  impps: [ContactFieldInput!]
+  languages: [ContactFieldInput!]
+  addresses: [AddressInput!]
+  organizations: [ContactOrganizationInput!]
+  title: String
+  role: String
+  timezone: String
+  geo: GeoInput
+  categories: [String!]
+  notes: [String!]
+  urls: [ContactFieldInput!]
+  source: String
+  prodid: String
+  fburl: String
+  caluri: String
+  caladruri: String
+  photo: ID
+  logo: ID
+  sound: ID
+  key: ID
+  custom_fields: [CustomFieldInput!]
+  favorite: Boolean
+  archived: Boolean
+}
+
+# ── Filtering ─────────────────────────────────────────────────────────────────
+# The shared per-field operator inputs (StringFilter, BoolFilter, IntFilter,
+# DateFilter, StringListFilter, GeoFilter, NearInput) and SortDirection live in
+# _shared.graphql. The contact-specific inputs below build on them.
+
+"""Match a single element of a repeatable field (email/phone): value substring/eq
+and an optional membership test on its types."""
+input ContactFieldFilter {
+  value: StringFilter
+  type: String
+}
+
+"""Filter a repeatable field list (emails/phones) by any-element match or size."""
+input FieldListFilter {
+  any: ContactFieldFilter
+  isEmpty: Boolean
+  size: IntFilter
+}
+
+input ContactFilter {
+  formatted_name: StringFilter
+  kind: StringFilter
+  birthday: StringFilter
+  anniversary: StringFilter
+  title: StringFilter
+  role: StringFilter
+  timezone: StringFilter
+  geo: GeoFilter
+
+  emails: FieldListFilter
+  phones: FieldListFilter
+  impps: FieldListFilter
+  languages: FieldListFilter
+  urls: FieldListFilter
+
+  categories: StringListFilter
+  nicknames: StringListFilter
+  notes: StringListFilter
+
+  favorite: BoolFilter
+  archived: BoolFilter
+  deleted: BoolFilter
+
+  created_at: DateFilter
+  updated_at: DateFilter
+
+  and: [ContactFilter!]
+  or: [ContactFilter!]
+  not: ContactFilter
+}
+
+# ── Sorting ───────────────────────────────────────────────────────────────────
+# SortDirection is shared (see _shared.graphql).
+
+"""Sortable contact columns (whitelisted; arbitrary fields aren't allowed)."""
+enum ContactSortField {
+  FORMATTED_NAME
+  CREATED_AT
+  UPDATED_AT
+  BIRTHDAY
+}
+
+"""One sort key. Pass a list to sort by several columns in order."""
+input ContactSort {
+  field: ContactSortField!
+  direction: SortDirection = ASC
+}
+
+# ── Operations ────────────────────────────────────────────────────────────────
+
+type Query {
+  contacts(scope: ContactScope = ACTIVE, favorite: Boolean, search: String, filter: ContactFilter, sort: [ContactSort!], limit: Int, offset: Int): [Contact!]!
+  """Total contacts matching the same scope/favorite/search/filter (ignores paging)."""
+  contactCount(scope: ContactScope = ACTIVE, favorite: Boolean, search: String, filter: ContactFilter): Int!
+  contact(id: ID!): Contact
+  contactHistory(id: ID!, filter: ContactVersionFilter): [ContactVersion!]!
+}
+
+type Mutation {
+  createContact(input: CreateContactInput!): Contact!
+  updateContact(id: ID!, parentVersionIds: [ID!]!, input: UpdateContactInput!): Contact!
+
+  """Branch from an old version: copies its content into a new head version whose
+  parent is that version, so the lineage forks instead of overwriting."""
+  restoreContactVersion(id: ID!, versionId: ID!): Contact!
+
+  """Soft-delete flags — each records a new version. Restore reverses trash/archive."""
+  trashContact(id: ID!): Contact!
+  restoreContact(id: ID!): Contact!
+  archiveContact(id: ID!): Contact!
+  unarchiveContact(id: ID!): Contact!
+  setContactFavorite(id: ID!, favorite: Boolean!): Contact!
+
+  """Permanent removal — only meaningful from the Trash tab."""
+  deleteContact(id: ID!): Boolean!
+
+  """vCard RELATED edges (contact ↔ contact)."""
+  relateContacts(fromId: ID!, toId: ID!, types: [String!], pref: Int): Boolean!
+  unrelateContacts(fromId: ID!, toId: ID!): Boolean!
+
+  """vCard MEMBER edges for a KIND=group contact."""
+  addGroupMember(groupId: ID!, memberId: ID!): Boolean!
+  removeGroupMember(groupId: ID!, memberId: ID!): Boolean!
+}

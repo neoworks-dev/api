@@ -1,0 +1,28 @@
+# Shared per-user settings keyed by (client_id, user, key). Each client (OAuth app)
+# writes its own settings, but any client can read another client's settings for
+# the same user, so apps can reference each other's preferences. The value is an
+# opaque JSON string the client encodes/decodes.
+
+type Setting {
+  """The client (OAuth app) the setting belongs to."""
+  client_id: ID!
+  key: String!
+  """JSON-encoded value."""
+  value: String!
+  updated_at: String!
+}
+
+extend type Query {
+  """A single setting for the caller. clientId defaults to the calling client;
+  pass another client's id to read its shared setting."""
+  setting(key: String!, clientId: ID): Setting
+  """The caller's settings, optionally scoped to a single client."""
+  settings(clientId: ID): [Setting!]!
+}
+
+extend type Mutation {
+  """Upsert a setting (JSON-encoded value) for the calling client and user."""
+  setSetting(key: String!, value: String!): Setting!
+  """Delete one of the calling client's settings. Returns true if it existed."""
+  deleteSetting(key: String!): Boolean!
+}

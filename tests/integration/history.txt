@@ -1,0 +1,16 @@
+#V2
+SELECT id, hash, size, ref_count, created_at FROM chunk ORDER BY created_at DESC LIMIT 10;
+LET $decrements = [{chunk: chunk:9ervcn60ytc1muovq7r3, count: 4}];
+FOR $d IN $decrements { UPDATE $d.chunk SET ref_count -= $d.count };
+SELECT id, ref_count FROM chunk:9ervcn60ytc1muovq7r3;
+SELECT id, ref_count, size, storage_key FROM chunk:l17wemousn6gcxgjvkdr;
+SELECT id, ref_count FROM chunk WHERE id IN [chunk:l17wemousn6gcxgjvkdr] AND ref_count <= 0;
+SELECT id, ref_count FROM chunk WHERE ref_count <= 0;
+BEGIN TRANSACTION;
+LET $dead = (SELECT id, size, storage_key FROM chunk WHERE id IN [chunk:ceu68h35cynurc2qmvg3] AND ref_count <= 0);
+FOR $row IN $dead {	DELETE $row.id;};
+RETURN $dead;
+COMMIT TRANSACTION;
+SELECT id FROM chunk WHERE id = chunk:ceu68h35cynurc2qmvg3;
+BEGIN TRANSACTION; LET $dead = (SELECT id, size, storage_key FROM chunk WHERE id IN [chunk:ceu68h35cynurc2qmvg3] AND ref_count <= 0); FOR $row IN $dead { DELETE $row.id; }; RETURN $dead; COMMIT TRANSACTION;
+SELECT id FROM chunk WHERE id = chunk:ceu68h35cynurc2qmvg3;

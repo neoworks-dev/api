@@ -1,0 +1,27 @@
+schema:
+  - schema/_shared.graphql
+  - schema/Contacts.graphql
+  - schema/Calendar.graphql
+  - schema/Connections.graphql
+  - schema/RefreshTokens.graphql
+  - schema/Clients.graphql
+  - schema/ClientDatabases.graphql
+  - schema/Organizations.graphql
+  - schema/Scopes.graphql
+  - schema/Email.graphql
+  - schema/Notifications.graphql
+  - schema/Memories.graphql
+  - schema/Settings.graphql
+  - schema/Media.graphql
+  - schema/Albums.graphql
+  - schema/Storage.graphql
+exec:
+  filename: gql/generated.go
+  package: gql
+model:
+  filename: gql/model/models_gen.go
+  package: gql_model
+resolver:
+  layout: follow-schema
+  dir: gql/resolvers
+  package: gql

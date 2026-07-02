@@ -1,0 +1,31 @@
+type Notification {
+  id: ID!
+  title: String!
+  body: String!
+  url: String
+  read: Boolean!
+  created_at: String!
+}
+
+input SendNotificationInput {
+  """Recipient user id. Defaults to the calling user when omitted."""
+  userId: ID
+  title: String!
+  body: String!
+  """Optional deep link opened when the notification is tapped."""
+  url: String
+}
+
+extend type Query {
+  """Notifications for the authenticated user, newest first."""
+  myNotifications: [Notification!]!
+}
+
+extend type Mutation {
+  """
+  Sends a notification to a user and pushes it to their authenticator devices.
+  Requires the `notification:write` scope.
+  """
+  sendNotification(input: SendNotificationInput!): Notification!
+  markNotificationRead(id: ID!): Boolean!
+}

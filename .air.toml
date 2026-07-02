@@ -1,0 +1,14 @@
+# Hot reload for the api service. Used by process-compose in local dev.
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -buildvcs=false -o ./tmp/api ./cmd/api"
+  bin = "./tmp/api"
+  include_ext = ["go"]
+  exclude_dir = ["tmp", "keys", "sql"]
+  delay = 500
+  stop_on_error = true
+
+[misc]
+  clean_on_exit = true

@@ -1,0 +1,14 @@
+version: '3'
+
+tasks:
+  db:migrate:
+    desc: Apply pending SurrealDB migrations
+    cmds:
+      - go run ./cmd/migrate
+    dir: '{{.ROOT_DIR}}'
+
+  gql:generate:
+    desc: Generate GraphQL code from schema
+    cmds:
+      - go run github.com/99designs/gqlgen generate --config schema/gqlgen.yml
+    dir: '{{.ROOT_DIR}}'

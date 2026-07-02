@@ -1,0 +1,73 @@
+# User-to-user connections with consent-based profile sharing. Used by the
+# calendar's participant ("people") picker. All resolvers act on the
+# authenticated caller; there is no admin override.
+
+"""A user profile projected to only the fields the caller may see. Name is always
+visible between accepted connections; email/avatar_url are null unless a sharing
+grant permits them."""
+type ConnectionProfile {
+  id: ID!
+  first_name: String!
+  last_name: String!
+  email: String
+  avatar_url: String
+}
+
+"""A connection edge as seen by the caller."""
+type Connection {
+  """The other user in the connection (never the caller)."""
+  user: ConnectionProfile!
+  status: String!
+  """Relative to the caller: "outgoing" (caller requested) or "incoming"."""
+  direction: String!
+  created_at: String!
+}
+
+"""A user surfaced by search for inviting; name-only, plus any existing status."""
+type UserSearchResult {
+  id: ID!
+  first_name: String!
+  last_name: String!
+  """null = no connection, else pending | accepted | blocked."""
+  connection_status: String
+}
+
+"""Extra profile fields the caller has agreed to share with a viewer."""
+type SharingGrant {
+  viewer: ConnectionProfile!
+  fields: [String!]!
+}
+
+"""How the caller handles calendar invites from a specific user."""
+type InvitePolicy {
+  """The other user the policy applies to."""
+  user: ConnectionProfile!
+  """"block" | "auto_accept"."""
+  policy: String!
+}
+
+extend type Query {
+  """The caller's connections, optionally filtered by status."""
+  myConnections(status: String): [Connection!]!
+  """Search users by name prefix or exact email for inviting."""
+  searchUsers(query: String!, limit: Int): [UserSearchResult!]!
+  """Resolve a user id to the profile the caller may see; null if not connected."""
+  connectionProfile(userId: ID!): ConnectionProfile
+  """Grants the caller has issued (what they share, with whom)."""
+  mySharingGrants: [SharingGrant!]!
+  """The caller's non-default calendar invite policies (block / auto-accept)."""
+  myInvitePolicies: [InvitePolicy!]!
+}
+
+extend type Mutation {
+  sendConnectionRequest(userId: ID!): Connection!
+  """Accept (true) or decline (false, deletes the edge) an incoming request."""
+  respondToConnectionRequest(userId: ID!, accept: Boolean!): Connection
+  removeConnection(userId: ID!): Boolean!
+  blockUser(userId: ID!): Connection!
+  """Set exactly which extra profile fields a connected viewer may see (empty = none)."""
+  updateSharingConsent(viewerId: ID!, fields: [String!]!): SharingGrant!
+  """Set how the caller handles calendar invites from a user. policy is
+  "block" | "auto_accept" | "default" ("default" clears the policy)."""
+  setInvitePolicy(userId: ID!, policy: String!): Boolean!
+}

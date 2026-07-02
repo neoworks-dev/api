@@ -1,0 +1,116 @@
+type ClientDatabase {
+  id: ID!
+  client_id: ID!
+  name: String!
+  db_name: String!
+  status: String!
+  created_at: String!
+  updated_at: String!
+}
+
+"""
+Returned once on creation. db_password is shown only once — store it securely.
+"""
+type CreateClientDatabaseResult {
+  database: ClientDatabase!
+  db_password: String!
+}
+
+input FieldDefInput {
+  name: String!
+  """
+  Allowed base types: string, int, float, decimal, bool, datetime, duration, bytes, uuid, object, any.
+  Parameterized: option<T>, array<T>, set<T> (recursively).
+  """
+  type: String!
+}
+
+input IndexDefInput {
+  name: String!
+  fields: [String!]!
+  unique: Boolean
+  """
+  When true, the index is a FULLTEXT (BM25) index instead of a plain/unique one,
+  enabling the `search` argument on the table's list query. Only valid on string
+  fields. `unique` is ignored for fulltext indexes.
+  """
+  fulltext: Boolean
+  """Analyzer for a fulltext index. Defaults to the built-in "text_en"."""
+  analyzer: String
+}
+
+input TableDefInput {
+  name: String!
+  schemafull: Boolean
+  fields: [FieldDefInput!]
+  indexes: [IndexDefInput!]
+  """
+  Ownership classification. Defaults to "data" (user-scoped): a server-injected
+  subject_user_id stamps each row to the authenticated user. "org" (org-scoped)
+  stamps a server-injected organization_id with the organization that owns the
+  request's client; org-scoped writes require a confidential (client_credentials)
+  token. "relation" and "helper" tables are exempt from a direct owner but must
+  set subjectPath so they stay traceable to a user indirectly.
+  """
+  kind: String
+  """
+  Read visibility: "private" (default — owner only), "shared" (owner plus users the
+  owner grants) or "public" (anyone, including anonymous). Ownership ("kind") and
+  visibility are independent axes.
+  """
+  visibility: String
+  """When true, the table is rewritten into a versioned form with history endpoints."""
+  history: Boolean
+  """Required for relation/helper tables: the path that traces a row back to a user (e.g. "in.subject_user_id")."""
+  subjectPath: String
+}
+
+"""
+Internal compiled representation of a client schema. Clients no longer submit this
+directly — they author in the OpenSchema DSL (`schemaSource`), which the server
+compiles into this shape before generating SurrealQL DDL.
+"""
+input DatabaseSchemaInput {
+  tables: [TableDefInput!]!
+}
+
+extend type Query {
+  clientDatabases(clientId: ID!): [ClientDatabase!]!
+}
+
+"""
+One ordered migration step for a client database. Apply `schema` (declarative
+DDL, idempotent) and/or `statements` (imperative SurrealQL, e.g. data backfills).
+Each version runs at most once; the server records applied versions per database.
+"""
+input MigrationInput {
+  """Monotonic version. Only versions greater than the database's current version run."""
+  version: Int!
+  name: String!
+  """Optional OpenSchema DSL applied at this version (compiled to DDL, idempotent)."""
+  schemaSource: String
+  """Optional imperative SurrealQL statements (run as admin against this database)."""
+  statements: [String!]
+}
+
+type MigrationResult {
+  """Versions applied by this call, in order."""
+  applied: [Int!]!
+  """The database's version after this call."""
+  currentVersion: Int!
+}
+
+extend type Mutation {
+  """
+  Provisions a client database. `schemaSource` is OpenSchema DSL text — the server
+  compiles it (via the schema-compiler sidecar) into the database definition, then
+  generates SurrealQL DDL. The DSL is stored as the canonical schema artifact.
+  """
+  createClientDatabase(clientId: ID!, name: String!, schemaSource: String): CreateClientDatabaseResult!
+  updateClientDatabaseSchema(clientId: ID!, name: String!, schemaSource: String!): ClientDatabase!
+  """
+  Applies ordered migrations (schema + data) to a client database, tracking
+  applied versions. Caller must be a member of the database's owning organization.
+  """
+  applyClientDatabaseMigrations(clientId: ID!, name: String!, migrations: [MigrationInput!]!): MigrationResult!
+}

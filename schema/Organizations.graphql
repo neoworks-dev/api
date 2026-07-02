@@ -1,0 +1,61 @@
+type Organization {
+  id: ID!
+  name: String!
+  slug: String!
+  description: String
+  logo_url: String
+  billing_email: String
+  created_at: String!
+}
+
+type OrganizationMember {
+  user_id: ID!
+  role: String!
+}
+
+type OrgInvite {
+  id: ID!
+  email: String!
+  role: String!
+  status: String!
+  created_at: String!
+  expires_at: String!
+}
+
+input CreateOrganizationInput {
+  name: String!
+  """Used as the organization token in scopes (e.g. "org_123"). Must be unique."""
+  slug: String!
+  description: String
+  billing_email: String
+}
+
+input UpdateOrganizationInput {
+  name: String
+  description: String
+  logo_url: String
+  billing_email: String
+}
+
+extend type Query {
+  """Organizations the authenticated user belongs to."""
+  myOrganizations: [Organization!]!
+  organization(id: ID!): Organization
+  organizationMembers(id: ID!): [OrganizationMember!]!
+  """Pending invitations for an organization. Caller must be an owner or admin."""
+  organizationInvites(id: ID!): [OrgInvite!]!
+}
+
+extend type Mutation {
+  """Creates an organization and adds the caller as its owner."""
+  createOrganization(input: CreateOrganizationInput!): Organization!
+  """Updates organization fields. Caller must be an owner or admin."""
+  updateOrganization(id: ID!, input: UpdateOrganizationInput!): Organization!
+  addOrganizationMember(organizationId: ID!, userId: ID!, role: String!): OrganizationMember!
+  removeOrganizationMember(organizationId: ID!, userId: ID!): Boolean!
+  """Invites someone to an organization by email. Caller must be an owner or admin."""
+  createOrgInvite(organizationId: ID!, email: String!, role: String!): OrgInvite!
+  revokeOrgInvite(id: ID!): Boolean!
+  """Accepts a pending invite addressed to the caller's email, joining the org."""
+  acceptOrgInvite(token: String!): Organization!
+}

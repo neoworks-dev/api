@@ -1,0 +1,43 @@
+"""
+Returned once on creation. secret is null for public (PKCE-only) clients.
+"""
+type CreateClientResult {
+  client: OAuthClient!
+  """null for public clients"""
+  secret: String
+}
+
+input CreateClientInput {
+  """
+  Used as both the OAuth client_id and the SurrealDB record key.
+  Must be unique across all clients (e.g. "myapp.example.com").
+  """
+  id: String!
+  """The organization that will own this client. The caller must be a member of it."""
+  organizationId: ID!
+  """Human-readable display name shown in first-party UI (e.g. the Vault)."""
+  name: String
+  redirect_uris: [String!]!
+  """Scopes this client is allowed to request."""
+  scopes: [String!]!
+  """
+  When true, the consent screen is skipped and scopes are granted automatically.
+  Intended for first-party apps where the user owns both the app and the resource.
+  """
+  auto_grant_scopes: Boolean
+  """
+  When true, no secret is generated. The client authenticates via PKCE only.
+  Suitable for SPAs and native apps that cannot safely store a secret.
+  """
+  public: Boolean
+}
+
+extend type Query {
+  clients(limit: Int, offset: Int): [OAuthClient!]!
+  oauthClient(id: ID!): OAuthClient
+}
+
+extend type Mutation {
+  createClient(input: CreateClientInput!): CreateClientResult!
+  deleteClient(id: ID!): Boolean!
+}

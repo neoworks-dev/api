@@ -1,0 +1,213 @@
+# Personal calendar, aligned to the jsCalendar Event object (RFC 8984).
+# Calendars and events are owned by an individual user. An event is shared by
+# inviting participants who are neoworks users: each gets an attendance edge and
+# a notification; once they accept, the single shared event appears on their
+# calendar too and both the owner and accepted participants may edit it.
+# Colour lives on the calendar (a calendar replaces the former "category").
+
+"""Arbitrary jsCalendar keyed object — used for the schemaless collections
+(participants, locations, alerts, links, relatedTo, localizations,
+recurrenceOverrides). Maps to map[string]interface{} server-side."""
+scalar Map
+
+type Calendar {
+  id: ID!
+  name: String!
+  """One of: green red amber blue violet pink neutral."""
+  color: String!
+  is_default: Boolean!
+  created_at: String!
+  updated_at: String!
+}
+
+"""A jsCalendar NDay: a weekday, optionally restricted to the Nth in the period."""
+type NDay {
+  """Weekday code: mo tu we th fr sa su."""
+  day: String!
+  nthOfPeriod: Int
+}
+
+"""A jsCalendar RecurrenceRule (subset)."""
+type RecurrenceRule {
+  """yearly | monthly | weekly | daily | hourly | minutely | secondly."""
+  frequency: String!
+  interval: Int
+  """Inclusive end, jsCalendar LocalDateTime."""
+  until: String
+  count: Int
+  firstDayOfWeek: String
+  byDay: [NDay!]
+  byMonthDay: [Int!]
+  byMonth: [String!]
+  bySetPosition: [Int!]
+}
+
+type Event {
+  id: ID!
+  """The user who owns this event (its creator)."""
+  owner_id: ID!
+  """The caller's relationship to this event: "owner", or — for an invited
+  participant — "accepted" | "pending" | "declined". Null if neither."""
+  my_attendance: String
+  """Globally-unique jsCalendar identifier (stable across instances)."""
+  uid: String!
+  """The calendar this event belongs to; drives its colour. Null = none."""
+  calendar_id: ID
+  title: String!
+  description: String
+
+  """jsCalendar LocalDateTime (no offset), e.g. 2026-06-14T09:00:00."""
+  start: String!
+  """ISO-8601 duration, e.g. PT1H. Absent = instant."""
+  duration: String
+  """IANA time zone; null = floating."""
+  time_zone: String
+  show_without_time: Boolean!
+
+  status: String
+  free_busy_status: String
+  privacy: String
+  priority: Int
+  color: String
+  sequence: Int
+  keywords: [String!]
+
+  participants: Map
+  locations: Map
+  virtual_locations: Map
+  alerts: Map
+  links: Map
+  related_to: Map
+  localizations: Map
+  recurrence_overrides: Map
+  recurrence_rules: [RecurrenceRule!]
+  excluded_recurrence_rules: [RecurrenceRule!]
+
+  created_at: String!
+  updated_at: String!
+}
+
+input NDayInput {
+  day: String!
+  nthOfPeriod: Int
+}
+
+input RecurrenceRuleInput {
+  frequency: String!
+  interval: Int
+  until: String
+  count: Int
+  firstDayOfWeek: String
+  byDay: [NDayInput!]
+  byMonthDay: [Int!]
+  byMonth: [String!]
+  bySetPosition: [Int!]
+}
+
+input CreateEventInput {
+  calendarId: ID
+  title: String!
+  description: String
+  start: String!
+  duration: String
+  time_zone: String
+  show_without_time: Boolean
+  status: String
+  free_busy_status: String
+  privacy: String
+  priority: Int
+  color: String
+  keywords: [String!]
+  participants: Map
+  locations: Map
+  virtual_locations: Map
+  alerts: Map
+  links: Map
+  related_to: Map
+  localizations: Map
+  recurrence_overrides: Map
+  recurrence_rules: [RecurrenceRuleInput!]
+  excluded_recurrence_rules: [RecurrenceRuleInput!]
+}
+
+input UpdateEventInput {
+  calendarId: ID
+  title: String
+  description: String
+  start: String
+  duration: String
+  time_zone: String
+  show_without_time: Boolean
+  status: String
+  free_busy_status: String
+  privacy: String
+  priority: Int
+  color: String
+  keywords: [String!]
+  participants: Map
+  locations: Map
+  virtual_locations: Map
+  alerts: Map
+  links: Map
+  related_to: Map
+  localizations: Map
+  recurrence_overrides: Map
+  recurrence_rules: [RecurrenceRuleInput!]
+  excluded_recurrence_rules: [RecurrenceRuleInput!]
+}
+
+input CreateCalendarInput {
+  name: String!
+  color: String!
+  is_default: Boolean
+}
+
+input UpdateCalendarInput {
+  name: String
+  color: String
+  is_default: Boolean
+}
+
+"""Structured per-field filter for events, built on the shared operator inputs
+(see _shared.graphql). The `start` operators apply to the resolved start_time."""
+input EventFilter {
+  title: StringFilter
+  description: StringFilter
+  status: StringFilter
+  free_busy_status: StringFilter
+  privacy: StringFilter
+  time_zone: StringFilter
+  color: StringFilter
+  priority: IntFilter
+  sequence: IntFilter
+  keywords: StringListFilter
+  start: DateFilter
+  created_at: DateFilter
+  updated_at: DateFilter
+  and: [EventFilter!]
+  or: [EventFilter!]
+  not: EventFilter
+}
+
+extend type Query {
+  """The caller's events overlapping [from, to] (ISO datetimes): events they own
+  plus events they've been invited to (accepted or pending). Recurring masters are
+  always included so the client can expand them. An optional structured filter
+  narrows further."""
+  events(from: String, to: String, filter: EventFilter): [Event!]!
+  event(id: ID!): Event
+  """The caller's calendars."""
+  calendars: [Calendar!]!
+}
+
+extend type Mutation {
+  createEvent(input: CreateEventInput!): Event!
+  updateEvent(id: ID!, input: UpdateEventInput!): Event!
+  deleteEvent(id: ID!): Boolean!
+  """Accept (true) or decline (false) an invitation to a shared event. Accepting
+  surfaces the event on the caller's calendar; declining removes their invite."""
+  respondToEventInvite(eventId: ID!, accept: Boolean!): Event
+  createCalendar(input: CreateCalendarInput!): Calendar!
+  updateCalendar(id: ID!, input: UpdateCalendarInput!): Calendar!
+  deleteCalendar(id: ID!): Boolean!
+}
