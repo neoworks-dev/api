@@ -93,6 +93,7 @@ func TestScopedUserCannotEscapeSandbox(t *testing.T) {
 	victimDB := "test_victim_" + randSuffix()
 	attackerClient := "atk" + randSuffix()
 	attackerName := "db"
+	pinInstance(store, url, user, pass, attackerClient)
 
 	root := rootConn(t, url, user, pass, ns, "auth")
 
@@ -192,6 +193,7 @@ func TestRunScopedClientDBStatementsContainsDestructiveSQL(t *testing.T) {
 
 	victimDB := "test_victim_" + randSuffix()
 	attackerClient := "atk" + randSuffix()
+	pinInstance(store, url, user, pass, attackerClient)
 
 	root := rootConn(t, url, user, pass, ns, "auth")
 	exec(t, root, "DEFINE DATABASE `"+victimDB+"`")
@@ -247,6 +249,7 @@ func TestScopedUserCannotReachAnotherClientNamespace(t *testing.T) {
 
 	clientA := "atk" + randSuffix()
 	clientB := "vic" + randSuffix()
+	pinInstance(store, url, user, pass, clientA, clientB)
 
 	nsA, dbA, passA, err := store.ProvisionClientDatabase(ctx, clientA, "db")
 	if err != nil {
@@ -288,6 +291,17 @@ func TestScopedUserCannotReachAnotherClientNamespace(t *testing.T) {
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────
+
+// pinInstance routes synthetic client ids at the live test SurrealDB by seeding
+// the store's target cache, so ProvisionClientDatabase and scoped runs hit that
+// instance without needing a provisioner or real client/org records. Keeping
+// both clients on one instance is what makes these cross-namespace isolation
+// checks meaningful.
+func pinInstance(store *SurrealStore, url, user, pass string, clientIDs ...string) {
+	for _, id := range clientIDs {
+		store.targets.put(id, surrealTarget{Endpoint: url, User: user, Pass: pass})
+	}
+}
 
 func firstString(res *[]surrealdb.QueryResult[[]map[string]any], key string) string {
 	for _, qr := range *res {

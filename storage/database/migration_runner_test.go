@@ -18,6 +18,7 @@ func TestMigrationRunsSchemaAndDataInTransaction(t *testing.T) {
 	}
 
 	client := "mig" + randSuffix()
+	pinInstance(store, url, user, pass, client)
 	nsClient, dbName, _, err := store.ProvisionClientDatabase(ctx, client, "db")
 	if err != nil {
 		t.Fatalf("provision: %v", err)
@@ -52,6 +53,7 @@ func TestMigrationTransactionRollsBackOnError(t *testing.T) {
 	}
 
 	client := "mig" + randSuffix()
+	pinInstance(store, url, user, pass, client)
 	nsClient, dbName, _, err := store.ProvisionClientDatabase(ctx, client, "db")
 	if err != nil {
 		t.Fatalf("provision: %v", err)
@@ -91,6 +93,7 @@ func TestMigrationTimeoutKillsLongQuery(t *testing.T) {
 	}
 
 	client := "mig" + randSuffix()
+	pinInstance(store, url, user, pass, client)
 	nsClient, dbName, _, err := store.ProvisionClientDatabase(ctx, client, "db")
 	if err != nil {
 		t.Fatalf("provision: %v", err)

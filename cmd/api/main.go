@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/handler"
@@ -28,6 +29,7 @@ import (
 	"github.com/neoworks/auth/middleware"
 	"github.com/neoworks/auth/mollie"
 	"github.com/neoworks/auth/oauth"
+	"github.com/neoworks/auth/provisioner"
 	"github.com/neoworks/auth/push"
 	"github.com/neoworks/auth/scheduler"
 	"github.com/neoworks/auth/storage/cache"
@@ -73,6 +75,28 @@ func main() {
 	if err != nil {
 		log.Fatalf("surrealdb: %v", err)
 	}
+
+	// Every organization's client databases are provisioned on a dedicated SurrealDB
+	// instance (isolation + metering boundary), created lazily on the org's first
+	// database. The control-plane store above stays on the shared system instance.
+	var enc *database.Encryptor
+	if key := os.Getenv("INSTANCE_SECRET_KEY"); key != "" {
+		enc, err = database.NewEncryptor(key)
+		if err != nil {
+			log.Fatalf("instance encryptor: %v", err)
+		}
+	} else {
+		slog.Warn("INSTANCE_SECRET_KEY unset; per-org instance root passwords are stored unencrypted")
+	}
+	dockerProv := provisioner.NewDockerProvisioner(provisioner.DockerConfig{
+		Image:    env("TENANT_SURREAL_IMAGE", "surrealdb/surrealdb:latest-dev"),
+		Network:  os.Getenv("TENANT_SURREAL_NETWORK"),
+		BindHost: env("TENANT_SURREAL_BIND_HOST", "127.0.0.1"),
+		DialHost: env("TENANT_SURREAL_DIAL_HOST", "127.0.0.1"),
+	})
+	surreal.UseInstanceProvisioner(dockerProv, enc)
+	surreal.StartInstanceMetering(context.Background(), time.Minute)
+	slog.Info("per-org SurrealDB instances enabled", "substrate", "docker")
 
 	objects, err := objectstore.New(s3Endpoint, s3AccessKey, s3SecretKey, s3Bucket, s3UseSSL)
 	if err != nil {

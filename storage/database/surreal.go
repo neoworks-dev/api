@@ -3,8 +3,11 @@ package database
 import (
 	"context"
 	"errors"
+	"sync"
+	"time"
 
 	"github.com/neoworks/auth/oauth"
+	"github.com/neoworks/auth/provisioner"
 	surrealdb "github.com/surrealdb/surrealdb.go"
 	"github.com/surrealdb/surrealdb.go/pkg/models"
 )
@@ -21,6 +24,14 @@ type SurrealStore struct {
 	pricing Pricing
 
 	storageCache *storageUsageCache
+
+	// Per-organization instance routing: each client database lives on its org's
+	// dedicated instance, provisioned lazily on first use. Set via
+	// UseInstanceProvisioner; required for any client-database operation.
+	prov        provisioner.InstanceProvisioner
+	instanceEnc *Encryptor
+	targets     *targetCache
+	provLocks   sync.Map
 
 	Contacts    *ContactStore
 	Events      *EventStore
@@ -63,6 +74,7 @@ func NewSurrealStore(url, user, pass, ns, dbName string) (*SurrealStore, error) 
 		adminNS:      ns,
 		pricing:      pricing,
 		storageCache: newStorageUsageCache(),
+		targets:      newTargetCache(60 * time.Second),
 	}
 	store.Contacts = &ContactStore{DB: db}
 	store.Events = &EventStore{DB: db}

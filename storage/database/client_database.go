@@ -45,18 +45,18 @@ func (s *SurrealStore) ProvisionClientDatabase(ctx context.Context, clientID, na
 	}
 	password = base64.RawURLEncoding.EncodeToString(raw)
 
-	adminDB, err := surrealdb.FromEndpointURLString(ctx, s.adminURL)
+	// Resolve (provisioning on first use) the org's dedicated instance, then run
+	// all DDL against it. Falls back to the shared instance when the feature is
+	// off or the client has no organization.
+	target, err := s.ensureTargetForClient(ctx, clientID)
 	if err != nil {
-		return "", "", "", fmt.Errorf("admin connect: %w", err)
+		return "", "", "", fmt.Errorf("resolve instance: %w", err)
+	}
+	adminDB, err := s.openAdmin(ctx, target, "", "")
+	if err != nil {
+		return "", "", "", err
 	}
 	defer adminDB.Close(ctx) //nolint:errcheck
-
-	if _, err = adminDB.SignIn(ctx, surrealdb.Auth{
-		Username: s.adminUser,
-		Password: s.adminPass,
-	}); err != nil {
-		return "", "", "", fmt.Errorf("admin sign in: %w", err)
-	}
 
 	// DEFINE NAMESPACE is a root-level statement; the root session runs it without
 	// selecting a namespace (selecting an empty one would itself define a "" namespace).
@@ -102,21 +102,15 @@ func (s *SurrealStore) ApplyDDLToClientDB(ctx context.Context, namespace, dbName
 		return nil
 	}
 
-	adminDB, err := surrealdb.FromEndpointURLString(ctx, s.adminURL)
+	target, err := s.targetForNamespace(ctx, namespace)
 	if err != nil {
-		return fmt.Errorf("admin connect: %w", err)
+		return err
+	}
+	adminDB, err := s.openAdmin(ctx, target, namespace, dbName)
+	if err != nil {
+		return err
 	}
 	defer adminDB.Close(ctx) //nolint:errcheck
-
-	if _, err = adminDB.SignIn(ctx, surrealdb.Auth{
-		Username: s.adminUser,
-		Password: s.adminPass,
-	}); err != nil {
-		return fmt.Errorf("admin sign in: %w", err)
-	}
-	if err = adminDB.Use(ctx, namespace, dbName); err != nil {
-		return fmt.Errorf("admin use db: %w", err)
-	}
 
 	for _, stmt := range stmts {
 		if _, err = surrealdb.Query[[]any](ctx, adminDB, stmt, nil); err != nil {
@@ -131,20 +125,33 @@ func (s *SurrealStore) ApplyDDLToClientDB(ctx context.Context, namespace, dbName
 // by the resolvers (subject_user_id filters from the JWT), so admin access is
 // safe and avoids storing per-DB passwords server-side.
 func (s *SurrealStore) clientConn(ctx context.Context, namespace, dbName string) (*surrealdb.DB, error) {
-	conn, err := surrealdb.FromEndpointURLString(ctx, s.adminURL)
+	target, err := s.targetForNamespace(ctx, namespace)
+	if err != nil {
+		return nil, err
+	}
+	return s.openAdmin(ctx, target, namespace, dbName)
+}
+
+// openAdmin opens a root connection to the given target instance, selecting
+// namespace/dbName when both are non-empty (namespace-level statements like
+// DEFINE NAMESPACE pass an empty namespace to skip selection).
+func (s *SurrealStore) openAdmin(ctx context.Context, target surrealTarget, namespace, dbName string) (*surrealdb.DB, error) {
+	conn, err := surrealdb.FromEndpointURLString(ctx, target.Endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("admin connect: %w", err)
 	}
 	if _, err = conn.SignIn(ctx, surrealdb.Auth{
-		Username: s.adminUser,
-		Password: s.adminPass,
+		Username: target.User,
+		Password: target.Pass,
 	}); err != nil {
 		_ = conn.Close(ctx)
 		return nil, fmt.Errorf("admin sign in: %w", err)
 	}
-	if err = conn.Use(ctx, namespace, dbName); err != nil {
-		_ = conn.Close(ctx)
-		return nil, fmt.Errorf("admin use db: %w", err)
+	if namespace != "" {
+		if err = conn.Use(ctx, namespace, dbName); err != nil {
+			_ = conn.Close(ctx)
+			return nil, fmt.Errorf("admin use db: %w", err)
+		}
 	}
 	return conn, nil
 }
@@ -245,18 +252,17 @@ func (s *SurrealStore) RunScopedClientDBStatements(ctx context.Context, namespac
 	password := base64.RawURLEncoding.EncodeToString(raw)
 	const runner = "_mig_runner"
 
-	// Root creates the ephemeral scoped OWNER user in the target database.
-	root, err := surrealdb.FromEndpointURLString(ctx, s.adminURL)
+	// Root creates the ephemeral scoped OWNER user in the target database, on the
+	// same instance the scoped session will connect to.
+	target, err := s.targetForNamespace(ctx, namespace)
 	if err != nil {
-		return fmt.Errorf("admin connect: %w", err)
+		return err
+	}
+	root, err := s.openAdmin(ctx, target, namespace, dbName)
+	if err != nil {
+		return err
 	}
 	defer root.Close(closeCtx) //nolint:errcheck
-	if _, err = root.SignIn(ctx, surrealdb.Auth{Username: s.adminUser, Password: s.adminPass}); err != nil {
-		return fmt.Errorf("admin sign in: %w", err)
-	}
-	if err = root.Use(ctx, namespace, dbName); err != nil {
-		return fmt.Errorf("admin use db: %w", err)
-	}
 	if _, err = surrealdb.Query[[]any](ctx, root,
 		"DEFINE USER OVERWRITE `"+runner+"` ON DATABASE ROLES OWNER PASSWORD '"+password+"'", nil); err != nil {
 		return fmt.Errorf("define migration user: %w", err)
@@ -267,7 +273,7 @@ func (s *SurrealStore) RunScopedClientDBStatements(ctx context.Context, namespac
 
 	// Run the statements on a session authenticated AS the scoped user, which the
 	// engine restricts to this database.
-	scoped, err := surrealdb.FromEndpointURLString(ctx, s.adminURL)
+	scoped, err := surrealdb.FromEndpointURLString(ctx, target.Endpoint)
 	if err != nil {
 		return fmt.Errorf("scoped connect: %w", err)
 	}

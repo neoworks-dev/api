@@ -274,3 +274,19 @@ type ClientDatabase struct {
 	CreatedAt time.Time        `json:"created_at"`
 	UpdatedAt time.Time        `json:"updated_at"`
 }
+
+// OrgInstance is the control-plane record of an organization's dedicated
+// SurrealDB instance. RootPassRef holds the sealed root password (see
+// database.Encryptor); it is opened in memory only when signing in.
+type OrgInstance struct {
+	ID           *models.RecordID `json:"id,omitempty"`
+	Organization *models.RecordID `json:"organization"`
+	Endpoint     string           `json:"endpoint"`
+	Status       string           `json:"status"`
+	Handle       string           `json:"handle"`
+	RootUser     string           `json:"root_user"`
+	RootPassRef  string           `json:"root_pass_ref"`
+	Host         *string          `json:"host,omitempty"`
+	CreatedAt    time.Time        `json:"created_at"`
+	UpdatedAt    time.Time        `json:"updated_at"`
+}
