@@ -26,7 +26,7 @@ func (r *mutationResolver) CreateClientDatabase(ctx context.Context, clientID st
 	if schemaSource != nil {
 		source = *schemaSource
 	}
-	schema, err := compileSchemaSource(ctx, source)
+	schema, ddl, err := compileSchemaSource(ctx, source)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func (r *mutationResolver) CreateClientDatabase(ctx context.Context, clientID st
 		return nil, fmt.Errorf("create client_database: no result")
 	}
 
-	if ddl := allDDL(tables); len(ddl) > 0 {
+	if len(ddl) > 0 {
 		if err := r.store.ApplyDDLToClientDB(ctx, namespace, dbName, ddl); err != nil {
 			return nil, fmt.Errorf("apply schema: %w", err)
 		}
@@ -119,7 +119,7 @@ func (r *mutationResolver) CreateClientDatabase(ctx context.Context, clientID st
 
 // UpdateClientDatabaseSchema is the resolver for the updateClientDatabaseSchema field.
 func (r *mutationResolver) UpdateClientDatabaseSchema(ctx context.Context, clientID string, name string, schemaSource string) (*gql_model.ClientDatabase, error) {
-	schema, err := compileSchemaSource(ctx, schemaSource)
+	schema, ddl, err := compileSchemaSource(ctx, schemaSource)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func (r *mutationResolver) UpdateClientDatabaseSchema(ctx context.Context, clien
 		return nil, database.ErrNotFound
 	}
 
-	if err := r.store.ApplyDDLToClientDB(ctx, rec.Namespace, rec.DbName, allDDL(tables)); err != nil {
+	if err := r.store.ApplyDDLToClientDB(ctx, rec.Namespace, rec.DbName, ddl); err != nil {
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
 	if err := r.recordClientTables(ctx, rec.ID, schema, tables); err != nil {

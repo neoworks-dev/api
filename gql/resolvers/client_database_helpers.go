@@ -238,7 +238,7 @@ func (r *mutationResolver) applyMigrations(ctx context.Context, clientID string,
 		}
 		var stmts []string
 		if m.SchemaSource != nil && *m.SchemaSource != "" {
-			schema, err := compileSchemaSource(ctx, *m.SchemaSource)
+			schema, ddl, err := compileSchemaSource(ctx, *m.SchemaSource)
 			if err != nil {
 				return nil, fmt.Errorf("migration %d schema: %w", m.Version, err)
 			}
@@ -246,7 +246,7 @@ func (r *mutationResolver) applyMigrations(ctx context.Context, clientID string,
 			if err != nil {
 				return nil, fmt.Errorf("migration %d schema: %w", m.Version, err)
 			}
-			stmts = append(stmts, allDDL(tables)...)
+			stmts = append(stmts, ddl...)
 			lastSchema = schema
 			lastTables = tables
 		}

@@ -41,50 +41,53 @@ type compileDiagnostic struct {
 type compileResponse struct {
 	OK          bool                           `json:"ok"`
 	Schema      *gql_model.DatabaseSchemaInput `json:"schema"`
+	DDL         []string                       `json:"ddl"`
 	Source      string                         `json:"source"`
 	Diagnostics []compileDiagnostic            `json:"diagnostics"`
 }
 
-// compileSchemaSource compiles OpenSchema DSL text into a DatabaseSchemaInput via
-// the sidecar. Returns nil for empty input (a database may be created with no
-// schema). Compile diagnostics surface as a Public (client-facing) error.
-func compileSchemaSource(ctx context.Context, source string) (*gql_model.DatabaseSchemaInput, error) {
+// compileSchemaSource compiles OpenSchema DSL text via the sidecar, returning both
+// the DatabaseSchemaInput (validated + recorded for the data plane) and the
+// SurrealQL DDL the compiler emits (applied verbatim to the org instance — the
+// compiler, not the Go API, owns codegen). Returns nil for empty input (a database
+// may be created with no schema). Diagnostics surface as a Public error.
+func compileSchemaSource(ctx context.Context, source string) (*gql_model.DatabaseSchemaInput, []string, error) {
 	if strings.TrimSpace(source) == "" {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	body, err := json.Marshal(map[string]any{
 		"files": []compileFile{{Path: "schema.schema", Contents: source}},
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, schemaCompilerURL()+"/compile", bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("schema compiler unreachable: %w", err)
+		return nil, nil, fmt.Errorf("schema compiler unreachable: %w", err)
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
 	var out compileResponse
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, fmt.Errorf("schema compiler bad response: %w", err)
+		return nil, nil, fmt.Errorf("schema compiler bad response: %w", err)
 	}
 	if !out.OK {
-		return nil, Public("schema error: " + formatDiagnostics(out.Diagnostics))
+		return nil, nil, Public("schema error: " + formatDiagnostics(out.Diagnostics))
 	}
 	if out.Schema == nil {
-		return nil, fmt.Errorf("schema compiler returned no schema")
+		return nil, nil, fmt.Errorf("schema compiler returned no schema")
 	}
-	return out.Schema, nil
+	return out.Schema, out.DDL, nil
 }
 
 func formatDiagnostics(diagnostics []compileDiagnostic) string {

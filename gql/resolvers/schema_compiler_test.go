@@ -26,12 +26,16 @@ model Schema {
   3 downloads: i64
 }`
 
-	schema, err := compileSchemaSource(context.Background(), source)
+	schema, ddl, err := compileSchemaSource(context.Background(), source)
 	if err != nil {
 		t.Fatalf("compile: %v", err)
 	}
 	if schema == nil || len(schema.Tables) != 1 {
 		t.Fatalf("want 1 table, got %+v", schema)
+	}
+	// The compiler now also emits the SurrealQL the API applies.
+	if len(ddl) == 0 {
+		t.Error("expected DDL statements from the compiler")
 	}
 
 	table := schema.Tables[0]
@@ -62,9 +66,9 @@ model Schema {
 	}
 
 	// Empty source compiles to no schema (a database may be created without one).
-	empty, err := compileSchemaSource(context.Background(), "   ")
-	if err != nil || empty != nil {
-		t.Errorf("empty source: schema=%v err=%v", empty, err)
+	empty, emptyDDL, err := compileSchemaSource(context.Background(), "   ")
+	if err != nil || empty != nil || emptyDDL != nil {
+		t.Errorf("empty source: schema=%v ddl=%v err=%v", empty, emptyDDL, err)
 	}
 }
 

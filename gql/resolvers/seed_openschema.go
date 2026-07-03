@@ -34,12 +34,27 @@ var registrySchemaSource string
 //go:embed registry.internal.json
 var registrySchemaJSON []byte
 
+// registry.ddl.json is the SurrealQL the OpenSchema compiler emits for the
+// registry schema, committed so boot seeding applies it without the compile
+// sidecar. Regenerate both artifacts with `bun run gen:registry`.
+//
+//go:embed registry.ddl.json
+var registryDDLJSON []byte
+
 func registrySchema() (*gql_model.DatabaseSchemaInput, error) {
 	var schema gql_model.DatabaseSchemaInput
 	if err := json.Unmarshal(registrySchemaJSON, &schema); err != nil {
 		return nil, fmt.Errorf("decode embedded registry schema: %w", err)
 	}
 	return &schema, nil
+}
+
+func registryDDL() ([]string, error) {
+	var ddl []string
+	if err := json.Unmarshal(registryDDLJSON, &ddl); err != nil {
+		return nil, fmt.Errorf("decode embedded registry ddl: %w", err)
+	}
+	return ddl, nil
 }
 
 // SeedOpenschemaRegistry provisions (idempotently) the openschema client_database
@@ -55,6 +70,10 @@ func (r *Resolver) SeedOpenschemaRegistry(ctx context.Context) error {
 	tables, err := rewriteSchemaInput(schema)
 	if err != nil {
 		return fmt.Errorf("registry schema: %w", err)
+	}
+	ddl, err := registryDDL()
+	if err != nil {
+		return err
 	}
 
 	clientRef := models.NewRecordID("client", openschemaClientID)
@@ -88,7 +107,7 @@ func (r *Resolver) SeedOpenschemaRegistry(ctx context.Context) error {
 		return fmt.Errorf("lookup registry database: %w", err)
 	}
 
-	if derr := r.store.ApplyDDLToClientDB(ctx, rec.Namespace, rec.DbName, allDDL(tables)); derr != nil {
+	if derr := r.store.ApplyDDLToClientDB(ctx, rec.Namespace, rec.DbName, ddl); derr != nil {
 		return fmt.Errorf("apply registry ddl: %w", derr)
 	}
 	if rerr := mr.recordClientTables(ctx, rec.ID, schema, tables); rerr != nil {
