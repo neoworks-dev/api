@@ -21,9 +21,12 @@ type InstanceHandle struct {
 	Host     string // best-effort host the instance runs on, for diagnostics
 }
 
-// ResourceStats is a point-in-time sample used to accrue usage-based billing.
+// ResourceStats is a point-in-time sample used to accrue usage-based billing and
+// to power the per-instance usage dashboard.
 type ResourceStats struct {
 	CPUPercent   float64 // instantaneous CPU load; the sampler integrates it over the window
+	MemBytes     int64   // resident memory the instance is currently using
+	MemPercent   float64 // memory use as a fraction of the container's limit
 	StorageBytes int64   // on-disk size of the instance's data volume
 }
 

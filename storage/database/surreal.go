@@ -33,6 +33,10 @@ type SurrealStore struct {
 	targets     *targetCache
 	provLocks   sync.Map
 
+	// queryMetrics measures per-database query latency + in-flight counts, which
+	// SurrealDB does not expose, as the store brokers each client-database query.
+	queryMetrics *queryMetrics
+
 	Contacts    *ContactStore
 	Events      *EventStore
 	Calendars   *CalendarStore
@@ -67,14 +71,15 @@ func NewSurrealStore(url, user, pass, ns, dbName string) (*SurrealStore, error) 
 	}
 
 	store := &SurrealStore{
-		DB:        db,
-		adminURL:  url,
-		adminUser: user,
-		adminPass: pass,
+		DB:           db,
+		adminURL:     url,
+		adminUser:    user,
+		adminPass:    pass,
 		adminNS:      ns,
 		pricing:      pricing,
 		storageCache: newStorageUsageCache(),
 		targets:      newTargetCache(60 * time.Second),
+		queryMetrics: newQueryMetrics(),
 	}
 	store.Contacts = &ContactStore{DB: db}
 	store.Events = &EventStore{DB: db}

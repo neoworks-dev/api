@@ -46,7 +46,15 @@ func (r *mutationResolver) countClientDatabases(ctx context.Context, clientRef m
 // clientOrganization returns the owning organization of a client, used to route
 // client usage to the org's billing identity. Returns nil if it cannot be resolved.
 func (r *mutationResolver) clientOrganization(ctx context.Context, clientRef models.RecordID) *models.RecordID {
-	results, err := surrealdb.Query[[]*models.RecordID](ctx, r.store.DB,
+	return clientOrganizationRef(ctx, r.store.DB, clientRef)
+}
+
+func (r *queryResolver) clientOrganization(ctx context.Context, clientRef models.RecordID) *models.RecordID {
+	return clientOrganizationRef(ctx, r.store.DB, clientRef)
+}
+
+func clientOrganizationRef(ctx context.Context, db *surrealdb.DB, clientRef models.RecordID) *models.RecordID {
+	results, err := surrealdb.Query[[]*models.RecordID](ctx, db,
 		"SELECT VALUE organization FROM client WHERE id = $client LIMIT 1",
 		map[string]any{"client": clientRef},
 	)

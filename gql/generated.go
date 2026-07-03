@@ -207,6 +207,22 @@ type ComplexityRoot struct {
 		Value func(childComplexity int) int
 	}
 
+	DatabaseUsage struct {
+		Current        func(childComplexity int) int
+		InstanceSeries func(childComplexity int) int
+		QuerySeries    func(childComplexity int) int
+	}
+
+	DatabaseUsageCurrent struct {
+		ActiveConnections func(childComplexity int) int
+		AvgLatencyMs      func(childComplexity int) int
+		CPUPercent        func(childComplexity int) int
+		MemBytes          func(childComplexity int) int
+		MemPercent        func(childComplexity int) int
+		QueryCount        func(childComplexity int) int
+		StorageBytes      func(childComplexity int) int
+	}
+
 	Event struct {
 		Alerts                  func(childComplexity int) int
 		CalendarID              func(childComplexity int) int
@@ -437,6 +453,7 @@ type ComplexityRoot struct {
 		ContactCount              func(childComplexity int, scope *gql_model.ContactScope, favorite *bool, search *string, filter *gql_model.ContactFilter) int
 		ContactHistory            func(childComplexity int, id string, filter *gql_model.ContactVersionFilter) int
 		Contacts                  func(childComplexity int, scope *gql_model.ContactScope, favorite *bool, search *string, filter *gql_model.ContactFilter, sort []*gql_model.ContactSort, limit *int, offset *int) int
+		DatabaseUsage             func(childComplexity int, clientID string, name string, sinceMinutes *int) int
 		Event                     func(childComplexity int, id string) int
 		Events                    func(childComplexity int, from *string, to *string, filter *gql_model.EventFilter) int
 		FavoriteMedia             func(childComplexity int, sort []*gql_model.MediaSort, limit *int, offset *int) int
@@ -466,6 +483,13 @@ type ComplexityRoot struct {
 		SharedMedia               func(childComplexity int, filter *gql_model.MediaFilter, sort []*gql_model.MediaSort, limit *int, offset *int) int
 		SharedMediaCount          func(childComplexity int, filter *gql_model.MediaFilter) int
 		StorageUsage              func(childComplexity int) int
+	}
+
+	QueryUsagePoint struct {
+		ActiveConnections func(childComplexity int) int
+		AvgLatencyMs      func(childComplexity int) int
+		QueryCount        func(childComplexity int) int
+		SampledAt         func(childComplexity int) int
 	}
 
 	RecurrenceRule struct {
@@ -544,6 +568,14 @@ type ComplexityRoot struct {
 		History    func(childComplexity int) int
 		Tiers      func(childComplexity int) int
 		TotalBytes func(childComplexity int) int
+	}
+
+	UsagePoint struct {
+		CPUPercent   func(childComplexity int) int
+		MemBytes     func(childComplexity int) int
+		MemPercent   func(childComplexity int) int
+		SampledAt    func(childComplexity int) int
+		StorageBytes func(childComplexity int) int
 	}
 
 	UserSearchResult struct {
@@ -630,6 +662,7 @@ type QueryResolver interface {
 	Clients(ctx context.Context, organizationID string, limit *int, offset *int) ([]*gql_model.OAuthClient, error)
 	OauthClient(ctx context.Context, id string) (*gql_model.OAuthClient, error)
 	ClientDatabases(ctx context.Context, clientID string) ([]*gql_model.ClientDatabase, error)
+	DatabaseUsage(ctx context.Context, clientID string, name string, sinceMinutes *int) (*gql_model.DatabaseUsage, error)
 	MyOrganizations(ctx context.Context) ([]*gql_model.Organization, error)
 	Organization(ctx context.Context, id string) (*gql_model.Organization, error)
 	OrganizationMembers(ctx context.Context, id string) ([]*gql_model.OrganizationMember, error)
@@ -1463,6 +1496,68 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CustomField.Value(childComplexity), true
+
+	case "DatabaseUsage.current":
+		if e.ComplexityRoot.DatabaseUsage.Current == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DatabaseUsage.Current(childComplexity), true
+	case "DatabaseUsage.instanceSeries":
+		if e.ComplexityRoot.DatabaseUsage.InstanceSeries == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DatabaseUsage.InstanceSeries(childComplexity), true
+	case "DatabaseUsage.querySeries":
+		if e.ComplexityRoot.DatabaseUsage.QuerySeries == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DatabaseUsage.QuerySeries(childComplexity), true
+
+	case "DatabaseUsageCurrent.active_connections":
+		if e.ComplexityRoot.DatabaseUsageCurrent.ActiveConnections == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DatabaseUsageCurrent.ActiveConnections(childComplexity), true
+	case "DatabaseUsageCurrent.avg_latency_ms":
+		if e.ComplexityRoot.DatabaseUsageCurrent.AvgLatencyMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DatabaseUsageCurrent.AvgLatencyMs(childComplexity), true
+	case "DatabaseUsageCurrent.cpu_percent":
+		if e.ComplexityRoot.DatabaseUsageCurrent.CPUPercent == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DatabaseUsageCurrent.CPUPercent(childComplexity), true
+	case "DatabaseUsageCurrent.mem_bytes":
+		if e.ComplexityRoot.DatabaseUsageCurrent.MemBytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DatabaseUsageCurrent.MemBytes(childComplexity), true
+	case "DatabaseUsageCurrent.mem_percent":
+		if e.ComplexityRoot.DatabaseUsageCurrent.MemPercent == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DatabaseUsageCurrent.MemPercent(childComplexity), true
+	case "DatabaseUsageCurrent.query_count":
+		if e.ComplexityRoot.DatabaseUsageCurrent.QueryCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DatabaseUsageCurrent.QueryCount(childComplexity), true
+	case "DatabaseUsageCurrent.storage_bytes":
+		if e.ComplexityRoot.DatabaseUsageCurrent.StorageBytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DatabaseUsageCurrent.StorageBytes(childComplexity), true
 
 	case "Event.alerts":
 		if e.ComplexityRoot.Event.Alerts == nil {
@@ -2845,6 +2940,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Contacts(childComplexity, args["scope"].(*gql_model.ContactScope), args["favorite"].(*bool), args["search"].(*string), args["filter"].(*gql_model.ContactFilter), args["sort"].([]*gql_model.ContactSort), args["limit"].(*int), args["offset"].(*int)), true
+	case "Query.databaseUsage":
+		if e.ComplexityRoot.Query.DatabaseUsage == nil {
+			break
+		}
+
+		args, err := ec.field_Query_databaseUsage_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.DatabaseUsage(childComplexity, args["clientId"].(string), args["name"].(string), args["sinceMinutes"].(*int)), true
 	case "Query.event":
 		if e.ComplexityRoot.Query.Event == nil {
 			break
@@ -3136,6 +3242,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Query.StorageUsage(childComplexity), true
 
+	case "QueryUsagePoint.active_connections":
+		if e.ComplexityRoot.QueryUsagePoint.ActiveConnections == nil {
+			break
+		}
+
+		return e.ComplexityRoot.QueryUsagePoint.ActiveConnections(childComplexity), true
+	case "QueryUsagePoint.avg_latency_ms":
+		if e.ComplexityRoot.QueryUsagePoint.AvgLatencyMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.QueryUsagePoint.AvgLatencyMs(childComplexity), true
+	case "QueryUsagePoint.query_count":
+		if e.ComplexityRoot.QueryUsagePoint.QueryCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.QueryUsagePoint.QueryCount(childComplexity), true
+	case "QueryUsagePoint.sampled_at":
+		if e.ComplexityRoot.QueryUsagePoint.SampledAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.QueryUsagePoint.SampledAt(childComplexity), true
+
 	case "RecurrenceRule.byDay":
 		if e.ComplexityRoot.RecurrenceRule.ByDay == nil {
 			break
@@ -3416,6 +3547,37 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.StorageUsage.TotalBytes(childComplexity), true
+
+	case "UsagePoint.cpu_percent":
+		if e.ComplexityRoot.UsagePoint.CPUPercent == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UsagePoint.CPUPercent(childComplexity), true
+	case "UsagePoint.mem_bytes":
+		if e.ComplexityRoot.UsagePoint.MemBytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UsagePoint.MemBytes(childComplexity), true
+	case "UsagePoint.mem_percent":
+		if e.ComplexityRoot.UsagePoint.MemPercent == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UsagePoint.MemPercent(childComplexity), true
+	case "UsagePoint.sampled_at":
+		if e.ComplexityRoot.UsagePoint.SampledAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UsagePoint.SampledAt(childComplexity), true
+	case "UsagePoint.storage_bytes":
+		if e.ComplexityRoot.UsagePoint.StorageBytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UsagePoint.StorageBytes(childComplexity), true
 
 	case "UserSearchResult.connection_status":
 		if e.ComplexityRoot.UserSearchResult.ConnectionStatus == nil {
@@ -4471,11 +4633,11 @@ input TableDefInput {
   indexes: [IndexDefInput!]
   """
   Ownership classification. Defaults to "data" (user-scoped): a server-injected
-  subject_user_id stamps each row to the authenticated user. "org" (org-scoped)
-  stamps a server-injected organization_id with the organization that owns the
-  request's client; org-scoped writes require a confidential (client_credentials)
-  token. "relation" and "helper" tables are exempt from a direct owner but must
-  set subjectPath so they stay traceable to a user indirectly.
+  subject_user_id stamps each row to the authenticated user. "internal" (org-owned)
+  rows have no per-user owner — the instance belongs to one organization, so any of
+  the org's clients read/write every row; internal writes require a confidential
+  (client_credentials) token. "relation" and "helper" tables are exempt from a
+  direct owner but must set subjectPath so they stay traceable to a user indirectly.
   """
   kind: String
   """
@@ -4538,6 +4700,51 @@ extend type Mutation {
   applied versions. Caller must be a member of the database's owning organization.
   """
   applyClientDatabaseMigrations(clientId: ID!, name: String!, migrations: [MigrationInput!]!): MigrationResult!
+}
+`, BuiltIn: false},
+	{Name: "../schema/Usage.graphql", Input: `"""One instance-level usage sample (CPU / memory / storage) at a point in time."""
+type UsagePoint {
+  sampled_at: String!
+  cpu_percent: Float!
+  """Bytes are Float to stay within GraphQL's 32-bit Int range."""
+  mem_bytes: Float!
+  mem_percent: Float!
+  storage_bytes: Float!
+}
+
+"""One per-database query sample at a point in time."""
+type QueryUsagePoint {
+  sampled_at: String!
+  query_count: Int!
+  avg_latency_ms: Float!
+  active_connections: Int!
+}
+
+"""Latest snapshot shown as gauges."""
+type DatabaseUsageCurrent {
+  cpu_percent: Float!
+  mem_bytes: Float!
+  mem_percent: Float!
+  storage_bytes: Float!
+  avg_latency_ms: Float!
+  active_connections: Int!
+  query_count: Int!
+}
+
+type DatabaseUsage {
+  current: DatabaseUsageCurrent!
+  instanceSeries: [UsagePoint!]!
+  querySeries: [QueryUsagePoint!]!
+}
+
+extend type Query {
+  """
+  Usage metrics for a client database. CPU, memory and storage reflect the shared
+  org instance hosting the database (an org's databases share one instance); query
+  stats are specific to this database. ` + "`" + `sinceMinutes` + "`" + ` bounds the time series
+  (default 60). Caller must be a member of the database's owning organization.
+  """
+  databaseUsage(clientId: ID!, name: String!, sinceMinutes: Int): DatabaseUsage!
 }
 `, BuiltIn: false},
 	{Name: "../schema/Organizations.graphql", Input: `type Organization {
@@ -6005,6 +6212,27 @@ func (ec *executionContext) field_Query_contacts_args(ctx context.Context, rawAr
 		return nil, err
 	}
 	args["offset"] = arg6
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_databaseUsage_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "clientId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["clientId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "name", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["name"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "sinceMinutes", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["sinceMinutes"] = arg2
 	return args, nil
 }
 
@@ -10444,6 +10672,334 @@ func (ec *executionContext) fieldContext_CustomField_value(_ context.Context, fi
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DatabaseUsage_current(ctx context.Context, field graphql.CollectedField, obj *gql_model.DatabaseUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_DatabaseUsage_current,
+		func(ctx context.Context) (any, error) {
+			return obj.Current, nil
+		},
+		nil,
+		ec.marshalNDatabaseUsageCurrent2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐDatabaseUsageCurrent,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_DatabaseUsage_current(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DatabaseUsage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "cpu_percent":
+				return ec.fieldContext_DatabaseUsageCurrent_cpu_percent(ctx, field)
+			case "mem_bytes":
+				return ec.fieldContext_DatabaseUsageCurrent_mem_bytes(ctx, field)
+			case "mem_percent":
+				return ec.fieldContext_DatabaseUsageCurrent_mem_percent(ctx, field)
+			case "storage_bytes":
+				return ec.fieldContext_DatabaseUsageCurrent_storage_bytes(ctx, field)
+			case "avg_latency_ms":
+				return ec.fieldContext_DatabaseUsageCurrent_avg_latency_ms(ctx, field)
+			case "active_connections":
+				return ec.fieldContext_DatabaseUsageCurrent_active_connections(ctx, field)
+			case "query_count":
+				return ec.fieldContext_DatabaseUsageCurrent_query_count(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type DatabaseUsageCurrent", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DatabaseUsage_instanceSeries(ctx context.Context, field graphql.CollectedField, obj *gql_model.DatabaseUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_DatabaseUsage_instanceSeries,
+		func(ctx context.Context) (any, error) {
+			return obj.InstanceSeries, nil
+		},
+		nil,
+		ec.marshalNUsagePoint2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐUsagePointᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_DatabaseUsage_instanceSeries(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DatabaseUsage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "sampled_at":
+				return ec.fieldContext_UsagePoint_sampled_at(ctx, field)
+			case "cpu_percent":
+				return ec.fieldContext_UsagePoint_cpu_percent(ctx, field)
+			case "mem_bytes":
+				return ec.fieldContext_UsagePoint_mem_bytes(ctx, field)
+			case "mem_percent":
+				return ec.fieldContext_UsagePoint_mem_percent(ctx, field)
+			case "storage_bytes":
+				return ec.fieldContext_UsagePoint_storage_bytes(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type UsagePoint", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DatabaseUsage_querySeries(ctx context.Context, field graphql.CollectedField, obj *gql_model.DatabaseUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_DatabaseUsage_querySeries,
+		func(ctx context.Context) (any, error) {
+			return obj.QuerySeries, nil
+		},
+		nil,
+		ec.marshalNQueryUsagePoint2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐQueryUsagePointᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_DatabaseUsage_querySeries(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DatabaseUsage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "sampled_at":
+				return ec.fieldContext_QueryUsagePoint_sampled_at(ctx, field)
+			case "query_count":
+				return ec.fieldContext_QueryUsagePoint_query_count(ctx, field)
+			case "avg_latency_ms":
+				return ec.fieldContext_QueryUsagePoint_avg_latency_ms(ctx, field)
+			case "active_connections":
+				return ec.fieldContext_QueryUsagePoint_active_connections(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type QueryUsagePoint", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DatabaseUsageCurrent_cpu_percent(ctx context.Context, field graphql.CollectedField, obj *gql_model.DatabaseUsageCurrent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_DatabaseUsageCurrent_cpu_percent,
+		func(ctx context.Context) (any, error) {
+			return obj.CPUPercent, nil
+		},
+		nil,
+		ec.marshalNFloat2float64,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_DatabaseUsageCurrent_cpu_percent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DatabaseUsageCurrent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DatabaseUsageCurrent_mem_bytes(ctx context.Context, field graphql.CollectedField, obj *gql_model.DatabaseUsageCurrent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_DatabaseUsageCurrent_mem_bytes,
+		func(ctx context.Context) (any, error) {
+			return obj.MemBytes, nil
+		},
+		nil,
+		ec.marshalNFloat2float64,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_DatabaseUsageCurrent_mem_bytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DatabaseUsageCurrent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DatabaseUsageCurrent_mem_percent(ctx context.Context, field graphql.CollectedField, obj *gql_model.DatabaseUsageCurrent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_DatabaseUsageCurrent_mem_percent,
+		func(ctx context.Context) (any, error) {
+			return obj.MemPercent, nil
+		},
+		nil,
+		ec.marshalNFloat2float64,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_DatabaseUsageCurrent_mem_percent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DatabaseUsageCurrent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DatabaseUsageCurrent_storage_bytes(ctx context.Context, field graphql.CollectedField, obj *gql_model.DatabaseUsageCurrent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_DatabaseUsageCurrent_storage_bytes,
+		func(ctx context.Context) (any, error) {
+			return obj.StorageBytes, nil
+		},
+		nil,
+		ec.marshalNFloat2float64,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_DatabaseUsageCurrent_storage_bytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DatabaseUsageCurrent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DatabaseUsageCurrent_avg_latency_ms(ctx context.Context, field graphql.CollectedField, obj *gql_model.DatabaseUsageCurrent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_DatabaseUsageCurrent_avg_latency_ms,
+		func(ctx context.Context) (any, error) {
+			return obj.AvgLatencyMs, nil
+		},
+		nil,
+		ec.marshalNFloat2float64,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_DatabaseUsageCurrent_avg_latency_ms(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DatabaseUsageCurrent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DatabaseUsageCurrent_active_connections(ctx context.Context, field graphql.CollectedField, obj *gql_model.DatabaseUsageCurrent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_DatabaseUsageCurrent_active_connections,
+		func(ctx context.Context) (any, error) {
+			return obj.ActiveConnections, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_DatabaseUsageCurrent_active_connections(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DatabaseUsageCurrent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DatabaseUsageCurrent_query_count(ctx context.Context, field graphql.CollectedField, obj *gql_model.DatabaseUsageCurrent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_DatabaseUsageCurrent_query_count,
+		func(ctx context.Context) (any, error) {
+			return obj.QueryCount, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_DatabaseUsageCurrent_query_count(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DatabaseUsageCurrent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -18174,6 +18730,55 @@ func (ec *executionContext) fieldContext_Query_clientDatabases(ctx context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_databaseUsage(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_databaseUsage,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().DatabaseUsage(ctx, fc.Args["clientId"].(string), fc.Args["name"].(string), fc.Args["sinceMinutes"].(*int))
+		},
+		nil,
+		ec.marshalNDatabaseUsage2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐDatabaseUsage,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_databaseUsage(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "current":
+				return ec.fieldContext_DatabaseUsage_current(ctx, field)
+			case "instanceSeries":
+				return ec.fieldContext_DatabaseUsage_instanceSeries(ctx, field)
+			case "querySeries":
+				return ec.fieldContext_DatabaseUsage_querySeries(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type DatabaseUsage", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_databaseUsage_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_myOrganizations(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -19546,6 +20151,122 @@ func (ec *executionContext) fieldContext_Query___schema(_ context.Context, field
 	return fc, nil
 }
 
+func (ec *executionContext) _QueryUsagePoint_sampled_at(ctx context.Context, field graphql.CollectedField, obj *gql_model.QueryUsagePoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_QueryUsagePoint_sampled_at,
+		func(ctx context.Context) (any, error) {
+			return obj.SampledAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_QueryUsagePoint_sampled_at(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "QueryUsagePoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _QueryUsagePoint_query_count(ctx context.Context, field graphql.CollectedField, obj *gql_model.QueryUsagePoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_QueryUsagePoint_query_count,
+		func(ctx context.Context) (any, error) {
+			return obj.QueryCount, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_QueryUsagePoint_query_count(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "QueryUsagePoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _QueryUsagePoint_avg_latency_ms(ctx context.Context, field graphql.CollectedField, obj *gql_model.QueryUsagePoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_QueryUsagePoint_avg_latency_ms,
+		func(ctx context.Context) (any, error) {
+			return obj.AvgLatencyMs, nil
+		},
+		nil,
+		ec.marshalNFloat2float64,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_QueryUsagePoint_avg_latency_ms(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "QueryUsagePoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _QueryUsagePoint_active_connections(ctx context.Context, field graphql.CollectedField, obj *gql_model.QueryUsagePoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_QueryUsagePoint_active_connections,
+		func(ctx context.Context) (any, error) {
+			return obj.ActiveConnections, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_QueryUsagePoint_active_connections(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "QueryUsagePoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _RecurrenceRule_frequency(ctx context.Context, field graphql.CollectedField, obj *gql_model.RecurrenceRule) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -20900,6 +21621,151 @@ func (ec *executionContext) fieldContext_StorageUsage_history(_ context.Context,
 				return ec.fieldContext_StoragePoint_bytes(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type StoragePoint", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UsagePoint_sampled_at(ctx context.Context, field graphql.CollectedField, obj *gql_model.UsagePoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_UsagePoint_sampled_at,
+		func(ctx context.Context) (any, error) {
+			return obj.SampledAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_UsagePoint_sampled_at(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UsagePoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UsagePoint_cpu_percent(ctx context.Context, field graphql.CollectedField, obj *gql_model.UsagePoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_UsagePoint_cpu_percent,
+		func(ctx context.Context) (any, error) {
+			return obj.CPUPercent, nil
+		},
+		nil,
+		ec.marshalNFloat2float64,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_UsagePoint_cpu_percent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UsagePoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UsagePoint_mem_bytes(ctx context.Context, field graphql.CollectedField, obj *gql_model.UsagePoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_UsagePoint_mem_bytes,
+		func(ctx context.Context) (any, error) {
+			return obj.MemBytes, nil
+		},
+		nil,
+		ec.marshalNFloat2float64,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_UsagePoint_mem_bytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UsagePoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UsagePoint_mem_percent(ctx context.Context, field graphql.CollectedField, obj *gql_model.UsagePoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_UsagePoint_mem_percent,
+		func(ctx context.Context) (any, error) {
+			return obj.MemPercent, nil
+		},
+		nil,
+		ec.marshalNFloat2float64,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_UsagePoint_mem_percent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UsagePoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UsagePoint_storage_bytes(ctx context.Context, field graphql.CollectedField, obj *gql_model.UsagePoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_UsagePoint_storage_bytes,
+		func(ctx context.Context) (any, error) {
+			return obj.StorageBytes, nil
+		},
+		nil,
+		ec.marshalNFloat2float64,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_UsagePoint_storage_bytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UsagePoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
 		},
 	}
 	return fc, nil
@@ -26530,6 +27396,124 @@ func (ec *executionContext) _CustomField(ctx context.Context, sel ast.SelectionS
 	return out
 }
 
+var databaseUsageImplementors = []string{"DatabaseUsage"}
+
+func (ec *executionContext) _DatabaseUsage(ctx context.Context, sel ast.SelectionSet, obj *gql_model.DatabaseUsage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, databaseUsageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("DatabaseUsage")
+		case "current":
+			out.Values[i] = ec._DatabaseUsage_current(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "instanceSeries":
+			out.Values[i] = ec._DatabaseUsage_instanceSeries(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "querySeries":
+			out.Values[i] = ec._DatabaseUsage_querySeries(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var databaseUsageCurrentImplementors = []string{"DatabaseUsageCurrent"}
+
+func (ec *executionContext) _DatabaseUsageCurrent(ctx context.Context, sel ast.SelectionSet, obj *gql_model.DatabaseUsageCurrent) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, databaseUsageCurrentImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("DatabaseUsageCurrent")
+		case "cpu_percent":
+			out.Values[i] = ec._DatabaseUsageCurrent_cpu_percent(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mem_bytes":
+			out.Values[i] = ec._DatabaseUsageCurrent_mem_bytes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mem_percent":
+			out.Values[i] = ec._DatabaseUsageCurrent_mem_percent(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "storage_bytes":
+			out.Values[i] = ec._DatabaseUsageCurrent_storage_bytes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "avg_latency_ms":
+			out.Values[i] = ec._DatabaseUsageCurrent_avg_latency_ms(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "active_connections":
+			out.Values[i] = ec._DatabaseUsageCurrent_active_connections(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "query_count":
+			out.Values[i] = ec._DatabaseUsageCurrent_query_count(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var eventImplementors = []string{"Event"}
 
 func (ec *executionContext) _Event(ctx context.Context, sel ast.SelectionSet, obj *gql_model.Event) graphql.Marshaler {
@@ -28315,6 +29299,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "databaseUsage":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_databaseUsage(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "myOrganizations":
 			field := field
 
@@ -28839,6 +29845,60 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___schema(ctx, field)
 			})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var queryUsagePointImplementors = []string{"QueryUsagePoint"}
+
+func (ec *executionContext) _QueryUsagePoint(ctx context.Context, sel ast.SelectionSet, obj *gql_model.QueryUsagePoint) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, queryUsagePointImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("QueryUsagePoint")
+		case "sampled_at":
+			out.Values[i] = ec._QueryUsagePoint_sampled_at(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "query_count":
+			out.Values[i] = ec._QueryUsagePoint_query_count(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "avg_latency_ms":
+			out.Values[i] = ec._QueryUsagePoint_avg_latency_ms(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "active_connections":
+			out.Values[i] = ec._QueryUsagePoint_active_connections(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -29408,6 +30468,65 @@ func (ec *executionContext) _StorageUsage(ctx context.Context, sel ast.Selection
 			}
 		case "history":
 			out.Values[i] = ec._StorageUsage_history(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var usagePointImplementors = []string{"UsagePoint"}
+
+func (ec *executionContext) _UsagePoint(ctx context.Context, sel ast.SelectionSet, obj *gql_model.UsagePoint) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, usagePointImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("UsagePoint")
+		case "sampled_at":
+			out.Values[i] = ec._UsagePoint_sampled_at(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "cpu_percent":
+			out.Values[i] = ec._UsagePoint_cpu_percent(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mem_bytes":
+			out.Values[i] = ec._UsagePoint_mem_bytes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mem_percent":
+			out.Values[i] = ec._UsagePoint_mem_percent(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "storage_bytes":
+			out.Values[i] = ec._UsagePoint_storage_bytes(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -30170,6 +31289,30 @@ func (ec *executionContext) unmarshalNCustomFieldInput2ᚖgithubᚗcomᚋneowork
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) marshalNDatabaseUsage2githubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐDatabaseUsage(ctx context.Context, sel ast.SelectionSet, v gql_model.DatabaseUsage) graphql.Marshaler {
+	return ec._DatabaseUsage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNDatabaseUsage2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐDatabaseUsage(ctx context.Context, sel ast.SelectionSet, v *gql_model.DatabaseUsage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._DatabaseUsage(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNDatabaseUsageCurrent2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐDatabaseUsageCurrent(ctx context.Context, sel ast.SelectionSet, v *gql_model.DatabaseUsageCurrent) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._DatabaseUsageCurrent(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNEvent2githubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐEvent(ctx context.Context, sel ast.SelectionSet, v gql_model.Event) graphql.Marshaler {
 	return ec._Event(ctx, sel, &v)
 }
@@ -30698,6 +31841,32 @@ func (ec *executionContext) marshalNPaymentSetup2ᚖgithubᚗcomᚋneoworksᚋau
 	return ec._PaymentSetup(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNQueryUsagePoint2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐQueryUsagePointᚄ(ctx context.Context, sel ast.SelectionSet, v []*gql_model.QueryUsagePoint) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNQueryUsagePoint2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐQueryUsagePoint(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNQueryUsagePoint2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐQueryUsagePoint(ctx context.Context, sel ast.SelectionSet, v *gql_model.QueryUsagePoint) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._QueryUsagePoint(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNRecurrenceRule2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐRecurrenceRule(ctx context.Context, sel ast.SelectionSet, v *gql_model.RecurrenceRule) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -31060,6 +32229,32 @@ func (ec *executionContext) unmarshalNUpdateMemoryInput2githubᚗcomᚋneoworks�
 func (ec *executionContext) unmarshalNUpdateOrganizationInput2githubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐUpdateOrganizationInput(ctx context.Context, v any) (gql_model.UpdateOrganizationInput, error) {
 	res, err := ec.unmarshalInputUpdateOrganizationInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNUsagePoint2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐUsagePointᚄ(ctx context.Context, sel ast.SelectionSet, v []*gql_model.UsagePoint) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNUsagePoint2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐUsagePoint(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNUsagePoint2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐUsagePoint(ctx context.Context, sel ast.SelectionSet, v *gql_model.UsagePoint) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._UsagePoint(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNUserSearchResult2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐUserSearchResultᚄ(ctx context.Context, sel ast.SelectionSet, v []*gql_model.UserSearchResult) graphql.Marshaler {

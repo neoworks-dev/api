@@ -402,6 +402,23 @@ type DatabaseSchemaInput struct {
 	Tables []*TableDefInput `json:"tables"`
 }
 
+type DatabaseUsage struct {
+	Current        *DatabaseUsageCurrent `json:"current"`
+	InstanceSeries []*UsagePoint         `json:"instanceSeries"`
+	QuerySeries    []*QueryUsagePoint    `json:"querySeries"`
+}
+
+// Latest snapshot shown as gauges.
+type DatabaseUsageCurrent struct {
+	CPUPercent        float64 `json:"cpu_percent"`
+	MemBytes          float64 `json:"mem_bytes"`
+	MemPercent        float64 `json:"mem_percent"`
+	StorageBytes      float64 `json:"storage_bytes"`
+	AvgLatencyMs      float64 `json:"avg_latency_ms"`
+	ActiveConnections int     `json:"active_connections"`
+	QueryCount        int     `json:"query_count"`
+}
+
 // Operators for a real datetime field (created_at / updated_at / start). String
 // values are ISO-8601 instants; `withinLast` is a SurrealDB duration like `30d`.
 type DateFilter struct {
@@ -762,6 +779,14 @@ type PaymentSetup struct {
 type Query struct {
 }
 
+// One per-database query sample at a point in time.
+type QueryUsagePoint struct {
+	SampledAt         string  `json:"sampled_at"`
+	QueryCount        int     `json:"query_count"`
+	AvgLatencyMs      float64 `json:"avg_latency_ms"`
+	ActiveConnections int     `json:"active_connections"`
+}
+
 // A jsCalendar RecurrenceRule (subset).
 type RecurrenceRule struct {
 	// yearly | monthly | weekly | daily | hourly | minutely | secondly.
@@ -922,11 +947,11 @@ type TableDefInput struct {
 	Fields     []*FieldDefInput `json:"fields,omitempty"`
 	Indexes    []*IndexDefInput `json:"indexes,omitempty"`
 	// Ownership classification. Defaults to "data" (user-scoped): a server-injected
-	// subject_user_id stamps each row to the authenticated user. "org" (org-scoped)
-	// stamps a server-injected organization_id with the organization that owns the
-	// request's client; org-scoped writes require a confidential (client_credentials)
-	// token. "relation" and "helper" tables are exempt from a direct owner but must
-	// set subjectPath so they stay traceable to a user indirectly.
+	// subject_user_id stamps each row to the authenticated user. "internal" (org-owned)
+	// rows have no per-user owner — the instance belongs to one organization, so any of
+	// the org's clients read/write every row; internal writes require a confidential
+	// (client_credentials) token. "relation" and "helper" tables are exempt from a
+	// direct owner but must set subjectPath so they stay traceable to a user indirectly.
 	Kind *string `json:"kind,omitempty"`
 	// Read visibility: "private" (default — owner only), "shared" (owner plus users the
 	// owner grants) or "public" (anyone, including anonymous). Ownership ("kind") and
@@ -1018,6 +1043,16 @@ type UpdateOrganizationInput struct {
 	Description  *string `json:"description,omitempty"`
 	LogoURL      *string `json:"logo_url,omitempty"`
 	BillingEmail *string `json:"billing_email,omitempty"`
+}
+
+// One instance-level usage sample (CPU / memory / storage) at a point in time.
+type UsagePoint struct {
+	SampledAt  string  `json:"sampled_at"`
+	CPUPercent float64 `json:"cpu_percent"`
+	// Bytes are Float to stay within GraphQL's 32-bit Int range.
+	MemBytes     float64 `json:"mem_bytes"`
+	MemPercent   float64 `json:"mem_percent"`
+	StorageBytes float64 `json:"storage_bytes"`
 }
 
 // A user surfaced by search for inviting; name-only, plus any existing status.

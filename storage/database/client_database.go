@@ -192,7 +192,9 @@ func (s *SurrealStore) QueryClientDB(ctx context.Context, namespace, dbName, que
 	}
 	defer conn.Close(context.WithoutCancel(ctx)) //nolint:errcheck
 
+	done := s.queryMetrics.track(namespace, dbName)
 	res, err := surrealdb.Query[[]map[string]any](ctx, conn, query, params)
+	done()
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +217,9 @@ func (s *SurrealStore) QueryClientDBLast(ctx context.Context, namespace, dbName,
 	}
 	defer conn.Close(context.WithoutCancel(ctx)) //nolint:errcheck
 
+	done := s.queryMetrics.track(namespace, dbName)
 	res, err := surrealdb.Query[[]map[string]any](ctx, conn, query, params)
+	done()
 	if err != nil {
 		return nil, err
 	}
