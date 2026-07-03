@@ -25,7 +25,7 @@ func TestRewriteFulltextIndexEmitsAnalyzerAndBM25Index(t *testing.T) {
 			{
 				Name:       "schema",
 				Schemafull: boolPtr(true),
-				Kind:       strPtr("org"),
+				Kind:       strPtr("internal"),
 				Visibility: strPtr("public"),
 				Fields: []*gql_model.FieldDefInput{
 					{Name: "name", Type: "string"},
@@ -169,13 +169,13 @@ func TestRewriteRelationTableRequiresSubjectPath(t *testing.T) {
 	}
 }
 
-func TestRewriteOrgTableInjectsOrganizationAndTimestamps(t *testing.T) {
+func TestRewriteInternalTableHasNoOwnerButKeepsTimestamps(t *testing.T) {
 	input := &gql_model.DatabaseSchemaInput{
 		Tables: []*gql_model.TableDefInput{
 			{
 				Name:       "message",
 				Schemafull: boolPtr(true),
-				Kind:       strPtr("org"),
+				Kind:       strPtr("internal"),
 				Visibility: strPtr("public"),
 				Fields:     []*gql_model.FieldDefInput{{Name: "body", Type: "string"}},
 			},
@@ -187,23 +187,22 @@ func TestRewriteOrgTableInjectsOrganizationAndTimestamps(t *testing.T) {
 	}
 	rt := tables[0]
 	if rt.hasSubjectUser {
-		t.Error("org table must not get subject_user_id")
+		t.Error("internal table must not get subject_user_id")
 	}
-	if !rt.hasOrg {
-		t.Error("org table should carry organization_id")
+	if !rt.hasInternal {
+		t.Error("internal table should be flagged internal")
 	}
-	if ddlContains(rt.ddl, "subject_user_id") {
-		t.Errorf("org ddl must not contain subject_user_id; ddl=%v", rt.ddl)
+	// Internal rows have no owner column at all.
+	if ddlContains(rt.ddl, "subject_user_id") || ddlContains(rt.ddl, "organization_id") {
+		t.Errorf("internal ddl must not contain an owner column; ddl=%v", rt.ddl)
 	}
 	checks := []string{
-		"DEFINE FIELD OVERWRITE `organization_id` ON `message` TYPE option<string>;",
-		"DEFINE INDEX OVERWRITE `idx_message_org` ON `message`",
 		"DEFINE FIELD OVERWRITE `created_at` ON `message` TYPE datetime VALUE $before OR time::now() READONLY;",
 		"DEFINE FIELD OVERWRITE `updated_at` ON `message` TYPE datetime VALUE time::now();",
 	}
 	for _, c := range checks {
 		if !ddlContains(rt.ddl, c) {
-			t.Errorf("org rewrite missing %q; ddl=%v", c, rt.ddl)
+			t.Errorf("internal rewrite missing %q; ddl=%v", c, rt.ddl)
 		}
 	}
 }
@@ -252,21 +251,21 @@ func TestRewritePrivateTableHasNoGrantTable(t *testing.T) {
 	}
 }
 
-func TestRewriteOrgTableRejectsHistory(t *testing.T) {
+func TestRewriteInternalTableRejectsHistory(t *testing.T) {
 	input := &gql_model.DatabaseSchemaInput{
 		Tables: []*gql_model.TableDefInput{
-			{Name: "message", Kind: strPtr("org"), History: boolPtr(true)},
+			{Name: "message", Kind: strPtr("internal"), History: boolPtr(true)},
 		},
 	}
 	if _, err := rewriteSchemaInput(input); err == nil {
-		t.Fatal("org table requesting history should fail")
+		t.Fatal("internal table requesting history should fail")
 	}
 }
 
 func TestRewriteRejectsReservedOrganizationField(t *testing.T) {
 	input := &gql_model.DatabaseSchemaInput{
 		Tables: []*gql_model.TableDefInput{
-			{Name: "message", Kind: strPtr("org"), Fields: []*gql_model.FieldDefInput{{Name: "organization_id", Type: "string"}}},
+			{Name: "message", Kind: strPtr("internal"), Fields: []*gql_model.FieldDefInput{{Name: "organization_id", Type: "string"}}},
 		},
 	}
 	if _, err := rewriteSchemaInput(input); err == nil {
@@ -277,7 +276,7 @@ func TestRewriteRejectsReservedOrganizationField(t *testing.T) {
 func TestRewriteRejectsInvalidVisibility(t *testing.T) {
 	input := &gql_model.DatabaseSchemaInput{
 		Tables: []*gql_model.TableDefInput{
-			{Name: "message", Kind: strPtr("org"), Visibility: strPtr("sometimes")},
+			{Name: "message", Kind: strPtr("internal"), Visibility: strPtr("sometimes")},
 		},
 	}
 	if _, err := rewriteSchemaInput(input); err == nil {

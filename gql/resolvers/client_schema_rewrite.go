@@ -19,7 +19,7 @@ var clientDBBaseTypes = map[string]bool{
 }
 
 var clientTableKinds = map[string]bool{
-	"data": true, "relation": true, "helper": true, "org": true,
+	"data": true, "relation": true, "helper": true, "internal": true,
 }
 
 var clientTableVisibilities = map[string]bool{
@@ -47,7 +47,7 @@ type rewrittenTable struct {
 	kind           string
 	versioned      bool
 	hasSubjectUser bool
-	hasOrg         bool
+	hasInternal    bool
 	subjectPath    string
 	ddl            []string
 }
@@ -98,9 +98,9 @@ func validateTableDef(t *gql_model.TableDefInput, tableNames map[string]bool) er
 	if (kind == "relation" || kind == "helper") && (t.SubjectPath == nil || strings.TrimSpace(*t.SubjectPath) == "") {
 		return fmt.Errorf("table %q: %s tables must set subjectPath so rows trace back to a user", t.Name, kind)
 	}
-	// Org-scoped rows are owned by the organization; per-user history does not apply.
-	if kind == "org" && wantsHistory(t) {
-		return fmt.Errorf("table %q: org-scoped tables cannot request history", t.Name)
+	// Internal rows are org-owned with no per-user author; per-user history does not apply.
+	if kind == "internal" && wantsHistory(t) {
+		return fmt.Errorf("table %q: internal tables cannot request history", t.Name)
 	}
 
 	if err := validateFields(t); err != nil {
@@ -246,20 +246,20 @@ func rewriteTable(t *gql_model.TableDefInput) rewrittenTable {
 		kind:           kind,
 		versioned:      wantsHistory(t),
 		hasSubjectUser: kind == "data",
-		hasOrg:         kind == "org",
+		hasInternal:    kind == "internal",
 	}
 	if t.SubjectPath != nil {
 		rt.subjectPath = *t.SubjectPath
 	}
 
-	// Non-private tables (public/shared) and org tables carry server timestamps so
-	// callers can sort by recency; private user data does not (it never has).
-	needsTimestamps := rt.hasOrg || tableVisibility(t) != "private"
+	// Non-private tables (public/shared) and internal tables carry server timestamps
+	// so callers can sort by recency; private user data does not (it never has).
+	needsTimestamps := rt.hasInternal || tableVisibility(t) != "private"
 
 	if rt.versioned {
 		rt.ddl = versionedTableDDL(t, rt.hasSubjectUser)
 	} else {
-		rt.ddl = plainTableDDL(t, rt.hasSubjectUser, rt.hasOrg, needsTimestamps)
+		rt.ddl = plainTableDDL(t, rt.hasSubjectUser, needsTimestamps)
 	}
 	// A "shared" table grants read access to specific users via a companion grant
 	// table (owner-managed). Modeled on media_grant.
@@ -360,7 +360,7 @@ func subjectIndexDDL(table string) string {
 	return fmt.Sprintf("DEFINE INDEX OVERWRITE `idx_%s_subject_user` ON `%s` FIELDS `subject_user_id`;", table, table)
 }
 
-func plainTableDDL(t *gql_model.TableDefInput, injectSubject, injectOrg, injectTimestamps bool) []string {
+func plainTableDDL(t *gql_model.TableDefInput, injectSubject, injectTimestamps bool) []string {
 	stmts := []string{fmt.Sprintf("DEFINE TABLE IF NOT EXISTS `%s` %s;", t.Name, tableKeyword(t))}
 	if injectSubject {
 		stmts = append(stmts,
@@ -368,14 +368,8 @@ func plainTableDDL(t *gql_model.TableDefInput, injectSubject, injectOrg, injectT
 			subjectIndexDDL(t.Name),
 		)
 	}
-	// Org-scoped tables are owned by the organization behind the request's client:
-	// stamp organization_id server-side.
-	if injectOrg {
-		stmts = append(stmts,
-			fieldDDL(t.Name, "organization_id", "option<string>", ""),
-			fmt.Sprintf("DEFINE INDEX OVERWRITE `idx_%s_org` ON `%s` FIELDS `organization_id`;", t.Name, t.Name),
-		)
-	}
+	// Internal tables are org-owned with no per-user/per-org owner column: the whole
+	// instance belongs to one organization, so no ownership field is stamped.
 	for _, f := range t.Fields {
 		if f == nil {
 			continue

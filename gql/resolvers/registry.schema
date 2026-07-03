@@ -9,7 +9,7 @@ namespace registry
 
 // Org-owned, publicly readable: the published schema catalog. Writes require the
 // openschema org's confidential client; reads are anonymous.
-@neoworks.kind("org") @neoworks.visibility("public")
+@neoworks.kind("internal") @neoworks.visibility("public")
 @neoworks.unique("scope", "name")
 model Schema {
   1 scope: string
@@ -23,7 +23,7 @@ model Schema {
   9 downloadsTotal: i64
 }
 
-@neoworks.kind("org") @neoworks.visibility("public")
+@neoworks.kind("internal") @neoworks.visibility("public")
 @neoworks.index("schemaId")
 @neoworks.unique("schemaId", "version")
 model SchemaVersion {
@@ -35,7 +35,7 @@ model SchemaVersion {
   6 releasedAt: timestamp?
 }
 
-@neoworks.kind("org") @neoworks.visibility("public")
+@neoworks.kind("internal") @neoworks.visibility("public")
 @neoworks.index("versionId")
 model SchemaFile {
   1 versionId: string

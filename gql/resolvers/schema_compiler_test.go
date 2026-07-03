@@ -18,7 +18,7 @@ func TestCompileSchemaSourceIntegration(t *testing.T) {
 	}
 
 	source := `namespace t
-@neoworks.kind("org") @neoworks.visibility("public")
+@neoworks.kind("internal") @neoworks.visibility("public")
 @neoworks.unique("scope", "name")
 model Schema {
   1 scope: string
@@ -38,8 +38,8 @@ model Schema {
 	if table.Name != "schema" {
 		t.Errorf("name = %q, want schema", table.Name)
 	}
-	if table.Kind == nil || *table.Kind != "org" {
-		t.Errorf("kind = %v, want org", table.Kind)
+	if table.Kind == nil || *table.Kind != "internal" {
+		t.Errorf("kind = %v, want internal", table.Kind)
 	}
 	if table.Visibility == nil || *table.Visibility != "public" {
 		t.Errorf("visibility = %v, want public", table.Visibility)

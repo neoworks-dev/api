@@ -28,16 +28,17 @@ func (m *mockQuerier) QueryClientDBLast(_ context.Context, _, _, query string, p
 	return m.rows, nil
 }
 
-// orgPublicSpec is an org-scoped, publicly-readable table (the registry shape).
-func orgPublicSpec() tableSpec {
-	return tableSpec{name: "message", org: true, visibility: visibilityPublic, fields: []fieldSpec{
+// internalPublicSpec is an internal (org-owned), publicly-readable table (the
+// registry shape). Internal rows have no per-user/per-org owner column.
+func internalPublicSpec() tableSpec {
+	return tableSpec{name: "message", internal: true, visibility: visibilityPublic, fields: []fieldSpec{
 		{name: "body", typ: "string"},
 		{name: "discussion_id", typ: "string"},
 	}}
 }
 
 // clientCtx is a confidential client-principal request (the client acting as its
-// org) — what org-scoped writes require.
+// org) — what internal writes require.
 func clientCtx() context.Context {
 	return withRequest(context.Background(), requestInfo{dbName: "db", clientOrg: "neoworks", clientPrincipal: true})
 }
@@ -46,7 +47,7 @@ func resolveParams(ctx context.Context, args map[string]any) graphql.ResolvePara
 	return graphql.ResolveParams{Context: ctx, Args: args}
 }
 
-func TestParseRegistrySchemaOrgFlag(t *testing.T) {
+func TestParseRegistrySchemaInternalFlag(t *testing.T) {
 	validated := map[string]any{
 		"name":       "message",
 		"visibility": "public",
@@ -55,12 +56,12 @@ func TestParseRegistrySchemaOrgFlag(t *testing.T) {
 			map[string]any{"name": "organization_id", "type": "string"}, // reserved, must be skipped
 		},
 	}
-	spec, err := parseRegistrySchema("org", false, validated)
+	spec, err := parseRegistrySchema("internal", false, validated)
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	if !spec.org {
-		t.Error("org flag not set for kind=org")
+	if !spec.internal {
+		t.Error("internal flag not set for kind=internal")
 	}
 	if !spec.publicRead() {
 		t.Error("visibility=public not parsed")
@@ -75,38 +76,37 @@ func TestParseRegistrySchemaOrgFlag(t *testing.T) {
 	}
 }
 
-func TestBuildSchemaOrgExposesOrganizationAndTimestamps(t *testing.T) {
-	schema, err := buildSchema(nil, []tableSpec{orgPublicSpec()})
+func TestBuildSchemaInternalExposesTimestampsNotOwner(t *testing.T) {
+	schema, err := buildSchema(nil, []tableSpec{internalPublicSpec()})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
 	obj := schema.Type("message").(*graphql.Object)
 	fields := obj.Fields()
-	for _, name := range []string{"organization_id", "created_at", "updated_at", "body"} {
+	for _, name := range []string{"created_at", "updated_at", "body"} {
 		if _, ok := fields[name]; !ok {
-			t.Errorf("org object missing %q", name)
+			t.Errorf("internal object missing %q", name)
 		}
 	}
-	// organization_id is server-managed, never writable.
-	createInput := schema.Type("messageCreateInput").(*graphql.InputObject)
-	if _, ok := createInput.Fields()["organization_id"]; ok {
-		t.Error("organization_id must not be writable")
+	// Internal tables carry no owner column, so organization_id is never exposed.
+	if _, ok := fields["organization_id"]; ok {
+		t.Error("internal object must not expose organization_id")
 	}
 }
 
-func TestOrgPublicListHasNoOwnerFilter(t *testing.T) {
+func TestInternalPublicListHasNoOwnerFilter(t *testing.T) {
 	m := &mockQuerier{}
 	ctx := withRequest(context.Background(), requestInfo{dbName: "db"}) // anonymous
-	if _, err := listResolver(m, orgPublicSpec())(resolveParams(ctx, map[string]any{})); err != nil {
+	if _, err := listResolver(m, internalPublicSpec())(resolveParams(ctx, map[string]any{})); err != nil {
 		t.Fatalf("list: %v", err)
 	}
 	if strings.Contains(m.lastQuery, "subject_user_id") || strings.Contains(m.lastQuery, "organization_id") {
-		t.Errorf("org+public list must not filter by an owner: %s", m.lastQuery)
+		t.Errorf("internal+public list must not filter by an owner: %s", m.lastQuery)
 	}
 }
 
-func TestOrgPrivateListDeniesAnonymous(t *testing.T) {
-	spec := orgPublicSpec()
+func TestInternalPrivateListDeniesAnonymous(t *testing.T) {
+	spec := internalPublicSpec()
 	spec.visibility = visibilityPrivate
 	m := &mockQuerier{rows: []map[string]any{{"id": "message:1"}}}
 	ctx := withRequest(context.Background(), requestInfo{dbName: "db"}) // anonymous
@@ -115,10 +115,10 @@ func TestOrgPrivateListDeniesAnonymous(t *testing.T) {
 		t.Fatalf("list: %v", err)
 	}
 	if m.lastQuery != "" {
-		t.Errorf("org+private anon read must not hit the DB: %s", m.lastQuery)
+		t.Errorf("internal+private anon read must not hit the DB: %s", m.lastQuery)
 	}
 	if list, _ := rows.([]map[string]any); len(list) != 0 {
-		t.Errorf("org+private anon read must be empty, got %v", rows)
+		t.Errorf("internal+private anon read must be empty, got %v", rows)
 	}
 }
 
@@ -133,54 +133,52 @@ func TestDataListKeepsSubjectFilter(t *testing.T) {
 	}
 }
 
-func TestOrgCreateStampsOrganization(t *testing.T) {
+func TestInternalCreateStampsNoOwner(t *testing.T) {
 	m := &mockQuerier{rows: []map[string]any{{"id": "message:1"}}}
 	args := map[string]any{"input": map[string]any{"body": "hi"}}
-	if _, err := createResolver(m, orgPublicSpec())(resolveParams(clientCtx(), args)); err != nil {
+	if _, err := createResolver(m, internalPublicSpec())(resolveParams(clientCtx(), args)); err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if !strings.Contains(m.lastQuery, "organization_id = $owner") {
-		t.Errorf("org create must stamp organization_id: %s", m.lastQuery)
+	// Internal rows have no owner column: neither ownership field is written.
+	if strings.Contains(m.lastQuery, "organization_id") || strings.Contains(m.lastQuery, "subject_user_id") {
+		t.Errorf("internal create must not stamp an owner: %s", m.lastQuery)
 	}
-	if strings.Contains(m.lastQuery, "subject_user_id") {
-		t.Errorf("org create must not stamp subject_user_id: %s", m.lastQuery)
-	}
-	if m.lastParams["owner"] != "neoworks" {
-		t.Errorf("owner not bound to clientOrg: %v", m.lastParams["owner"])
+	if _, ok := m.lastParams["owner"]; ok {
+		t.Errorf("internal create must not bind an owner param: %v", m.lastParams["owner"])
 	}
 }
 
-func TestOrgWriteRequiresClientPrincipal(t *testing.T) {
+func TestInternalWriteRequiresClientPrincipal(t *testing.T) {
 	m := &mockQuerier{}
-	// A user token (uid set, not a client principal) may not write an org table.
+	// A user token (uid set, not a client principal) may not write an internal table.
 	ctx := withRequest(context.Background(), requestInfo{uid: "user-1", dbName: "db", clientOrg: "neoworks"})
 	args := map[string]any{"input": map[string]any{"body": "hi"}}
-	if _, err := createResolver(m, orgPublicSpec())(resolveParams(ctx, args)); err == nil {
-		t.Error("org create with a user token must be rejected")
+	if _, err := createResolver(m, internalPublicSpec())(resolveParams(ctx, args)); err == nil {
+		t.Error("internal create with a user token must be rejected")
 	}
 	if m.lastQuery != "" {
-		t.Errorf("rejected org write must not hit the DB: %s", m.lastQuery)
+		t.Errorf("rejected internal write must not hit the DB: %s", m.lastQuery)
 	}
 }
 
-func TestOrgUpdateAndDeleteScopeToOrganization(t *testing.T) {
+func TestInternalUpdateAndDeleteHaveNoOwnerFilter(t *testing.T) {
 	ctx := clientCtx()
 
 	mu := &mockQuerier{rows: []map[string]any{{"id": "message:1"}}}
 	updArgs := map[string]any{"id": "1", "input": map[string]any{"body": "edited"}}
-	if _, err := updateResolver(mu, orgPublicSpec())(resolveParams(ctx, updArgs)); err != nil {
+	if _, err := updateResolver(mu, internalPublicSpec())(resolveParams(ctx, updArgs)); err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	if !strings.Contains(mu.lastQuery, "organization_id = $owner") {
-		t.Errorf("org update must scope to organization_id: %s", mu.lastQuery)
+	if strings.Contains(mu.lastQuery, "organization_id") || strings.Contains(mu.lastQuery, "subject_user_id") {
+		t.Errorf("internal update must not scope to an owner: %s", mu.lastQuery)
 	}
 
 	md := &mockQuerier{rows: []map[string]any{{"id": "message:1"}}}
-	if _, err := deleteResolver(md, orgPublicSpec())(resolveParams(ctx, map[string]any{"id": "1"})); err != nil {
+	if _, err := deleteResolver(md, internalPublicSpec())(resolveParams(ctx, map[string]any{"id": "1"})); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	if !strings.Contains(md.lastQuery, "organization_id = $owner") {
-		t.Errorf("org delete must scope to organization_id: %s", md.lastQuery)
+	if strings.Contains(md.lastQuery, "organization_id") || strings.Contains(md.lastQuery, "subject_user_id") {
+		t.Errorf("internal delete must not scope to an owner: %s", md.lastQuery)
 	}
 }
 

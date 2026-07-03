@@ -85,18 +85,11 @@ func readScope(spec tableSpec, ctx context.Context) (clause string, params map[s
 		quote(spec.name+"_grant"))
 	uid := uidFromContext(ctx)
 
-	if spec.org {
-		// The org's own backend (client principal) sees every org row.
-		if clientPrincipalFromContext(ctx) {
-			return "organization_id = $owner", map[string]any{"owner": clientOrgFromContext(ctx)}, true
-		}
-		// A shared org row is visible to its specific grantees.
-		if spec.sharedRead() && uid != "" {
-			return grantSub, map[string]any{"grantee": uid}, true
-		}
-		// A private org row is visible to any authenticated caller of the client.
-		if !spec.sharedRead() && authedFromContext(ctx) {
-			return "organization_id = $owner", map[string]any{"owner": clientOrgFromContext(ctx)}, true
+	if spec.internal {
+		// The instance belongs to one organization and internal rows have no per-user
+		// owner, so any authenticated caller of the client sees every row.
+		if clientPrincipalFromContext(ctx) || authedFromContext(ctx) {
+			return "", map[string]any{}, true
 		}
 		return "", nil, false
 	}
@@ -110,20 +103,40 @@ func readScope(spec tableSpec, ctx context.Context) (clause string, params map[s
 }
 
 // writeOwner returns the owner column, its value, and whether the caller is
-// allowed to write. Org-scoped writes require a client-principal token; user
-// writes require a user subject.
+// allowed to write. Internal tables have no owner column (empty field) and only
+// require a client-principal token; user writes stamp/scope by subject_user_id.
 func writeOwner(spec tableSpec, ctx context.Context) (field string, value string, allowed bool) {
-	if spec.org {
+	if spec.internal {
 		if !clientPrincipalFromContext(ctx) {
 			return "", "", false
 		}
-		return "organization_id", clientOrgFromContext(ctx), true
+		return "", "", true
 	}
 	uid := uidFromContext(ctx)
 	if uid == "" {
 		return "", "", false
 	}
 	return "subject_user_id", uid, true
+}
+
+// ownerAssign returns the leading "field = $owner" SET fragment (and registers the
+// param) for tables that have an owner column; empty for internal tables.
+func ownerAssign(field, value string, params map[string]any) []string {
+	if field == "" {
+		return nil
+	}
+	params["owner"] = value
+	return []string{field + " = $owner"}
+}
+
+// ownerFilter returns the " AND field = $owner" WHERE fragment (and registers the
+// param) for tables that have an owner column; empty for internal tables.
+func ownerFilter(field, value string, params map[string]any) string {
+	if field == "" {
+		return ""
+	}
+	params["owner"] = value
+	return " AND " + field + " = $owner"
 }
 
 var errWriteForbidden = fmt.Errorf("not permitted")
@@ -263,8 +276,7 @@ func createResolver(q Querier, spec tableSpec) graphql.FieldResolveFn {
 		}
 		ns, dbName := dbCoords(p.Context)
 		assigns, params := buildAssignments(spec, inputArg(p), false)
-		params["owner"] = ownerVal
-		setClause := strings.Join(append([]string{ownerField + " = $owner"}, assigns...), ", ")
+		setClause := strings.Join(append(ownerAssign(ownerField, ownerVal, params), assigns...), ", ")
 
 		// Optional client-supplied id → use it as the record id.
 		idArg, _ := p.Args["id"].(string)
@@ -276,8 +288,12 @@ func createResolver(q Querier, spec tableSpec) graphql.FieldResolveFn {
 				params["tbl"] = spec.name
 				params["id"] = idArg
 			}
+			setSQL := ""
+			if setClause != "" {
+				setSQL = " SET " + setClause
+			}
 			rows, err := q.QueryClientDB(p.Context, ns, dbName,
-				fmt.Sprintf("CREATE %s SET %s RETURN AFTER", target, setClause),
+				fmt.Sprintf("CREATE %s%s RETURN AFTER", target, setSQL),
 				params,
 			)
 			if err != nil {
@@ -290,9 +306,9 @@ func createResolver(q Querier, spec tableSpec) graphql.FieldResolveFn {
 		}
 
 		// Versioned tables are user-scoped (the history triple mirrors subject_user_id).
-		// Versioning an org-owned table is not supported.
-		if spec.org {
-			return nil, fmt.Errorf("versioned org-scoped tables are not supported")
+		// Versioning an internal (org-owned) table is not supported.
+		if spec.internal {
+			return nil, fmt.Errorf("versioned internal tables are not supported")
 		}
 
 		// Versioned: create the history row and the current row in one transaction.
@@ -339,10 +355,10 @@ func updateResolver(q Querier, spec tableSpec) graphql.FieldResolveFn {
 				return getResolver(q, spec)(p) // nothing to change
 			}
 			params["id"] = rid
-			params["owner"] = ownerVal
+			where := "id = $id" + ownerFilter(ownerField, ownerVal, params)
 			rows, err := q.QueryClientDB(p.Context, ns, dbName,
-				fmt.Sprintf("UPDATE %s SET %s WHERE id = $id AND %s = $owner RETURN AFTER",
-					quote(spec.name), strings.Join(assigns, ", "), ownerField),
+				fmt.Sprintf("UPDATE %s SET %s WHERE %s RETURN AFTER",
+					quote(spec.name), strings.Join(assigns, ", "), where),
 				params,
 			)
 			if err != nil {
@@ -354,8 +370,8 @@ func updateResolver(q Querier, spec tableSpec) graphql.FieldResolveFn {
 			return rows[0], nil
 		}
 
-		if spec.org {
-			return nil, fmt.Errorf("versioned org-scoped tables are not supported")
+		if spec.internal {
+			return nil, fmt.Errorf("versioned internal tables are not supported")
 		}
 		uid := ownerVal
 
@@ -395,9 +411,11 @@ func deleteResolver(q Querier, spec tableSpec) graphql.FieldResolveFn {
 		}
 		idArg, _ := p.Args["id"].(string)
 		ns, db := dbCoords(p.Context)
+		params := map[string]any{"id": models.NewRecordID(spec.name, idArg)}
+		where := "id = $id" + ownerFilter(ownerField, ownerVal, params)
 		rows, err := q.QueryClientDB(p.Context, ns, db,
-			fmt.Sprintf("DELETE %s WHERE id = $id AND %s = $owner RETURN BEFORE", quote(spec.name), ownerField),
-			map[string]any{"id": models.NewRecordID(spec.name, idArg), "owner": ownerVal},
+			fmt.Sprintf("DELETE %s WHERE %s RETURN BEFORE", quote(spec.name), where),
+			params,
 		)
 		if err != nil {
 			return nil, err
@@ -418,9 +436,11 @@ func ownsRow(q Querier, spec tableSpec, p graphql.ResolveParams) (models.RecordI
 	idArg, _ := p.Args["id"].(string)
 	rid := models.NewRecordID(spec.name, idArg)
 	ns, db := dbCoords(p.Context)
+	params := map[string]any{"id": rid}
+	where := "id = $id" + ownerFilter(ownerField, ownerVal, params)
 	rows, err := q.QueryClientDB(p.Context, ns, db,
-		fmt.Sprintf("SELECT id FROM %s WHERE id = $id AND %s = $owner LIMIT 1", quote(spec.name), ownerField),
-		map[string]any{"id": rid, "owner": ownerVal},
+		fmt.Sprintf("SELECT id FROM %s WHERE %s LIMIT 1", quote(spec.name), where),
+		params,
 	)
 	if err != nil {
 		return models.RecordID{}, false, err

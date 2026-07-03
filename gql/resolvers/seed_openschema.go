@@ -21,10 +21,6 @@ import (
 const (
 	openschemaClientID   = "openschema"
 	openschemaRegistryDB = "registry"
-	// openschemaOrg owns the registry's org-scoped rows (the org behind the
-	// openschema client — see migration 039 / 015). Seeded rows are stamped with
-	// it so the org's confidential client can later manage them.
-	openschemaOrg = "neoworks"
 )
 
 // The registry dogfoods the OpenSchema DSL: registry.schema is the canonical
@@ -142,13 +138,12 @@ func (r *Resolver) seedRegistryCatalog(ctx context.Context, namespace, dbName st
 		schemaID := s.scope + "_" + s.name
 		if _, err := r.store.QueryClientDB(ctx, namespace, dbName, `
 			CREATE type::record('schema', $id) SET
-				organization_id = $org,
 				scope = $scope, name = $name, description = $description,
 				tags = $tags, license = 'MIT',
 				repository = $repository, latest_version = $version,
 				official = $official, downloads_total = $downloads
 		`, map[string]any{
-			"id": schemaID, "org": openschemaOrg, "scope": s.scope, "name": s.name, "description": s.description,
+			"id": schemaID, "scope": s.scope, "name": s.name, "description": s.description,
 			"tags": s.tags, "repository": "https://github.com/neoworks-io/" + s.name,
 			"version": s.version, "official": s.official, "downloads": s.downloads,
 		}); err != nil {
@@ -158,11 +153,10 @@ func (r *Resolver) seedRegistryCatalog(ctx context.Context, namespace, dbName st
 		versionID := schemaID + "_" + versionRecordSuffix(s.version)
 		if _, err := r.store.QueryClientDB(ctx, namespace, dbName, `
 			CREATE type::record('schema_version', $id) SET
-				organization_id = $org,
 				schema_id = $schema_id, version = $version, state = 'released',
 				readme = $readme, targets = $targets, released_at = time::now()
 		`, map[string]any{
-			"id": versionID, "org": openschemaOrg, "schema_id": schemaID, "version": s.version,
+			"id": versionID, "schema_id": schemaID, "version": s.version,
 			"readme": s.readme, "targets": openschemaTargets,
 		}); err != nil {
 			return fmt.Errorf("seed version %s: %w", versionID, err)
@@ -171,11 +165,9 @@ func (r *Resolver) seedRegistryCatalog(ctx context.Context, namespace, dbName st
 		for ordinal, file := range s.files {
 			if _, err := r.store.QueryClientDB(ctx, namespace, dbName, `
 				CREATE schema_file SET
-					organization_id = $org,
 					version_id = $version_id, path = $path, contents = $contents,
 					size = $size, ordinal = $ordinal
 			`, map[string]any{
-				"org":        openschemaOrg,
 				"version_id": versionID, "path": file.path, "contents": file.contents,
 				"size": len(file.contents), "ordinal": ordinal,
 			}); err != nil {

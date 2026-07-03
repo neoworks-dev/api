@@ -7,7 +7,7 @@ import (
 )
 
 func searchableSpec() tableSpec {
-	return tableSpec{name: "schema", org: true, visibility: visibilityPublic, fields: []fieldSpec{
+	return tableSpec{name: "schema", internal: true, visibility: visibilityPublic, fields: []fieldSpec{
 		{name: "name", typ: "string"},
 		{name: "description", typ: "string"},
 	}, searchFields: []string{"name", "description"}}
@@ -74,7 +74,7 @@ func TestListSearchBuildsBM25Query(t *testing.T) {
 func TestListSearchIgnoredWithoutIndex(t *testing.T) {
 	// A spec with no searchFields must not interpolate any @@ match even if a
 	// caller smuggles a search arg.
-	spec := tableSpec{name: "plain", org: true, visibility: visibilityPublic, fields: []fieldSpec{{name: "body", typ: "string"}}}
+	spec := tableSpec{name: "plain", internal: true, visibility: visibilityPublic, fields: []fieldSpec{{name: "body", typ: "string"}}}
 	m := &mockQuerier{}
 	ctx := withRequest(context.Background(), requestInfo{dbName: "db"})
 	if _, err := listResolver(m, spec)(resolveParams(ctx, map[string]any{"search": "x"})); err != nil {

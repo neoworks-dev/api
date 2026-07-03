@@ -22,16 +22,17 @@ type fieldSpec struct {
 }
 
 // tableSpec is the validated, server-owned form of one client table used to
-// generate GraphQL types and resolvers. Ownership (`org`) and `visibility` are
-// the two access axes:
-//   - org == false → user-scoped: every row carries subject_user_id (the user).
-//   - org == true  → org-scoped: every row carries organization_id (the org that
-//     owns the request's client). Writes require a client-principal token.
+// generate GraphQL types and resolvers. Ownership (`internal`) and `visibility`
+// are the two access axes:
+//   - internal == false → user-scoped: every row carries subject_user_id (the user).
+//   - internal == true  → org-scoped: rows have no per-user owner. The instance
+//     belongs to one organization, so any authenticated caller of the client sees
+//     every row; writes require a client-principal token.
 //   - visibility ∈ {private, shared, public} controls who may read.
 type tableSpec struct {
 	name       string
 	versioned  bool
-	org        bool
+	internal   bool
 	visibility string
 	fields     []fieldSpec
 	// searchFields are the string fields covered by a FULLTEXT index, in index
@@ -48,10 +49,10 @@ const (
 func (s tableSpec) publicRead() bool { return s.visibility == visibilityPublic }
 func (s tableSpec) sharedRead() bool { return s.visibility == visibilityShared }
 
-// needsTimestamps mirrors the provisioning rule: org tables and any non-private
-// table carry server-managed created_at/updated_at.
+// needsTimestamps mirrors the provisioning rule: internal tables and any
+// non-private table carry server-managed created_at/updated_at.
 func (s tableSpec) needsTimestamps() bool {
-	return s.org || s.visibility != visibilityPrivate
+	return s.internal || s.visibility != visibilityPrivate
 }
 
 // idString renders a record id as its bare identifier, dropping the `table:`
@@ -74,7 +75,7 @@ func parseRegistrySchema(kind string, versioned bool, validated map[string]any) 
 	if v, ok := validated["visibility"].(string); ok && v != "" {
 		visibility = v
 	}
-	spec := tableSpec{name: name, versioned: versioned, org: kind == "org", visibility: visibility}
+	spec := tableSpec{name: name, versioned: versioned, internal: kind == "internal", visibility: visibility}
 
 	rawFields, _ := validated["fields"].([]any)
 	for _, rf := range rawFields {

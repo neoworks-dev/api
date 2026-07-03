@@ -130,7 +130,7 @@ func (e *Engine) build(ctx context.Context, clientID, name string) (*compiled, e
 
 	tres, err := surrealdb.Query[[]ctRow](ctx, e.store.DB, `
 		SELECT name, kind, versioned, validated_schema FROM client_table
-		WHERE database = $db AND kind IN ["data", "org"]
+		WHERE database = $db AND kind IN ["data", "internal"]
 	`, map[string]any{"db": *cdb.ID})
 	if err != nil {
 		return nil, fmt.Errorf("lookup tables: %w", err)

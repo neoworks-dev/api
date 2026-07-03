@@ -142,11 +142,6 @@ func buildObjectType(spec tableSpec) *graphql.Object {
 	for _, f := range spec.fields {
 		fields[f.name] = &graphql.Field{Type: graphQLType(f.typ), Resolve: fieldResolver(f.name)}
 	}
-	// Org-scoped tables expose the server-set owning organization so callers can
-	// gate edit/delete affordances.
-	if spec.org {
-		fields["organization_id"] = &graphql.Field{Type: graphql.String, Resolve: fieldResolver("organization_id")}
-	}
 	if spec.versioned || spec.needsTimestamps() {
 		fields["created_at"] = &graphql.Field{Type: graphql.String, Resolve: fieldResolver("created_at")}
 		fields["updated_at"] = &graphql.Field{Type: graphql.String, Resolve: fieldResolver("updated_at")}

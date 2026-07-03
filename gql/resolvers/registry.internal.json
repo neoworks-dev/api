@@ -3,7 +3,7 @@
     {
       "name": "schema",
       "schemafull": true,
-      "kind": "org",
+      "kind": "internal",
       "fields": [
         {
           "name": "scope",
@@ -71,7 +71,7 @@
     {
       "name": "schema_version",
       "schemafull": true,
-      "kind": "org",
+      "kind": "internal",
       "fields": [
         {
           "name": "schema_id",
@@ -119,7 +119,7 @@
     {
       "name": "schema_file",
       "schemafull": true,
-      "kind": "org",
+      "kind": "internal",
       "fields": [
         {
           "name": "version_id",
