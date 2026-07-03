@@ -15,6 +15,11 @@ spec:
     spec:
       containers:
         - name: surrealdb
+          # latest-dev matches the process-compose instance and the tenant image
+          # (TENANT_SURREAL_IMAGE). The base pins v2.1.4 only for TiKV pairing,
+          # which doesn't apply to single-node rocksdb — and the migrations use
+          # functions (e.g. string::is_email) that v2.1.4 rejects.
+          image: surrealdb/surrealdb:latest-dev
           args: ["start", "--user", "root", "--pass", "root", "--bind", "0.0.0.0:8000", "rocksdb:/data/dev.db"]
           volumeMounts:
             - name: data

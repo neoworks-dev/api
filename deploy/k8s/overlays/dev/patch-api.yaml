@@ -25,3 +25,8 @@ spec:
               $patch: delete
             - name: REDIS_URL
               value: "redis:6379"
+            # The key fallback generates and persists a key at KEY_PATH, but the
+            # default ./keys/auth.pem fails: /app/keys does not exist in the image
+            # and persistKey does not create parent directories. /tmp is writable.
+            - name: KEY_PATH
+              value: "/tmp/auth.pem"
