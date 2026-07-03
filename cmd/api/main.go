@@ -88,15 +88,17 @@ func main() {
 	} else {
 		slog.Warn("INSTANCE_SECRET_KEY unset; per-org instance root passwords are stored unencrypted")
 	}
-	dockerProv := provisioner.NewDockerProvisioner(provisioner.DockerConfig{
-		Image:    env("TENANT_SURREAL_IMAGE", "surrealdb/surrealdb:latest-dev"),
-		Network:  os.Getenv("TENANT_SURREAL_NETWORK"),
-		BindHost: env("TENANT_SURREAL_BIND_HOST", "127.0.0.1"),
-		DialHost: env("TENANT_SURREAL_DIAL_HOST", "127.0.0.1"),
+	// Per-org instances run as StatefulSets in the kubernetes cluster the API is
+	// deployed into; instances are reached over their in-cluster Service DNS.
+	prov := provisioner.NewKubernetesProvisioner(provisioner.KubernetesConfig{
+		Image:        env("TENANT_SURREAL_IMAGE", "surrealdb/surrealdb:latest-dev"),
+		Namespace:    env("TENANT_K8S_NAMESPACE", "neoworks-tenants"),
+		StorageClass: os.Getenv("TENANT_K8S_STORAGE_CLASS"),
+		StorageSize:  env("TENANT_K8S_STORAGE_SIZE", "1Gi"),
 	})
-	surreal.UseInstanceProvisioner(dockerProv, enc)
+	surreal.UseInstanceProvisioner(prov, enc)
 	surreal.StartInstanceMetering(context.Background(), time.Minute)
-	slog.Info("per-org SurrealDB instances enabled", "substrate", "docker")
+	slog.Info("per-org SurrealDB instances enabled", "substrate", "kubernetes")
 
 	objects, err := objectstore.New(s3Endpoint, s3AccessKey, s3SecretKey, s3Bucket, s3UseSSL)
 	if err != nil {

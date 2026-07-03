@@ -11,3 +11,8 @@ keys/
 
 # Runtime data
 /data/
+
+# Compiled demo/tooling binaries
+/dist/
+/provisiondemo
+/migrate

@@ -1,0 +1,58 @@
+# Runs the provisioning demo in-cluster: waits for the control-plane SurrealDB,
+# applies migrations, then drives ProvisionClientDatabase → queries → metering →
+# usage against the real cluster. Inspect the result with:
+#   kubectl -n neoworks-control logs job/provision-demo
+#   kubectl -n neoworks-tenants get statefulset,pod,svc,pvc
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: provision-demo
+  namespace: neoworks-control
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      serviceAccountName: neoworks-provisioner
+      restartPolicy: Never
+      initContainers:
+        - name: wait-for-surreal
+          image: neoworks-api:demo
+          imagePullPolicy: Never
+          command: ["kubectl", "-n", "neoworks-control", "wait", "--for=condition=ready", "pod", "-l", "app=control-surreal", "--timeout=150s"]
+        - name: migrate
+          image: neoworks-api:demo
+          imagePullPolicy: Never
+          workingDir: /app
+          command: ["/usr/local/bin/migrate"]
+          env:
+            - name: SURREAL_URL
+              value: "ws://control-surreal:8000/rpc"
+            - name: SURREAL_USER
+              value: "root"
+            - name: SURREAL_PASS
+              value: "root"
+            - name: SURREAL_NS
+              value: "neoworks"
+            - name: SURREAL_DB
+              value: "auth"
+      containers:
+        - name: provisiondemo
+          image: neoworks-api:demo
+          imagePullPolicy: Never
+          workingDir: /app
+          command: ["/usr/local/bin/provisiondemo"]
+          env:
+            - name: SURREAL_URL
+              value: "ws://control-surreal:8000/rpc"
+            - name: SURREAL_USER
+              value: "root"
+            - name: SURREAL_PASS
+              value: "root"
+            - name: SURREAL_NS
+              value: "neoworks"
+            - name: SURREAL_DB
+              value: "auth"
+            - name: TENANT_K8S_NAMESPACE
+              value: "neoworks-tenants"
+            - name: TENANT_SURREAL_IMAGE
+              value: "surrealdb/surrealdb:latest-dev"
