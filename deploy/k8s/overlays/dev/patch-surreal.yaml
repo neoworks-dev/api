@@ -1,0 +1,24 @@
+# Turn the base HA SurrealDB compute into a single-node rocksdb instance for dev:
+# local embedded storage on an ephemeral volume, one replica. The args list is
+# replaced wholesale (no tikv:// endpoint), and an emptyDir volume is added.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: control-surreal
+  namespace: neoworks-control
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+    rollingUpdate: null
+  template:
+    spec:
+      containers:
+        - name: surrealdb
+          args: ["start", "--user", "root", "--pass", "root", "--bind", "0.0.0.0:8000", "rocksdb:/data/dev.db"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}

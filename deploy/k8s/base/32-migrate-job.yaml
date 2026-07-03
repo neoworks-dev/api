@@ -1,0 +1,36 @@
+# One-shot schema migration. cmd/api does NOT migrate on boot, so this must run to
+# completion before the API takes traffic. Idempotent — safe to re-run. Waits for a
+# SurrealDB compute pod to be ready first.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: neoworks-migrate
+  namespace: neoworks-control
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      serviceAccountName: neoworks-provisioner
+      restartPolicy: Never
+      initContainers:
+        - name: wait-for-surreal
+          image: neoworks-api:demo
+          imagePullPolicy: Never
+          command: ["kubectl", "-n", "neoworks-control", "wait", "--for=condition=ready", "pod", "-l", "app=control-surreal", "--timeout=180s"]
+      containers:
+        - name: migrate
+          image: neoworks-api:demo
+          imagePullPolicy: Never
+          workingDir: /app
+          command: ["/usr/local/bin/migrate"]
+          env:
+            - name: SURREAL_URL
+              value: "ws://control-surreal:8000/rpc"
+            - name: SURREAL_USER
+              value: "root"
+            - name: SURREAL_PASS
+              value: "root"
+            - name: SURREAL_NS
+              value: "neoworks"
+            - name: SURREAL_DB
+              value: "auth"

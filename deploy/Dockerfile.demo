@@ -13,9 +13,11 @@ RUN apk add --no-cache ca-certificates curl \
     && apk del curl
 
 WORKDIR /app
+COPY dist/api /usr/local/bin/api
 COPY dist/migrate /usr/local/bin/migrate
 COPY dist/provisiondemo /usr/local/bin/provisiondemo
 COPY sql/migrations /app/sql/migrations
 
-# Default command runs the demo; the migration Job overrides it with `migrate`.
+# Default command runs the demo; the API Deployment overrides it with `api` and
+# the migration Job overrides it with `migrate`.
 CMD ["/usr/local/bin/provisiondemo"]

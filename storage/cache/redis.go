@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/neoworks/auth/oauth"
@@ -20,10 +22,59 @@ type RedisStore struct {
 	client *redis.Client
 }
 
-func NewRedisStore(addr string) *RedisStore {
-	return &RedisStore{
-		client: redis.NewClient(&redis.Options{Addr: addr}),
+// Config selects between a single-node Redis (dev / non-HA) and a Sentinel-managed
+// master with automatic failover. When SentinelAddrs and MasterName are both set,
+// the client re-resolves the current master after a failover; otherwise it dials
+// the fixed Addr.
+type Config struct {
+	Addr          string
+	SentinelAddrs []string
+	MasterName    string
+}
+
+func ConfigFromEnv() Config {
+	config := Config{
+		Addr:       envOr("REDIS_URL", "127.0.0.1:6379"),
+		MasterName: os.Getenv("REDIS_MASTER_NAME"),
 	}
+	if raw := os.Getenv("REDIS_SENTINEL_ADDRS"); raw != "" {
+		config.SentinelAddrs = splitAddrs(raw)
+	}
+	return config
+}
+
+func NewRedisStore(config Config) *RedisStore {
+	if len(config.SentinelAddrs) > 0 && config.MasterName != "" {
+		return &RedisStore{
+			client: redis.NewFailoverClient(&redis.FailoverOptions{
+				MasterName:    config.MasterName,
+				SentinelAddrs: config.SentinelAddrs,
+			}),
+		}
+	}
+	return &RedisStore{
+		client: redis.NewClient(&redis.Options{Addr: config.Addr}),
+	}
+}
+
+func envOr(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}
+
+// splitAddrs parses a comma-separated sentinel address list, trimming whitespace
+// and dropping empty entries.
+func splitAddrs(raw string) []string {
+	var addrs []string
+	for _, part := range strings.Split(raw, ",") {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			addrs = append(addrs, trimmed)
+		}
+	}
+	return addrs
 }
 
 // ── Authorization codes ──────────────────────────────────────────────────────

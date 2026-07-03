@@ -1,0 +1,23 @@
+# Strip the HA-only pieces from the base for fast local dev: no TiKV cluster, no
+# Redis Sentinel failover, no autoscaler. The single-node dev surreal (patch) and
+# redis (redis.yaml) replace them.
+apiVersion: pingcap.com/v1alpha1
+kind: TidbCluster
+metadata:
+  name: neoworks-control-tikv
+  namespace: neoworks-control
+$patch: delete
+---
+apiVersion: databases.spotahome.com/v1
+kind: RedisFailover
+metadata:
+  name: neoworks-redis
+  namespace: neoworks-control
+$patch: delete
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: neoworks-api
+  namespace: neoworks-control
+$patch: delete

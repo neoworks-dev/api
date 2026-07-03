@@ -1,0 +1,38 @@
+# Public entrypoint. Terminates TLS and routes both the app API and the OAuth issuer
+# host to the single stateless API Service (they are the same binary). Assumes an
+# ingress controller (ingress-nginx) and cert-manager issuing the TLS secret.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: neoworks-api
+  namespace: neoworks-control
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.neoworks.dev
+        - oauth.neoworks.dev
+      secretName: neoworks-api-tls
+  rules:
+    - host: api.neoworks.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: neoworks-api
+                port:
+                  number: 8081
+    - host: oauth.neoworks.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: neoworks-api
+                port:
+                  number: 8081

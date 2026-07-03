@@ -1,0 +1,46 @@
+# Redis HA via the spotahome redis-operator (must be installed first — see README).
+# One master + two replicas guarded by three sentinels: if the master pod dies, the
+# sentinels elect a replica as the new master. The API connects through the
+# sentinels (REDIS_SENTINEL_ADDRS + REDIS_MASTER_NAME) so it always follows the
+# current master across failovers.
+#
+# Master name: the operator's sentinels monitor the master under the name "mymaster"
+# by default; the API must be configured with the same REDIS_MASTER_NAME.
+apiVersion: databases.spotahome.com/v1
+kind: RedisFailover
+metadata:
+  name: neoworks-redis
+  namespace: neoworks-control
+spec:
+  sentinel:
+    replicas: 3
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+  redis:
+    replicas: 3
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 400m
+        memory: 512Mi
+    # AOF persistence so a failover promotes a replica with durable data rather
+    # than an empty cache (protects long-lived SSO sessions + the revocation list).
+    customConfig:
+      - "appendonly yes"
+      - "save 900 1"
+    storage:
+      keepAfterDeletion: true
+      persistentVolumeClaim:
+        metadata:
+          name: neoworks-redis-data
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 1Gi

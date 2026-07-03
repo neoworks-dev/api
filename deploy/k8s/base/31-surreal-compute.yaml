@@ -1,0 +1,70 @@
+# Stateless SurrealDB compute for the control plane. These pods hold no data — all
+# state lives in the TiKV cluster (30-surreal-tikv.yaml) — so they scale and fail
+# over freely. Multiple replicas behind one ClusterIP Service give HA: if a compute
+# pod dies, the Service routes to a surviving one and the driver reconnects.
+#
+# The Service keeps the name "control-surreal" so the API's
+# SURREAL_URL=ws://control-surreal:8000/rpc is unchanged from the single-node setup.
+#
+# Image is pinned and MUST match the TiKV version it talks to (see 30-surreal-tikv
+# version-pinning note and surrealdb/surrealdb#4697). Never use latest/latest-dev here.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: control-surreal
+  namespace: neoworks-control
+  labels:
+    app: control-surreal
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: control-surreal
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: control-surreal
+    spec:
+      containers:
+        - name: surrealdb
+          image: surrealdb/surrealdb:v2.1.4
+          args:
+            - start
+            - --user
+            - root
+            - --pass
+            - root
+            - --bind
+            - 0.0.0.0:8000
+            - tikv://neoworks-control-tikv-pd:2379
+          ports:
+            - containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: control-surreal
+  namespace: neoworks-control
+spec:
+  selector:
+    app: control-surreal
+  ports:
+    - port: 8000
+      targetPort: 8000

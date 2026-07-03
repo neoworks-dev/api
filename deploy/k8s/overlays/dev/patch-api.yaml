@@ -1,0 +1,27 @@
+# Dev API: one replica, plain single-node Redis, and no secrets. With replicas: 1
+# the per-process OAuth key fallback (crypto/keys.go, when AUTH_PRIVATE_KEY is
+# unset) is fine, so the signing-key and instance-key Secrets are dropped — nothing
+# to create before applying. The Sentinel env is removed and REDIS_URL added, which
+# selects the plain-client path in cache.ConfigFromEnv.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: neoworks-api
+  namespace: neoworks-control
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: api
+          env:
+            - name: REDIS_SENTINEL_ADDRS
+              $patch: delete
+            - name: REDIS_MASTER_NAME
+              $patch: delete
+            - name: AUTH_PRIVATE_KEY
+              $patch: delete
+            - name: INSTANCE_SECRET_KEY
+              $patch: delete
+            - name: REDIS_URL
+              value: "redis:6379"

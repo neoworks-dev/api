@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/99designs/gqlgen/graphql"
@@ -46,7 +48,6 @@ func main() {
 
 	// ── Config ────────────────────────────────────────────────────────────────
 	keyPath := env("KEY_PATH", "./keys/auth.pem")
-	redisAddr := env("REDIS_URL", "127.0.0.1:6379")
 	surrealURL := env("SURREAL_URL", "ws://127.0.0.1:8000")
 	surrealUser := env("SURREAL_USER", "root")
 	surrealPass := env("SURREAL_PASS", "root")
@@ -67,7 +68,7 @@ func main() {
 	}
 
 	// ── Storage ───────────────────────────────────────────────────────────────
-	redis := cache.NewRedisStore(redisAddr)
+	redis := cache.NewRedisStore(cache.ConfigFromEnv())
 
 	surreal, err := database.NewSurrealStore(
 		surrealURL, surrealUser, surrealPass, surrealNS, surrealDB,
@@ -172,6 +173,14 @@ func main() {
 		return gqlErr
 	})
 
+	// Liveness/readiness probe. Boot-blocking dependencies (key manager, SurrealDB,
+	// object store) are validated before the server starts serving, so a plain 200
+	// here means the process is ready to take traffic.
+	router.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+
 	// Key management — public endpoints (no auth)
 	keysHandler := keyhandlers.NewHandler(surreal, redis)
 	keysHandler.RegisterPublic(router)
@@ -196,8 +205,25 @@ func main() {
 
 	router.Handle("/playground", playground.Handler("NeoWorks API", "/graphql"))
 
-	if err := http.ListenAndServe(":"+port, router); err != nil {
-		log.Fatalf("server: %v", err)
+	// Graceful shutdown: on SIGTERM (pod eviction, rollout, HPA scale-down) stop
+	// accepting new connections and let in-flight OAuth/GraphQL requests drain
+	// before the process exits, instead of dropping them mid-flight.
+	httpServer := &http.Server{Addr: ":" + port, Handler: router}
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("server: %v", err)
+		}
+	}()
+
+	shutdownSignal, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	<-shutdownSignal.Done()
+
+	slog.Info("shutdown signal received; draining in-flight requests")
+	drainCtx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	if err := httpServer.Shutdown(drainCtx); err != nil {
+		slog.Error("graceful shutdown", "error", err)
 	}
 }
 
