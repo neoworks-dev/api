@@ -43,6 +43,10 @@ func ConfigFromEnv() Config {
 	return config
 }
 
+// Client exposes the underlying Redis client for higher-layer components (e.g. the
+// client-database query throttler) that need direct command / scripting access.
+func (store *RedisStore) Client() *redis.Client { return store.client }
+
 func NewRedisStore(config Config) *RedisStore {
 	if len(config.SentinelAddrs) > 0 && config.MasterName != "" {
 		return &RedisStore{
@@ -260,4 +264,3 @@ func rotationResultKey(jti string) string  { return fmt.Sprintf("rt_result:%s", 
 func revokedKey(jti string) string         { return fmt.Sprintf("revoked:%s", jti) }
 func loginChallengeKey(id string) string   { return fmt.Sprintf("login_challenge:%s", id) }
 func consentChallengeKey(id string) string { return fmt.Sprintf("consent_challenge:%s", id) }
-

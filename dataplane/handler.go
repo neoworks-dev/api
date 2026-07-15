@@ -10,11 +10,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/graphql-go/graphql"
+	"github.com/graphql-go/graphql/gqlerrors"
 	"github.com/graphql-go/graphql/language/ast"
 	"github.com/graphql-go/graphql/language/parser"
 	"github.com/graphql-go/graphql/language/source"
 	"github.com/neoworks/auth/middleware"
 	"github.com/neoworks/auth/oauth"
+	"github.com/neoworks/auth/storage/database"
 )
 
 type graphQLRequest struct {
@@ -92,6 +94,13 @@ func (e *Engine) Handler(auth *middleware.ClientAuth) http.Handler {
 			Context:        ctx,
 		})
 
+		// A tenant that hit its concurrency cap is a retryable backpressure signal,
+		// not a query error — surface it as 429 so clients back off.
+		if tenantBusy(result.Errors) {
+			writeError(w, http.StatusTooManyRequests, "database busy, retry shortly")
+			return
+		}
+
 		// Scrub resolver/internal errors: log server-side, return a generic
 		// message unless DATAPLANE_DEBUG is set (dev convenience).
 		if len(result.Errors) > 0 && !debug {
@@ -104,6 +113,21 @@ func (e *Engine) Handler(auth *middleware.ClientAuth) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(result)
 	})
+}
+
+// tenantBusy reports whether any resolver error is a throttle rejection. It checks
+// the unwrapped original error and falls back to the message, since graphql-go does
+// not always preserve the error wrap chain.
+func tenantBusy(errs []gqlerrors.FormattedError) bool {
+	for _, ge := range errs {
+		if errors.Is(ge.OriginalError(), database.ErrTenantBusy) {
+			return true
+		}
+		if ge.Message == database.ErrTenantBusy.Error() {
+			return true
+		}
+	}
+	return false
 }
 
 // verifyBearer extracts and validates the Authorization bearer token, or returns

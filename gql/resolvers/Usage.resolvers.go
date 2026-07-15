@@ -11,13 +11,8 @@ import (
 
 	gql_model "github.com/neoworks/auth/gql/model"
 	"github.com/neoworks/auth/middleware"
-	"github.com/neoworks/auth/storage/database"
 	"github.com/surrealdb/surrealdb.go/pkg/models"
 )
-
-// defaultUsageWindowMinutes bounds the returned time series when the caller does
-// not specify one.
-const defaultUsageWindowMinutes = 60
 
 // DatabaseUsage is the resolver for the databaseUsage field.
 func (r *queryResolver) DatabaseUsage(ctx context.Context, clientID string, name string, sinceMinutes *int) (*gql_model.DatabaseUsage, error) {
@@ -42,38 +37,4 @@ func (r *queryResolver) DatabaseUsage(ctx context.Context, clientID string, name
 		return nil, err
 	}
 	return usageReportToGQL(report), nil
-}
-
-func usageReportToGQL(report *database.DatabaseUsageReport) *gql_model.DatabaseUsage {
-	out := &gql_model.DatabaseUsage{
-		Current: &gql_model.DatabaseUsageCurrent{
-			CPUPercent:        report.Current.CPUPercent,
-			MemBytes:          float64(report.Current.MemBytes),
-			MemPercent:        report.Current.MemPercent,
-			StorageBytes:      float64(report.Current.StorageBytes),
-			AvgLatencyMs:      report.Current.AvgLatencyMs,
-			ActiveConnections: report.Current.ActiveConnections,
-			QueryCount:        int(report.Current.QueryCount),
-		},
-		InstanceSeries: make([]*gql_model.UsagePoint, len(report.InstanceSeries)),
-		QuerySeries:    make([]*gql_model.QueryUsagePoint, len(report.QuerySeries)),
-	}
-	for i, sample := range report.InstanceSeries {
-		out.InstanceSeries[i] = &gql_model.UsagePoint{
-			SampledAt:    sample.SampledAt.Format(time.RFC3339),
-			CPUPercent:   sample.CPUPercent,
-			MemBytes:     float64(sample.MemBytes),
-			MemPercent:   sample.MemPercent,
-			StorageBytes: float64(sample.StorageBytes),
-		}
-	}
-	for i, sample := range report.QuerySeries {
-		out.QuerySeries[i] = &gql_model.QueryUsagePoint{
-			SampledAt:         sample.SampledAt.Format(time.RFC3339),
-			QueryCount:        int(sample.QueryCount),
-			AvgLatencyMs:      sample.AvgLatencyMs,
-			ActiveConnections: sample.ActiveConnections,
-		}
-	}
-	return out
 }

@@ -759,7 +759,9 @@ type Organization struct {
 	Description  *string `json:"description,omitempty"`
 	LogoURL      *string `json:"logo_url,omitempty"`
 	BillingEmail *string `json:"billing_email,omitempty"`
-	CreatedAt    string  `json:"created_at"`
+	// Hosting plan: "free" (shared instance) or "pro" (dedicated database).
+	Plan      string `json:"plan"`
+	CreatedAt string `json:"created_at"`
 }
 
 type OrganizationMember struct {

@@ -427,6 +427,7 @@ type ComplexityRoot struct {
 		ID           func(childComplexity int) int
 		LogoURL      func(childComplexity int) int
 		Name         func(childComplexity int) int
+		Plan         func(childComplexity int) int
 		Slug         func(childComplexity int) int
 	}
 
@@ -2790,6 +2791,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Organization.Name(childComplexity), true
+	case "Organization.plan":
+		if e.ComplexityRoot.Organization.Plan == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Organization.Plan(childComplexity), true
 	case "Organization.slug":
 		if e.ComplexityRoot.Organization.Slug == nil {
 			break
@@ -4754,6 +4761,8 @@ extend type Query {
   description: String
   logo_url: String
   billing_email: String
+  """Hosting plan: "free" (shared instance) or "pro" (dedicated database)."""
+  plan: String!
   created_at: String!
 }
 
@@ -15243,6 +15252,8 @@ func (ec *executionContext) fieldContext_Mutation_createOrganization(ctx context
 				return ec.fieldContext_Organization_logo_url(ctx, field)
 			case "billing_email":
 				return ec.fieldContext_Organization_billing_email(ctx, field)
+			case "plan":
+				return ec.fieldContext_Organization_plan(ctx, field)
 			case "created_at":
 				return ec.fieldContext_Organization_created_at(ctx, field)
 			}
@@ -15300,6 +15311,8 @@ func (ec *executionContext) fieldContext_Mutation_updateOrganization(ctx context
 				return ec.fieldContext_Organization_logo_url(ctx, field)
 			case "billing_email":
 				return ec.fieldContext_Organization_billing_email(ctx, field)
+			case "plan":
+				return ec.fieldContext_Organization_plan(ctx, field)
 			case "created_at":
 				return ec.fieldContext_Organization_created_at(ctx, field)
 			}
@@ -15545,6 +15558,8 @@ func (ec *executionContext) fieldContext_Mutation_acceptOrgInvite(ctx context.Co
 				return ec.fieldContext_Organization_logo_url(ctx, field)
 			case "billing_email":
 				return ec.fieldContext_Organization_billing_email(ctx, field)
+			case "plan":
+				return ec.fieldContext_Organization_plan(ctx, field)
 			case "created_at":
 				return ec.fieldContext_Organization_created_at(ctx, field)
 			}
@@ -17456,6 +17471,35 @@ func (ec *executionContext) fieldContext_Organization_billing_email(_ context.Co
 	return fc, nil
 }
 
+func (ec *executionContext) _Organization_plan(ctx context.Context, field graphql.CollectedField, obj *gql_model.Organization) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Organization_plan,
+		func(ctx context.Context) (any, error) {
+			return obj.Plan, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Organization_plan(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Organization",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Organization_created_at(ctx context.Context, field graphql.CollectedField, obj *gql_model.Organization) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -18815,6 +18859,8 @@ func (ec *executionContext) fieldContext_Query_myOrganizations(_ context.Context
 				return ec.fieldContext_Organization_logo_url(ctx, field)
 			case "billing_email":
 				return ec.fieldContext_Organization_billing_email(ctx, field)
+			case "plan":
+				return ec.fieldContext_Organization_plan(ctx, field)
 			case "created_at":
 				return ec.fieldContext_Organization_created_at(ctx, field)
 			}
@@ -18861,6 +18907,8 @@ func (ec *executionContext) fieldContext_Query_organization(ctx context.Context,
 				return ec.fieldContext_Organization_logo_url(ctx, field)
 			case "billing_email":
 				return ec.fieldContext_Organization_billing_email(ctx, field)
+			case "plan":
+				return ec.fieldContext_Organization_plan(ctx, field)
 			case "created_at":
 				return ec.fieldContext_Organization_created_at(ctx, field)
 			}
@@ -28825,6 +28873,11 @@ func (ec *executionContext) _Organization(ctx context.Context, sel ast.Selection
 			out.Values[i] = ec._Organization_logo_url(ctx, field, obj)
 		case "billing_email":
 			out.Values[i] = ec._Organization_billing_email(ctx, field, obj)
+		case "plan":
+			out.Values[i] = ec._Organization_plan(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "created_at":
 			out.Values[i] = ec._Organization_created_at(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

@@ -299,7 +299,10 @@ func TestScopedUserCannotReachAnotherClientNamespace(t *testing.T) {
 // checks meaningful.
 func pinInstance(store *SurrealStore, url, user, pass string, clientIDs ...string) {
 	for _, id := range clientIDs {
-		store.targets.put(id, surrealTarget{Endpoint: url, User: user, Pass: pass})
+		store.targets.put(id, tenantRoute{
+			target: surrealTarget{Endpoint: url, User: user, Pass: pass},
+			plan:   "pro",
+		})
 	}
 }
 

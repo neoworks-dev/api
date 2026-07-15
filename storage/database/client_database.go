@@ -13,17 +13,43 @@ import (
 	"github.com/surrealdb/surrealdb.go/pkg/models"
 )
 
-// clientDBTimeout bounds every query against a client database so a slow or
-// runaway statement can't tie up resources. On timeout the dedicated connection
-// is closed, which aborts any in-flight (uncommitted) transaction server-side.
-// Override with CLIENT_DB_QUERY_TIMEOUT (Go duration, e.g. "10s", "2m").
-func clientDBTimeout() time.Duration {
+// Query time budgets. Free-plan tenants share an instance, so a shorter deadline
+// caps the damage a slow query does to their neighbours; pro tenants (dedicated)
+// get the full budget. An explicit CLIENT_DB_QUERY_TIMEOUT overrides both.
+const (
+	freePlanQueryTimeout = 8 * time.Second
+	proPlanQueryTimeout  = 30 * time.Second
+)
+
+// clientDBTimeoutOverride returns the operator-configured query timeout, if any.
+func clientDBTimeoutOverride() (time.Duration, bool) {
 	if v := os.Getenv("CLIENT_DB_QUERY_TIMEOUT"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil && d > 0 {
-			return d
+			return d, true
 		}
 	}
-	return 30 * time.Second
+	return 0, false
+}
+
+// clientDBTimeout is the default query budget used where the tenant plan is not
+// resolved (e.g. developer-authored migrations). Override with
+// CLIENT_DB_QUERY_TIMEOUT (Go duration, e.g. "10s", "2m").
+func clientDBTimeout() time.Duration {
+	if d, ok := clientDBTimeoutOverride(); ok {
+		return d
+	}
+	return proPlanQueryTimeout
+}
+
+// planQueryTimeout is the per-tenant query budget, tighter for free-plan tenants.
+func planQueryTimeout(plan string) time.Duration {
+	if d, ok := clientDBTimeoutOverride(); ok {
+		return d
+	}
+	if plan == "pro" {
+		return proPlanQueryTimeout
+	}
+	return freePlanQueryTimeout
 }
 
 // ProvisionClientDatabase creates a dedicated SurrealDB namespace per client
@@ -120,16 +146,40 @@ func (s *SurrealStore) ApplyDDLToClientDB(ctx context.Context, namespace, dbName
 	return nil
 }
 
-// clientConn opens an admin connection scoped to a single client database. The
-// data plane never connects as the per-DB OWNER user; row isolation is enforced
-// by the resolvers (subject_user_id filters from the JWT), so admin access is
-// safe and avoids storing per-DB passwords server-side.
-func (s *SurrealStore) clientConn(ctx context.Context, namespace, dbName string) (*surrealdb.DB, error) {
-	target, err := s.targetForNamespace(ctx, namespace)
+// beginClientQuery resolves the tenant route, applies the plan-aware timeout and
+// per-tenant query admission, and opens a connection to the client database. The
+// returned cleanup closes the connection, releases the admission slot, and cancels
+// the timeout; callers defer it. The data plane connects as admin (not the per-DB
+// OWNER user); row isolation is enforced by resolver subject_user_id filters, and
+// namespace isolation by SurrealDB's USE, so admin access avoids storing per-DB
+// passwords server-side.
+func (s *SurrealStore) beginClientQuery(parent context.Context, namespace, dbName string) (*surrealdb.DB, context.Context, func(), error) {
+	route, err := s.routeForNamespace(parent, namespace)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
-	return s.openAdmin(ctx, target, namespace, dbName)
+
+	ctx, cancel := context.WithTimeout(parent, planQueryTimeout(route.plan))
+
+	release, err := s.acquireQuery(ctx, route, namespace)
+	if err != nil {
+		cancel()
+		return nil, nil, nil, err
+	}
+
+	conn, err := s.openAdmin(ctx, route.target, namespace, dbName)
+	if err != nil {
+		release()
+		cancel()
+		return nil, nil, nil, err
+	}
+
+	cleanup := func() {
+		_ = conn.Close(context.WithoutCancel(ctx))
+		release()
+		cancel()
+	}
+	return conn, ctx, cleanup, nil
 }
 
 // openAdmin opens a root connection to the given target instance, selecting
@@ -182,15 +232,12 @@ func (s *SurrealStore) ResolveClientDB(ctx context.Context, clientID, name strin
 // QueryClientDB runs a parametrized query against a client database and returns
 // the rows of the FIRST statement as generic maps. Use for single-statement
 // reads/writes.
-func (s *SurrealStore) QueryClientDB(ctx context.Context, namespace, dbName, query string, params map[string]any) ([]map[string]any, error) {
-	ctx, cancel := context.WithTimeout(ctx, clientDBTimeout())
-	defer cancel()
-
-	conn, err := s.clientConn(ctx, namespace, dbName)
+func (s *SurrealStore) QueryClientDB(parent context.Context, namespace, dbName, query string, params map[string]any) ([]map[string]any, error) {
+	conn, ctx, cleanup, err := s.beginClientQuery(parent, namespace, dbName)
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close(context.WithoutCancel(ctx)) //nolint:errcheck
+	defer cleanup()
 
 	done := s.queryMetrics.track(namespace, dbName)
 	res, err := surrealdb.Query[[]map[string]any](ctx, conn, query, params)
@@ -207,15 +254,12 @@ func (s *SurrealStore) QueryClientDB(ctx context.Context, namespace, dbName, que
 // QueryClientDBLast runs a parametrized query (typically a multi-statement
 // transaction) and returns the rows of the LAST statement — the convention used
 // by the versioning transactions, whose final `RETURN [...]` carries the result.
-func (s *SurrealStore) QueryClientDBLast(ctx context.Context, namespace, dbName, query string, params map[string]any) ([]map[string]any, error) {
-	ctx, cancel := context.WithTimeout(ctx, clientDBTimeout())
-	defer cancel()
-
-	conn, err := s.clientConn(ctx, namespace, dbName)
+func (s *SurrealStore) QueryClientDBLast(parent context.Context, namespace, dbName, query string, params map[string]any) ([]map[string]any, error) {
+	conn, ctx, cleanup, err := s.beginClientQuery(parent, namespace, dbName)
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close(context.WithoutCancel(ctx)) //nolint:errcheck
+	defer cleanup()
 
 	done := s.queryMetrics.track(namespace, dbName)
 	res, err := surrealdb.Query[[]map[string]any](ctx, conn, query, params)

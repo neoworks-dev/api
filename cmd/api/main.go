@@ -31,7 +31,6 @@ import (
 	"github.com/neoworks/auth/middleware"
 	"github.com/neoworks/auth/mollie"
 	"github.com/neoworks/auth/oauth"
-	"github.com/neoworks/auth/provisioner"
 	"github.com/neoworks/auth/push"
 	"github.com/neoworks/auth/scheduler"
 	"github.com/neoworks/auth/storage/cache"
@@ -77,29 +76,28 @@ func main() {
 		log.Fatalf("surrealdb: %v", err)
 	}
 
-	// Every organization's client databases are provisioned on a dedicated SurrealDB
-	// instance (isolation + metering boundary), created lazily on the org's first
-	// database. The control-plane store above stays on the shared system instance.
-	var enc *database.Encryptor
-	if key := os.Getenv("INSTANCE_SECRET_KEY"); key != "" {
-		enc, err = database.NewEncryptor(key)
-		if err != nil {
-			log.Fatalf("instance encryptor: %v", err)
-		}
+	// Free-plan orgs share one SurrealDB instance, isolated by their per-client
+	// namespace (client_{clientID}); pro-plan orgs get a dedicated database
+	// (provisioned separately — not wired here yet). The shared instance defaults to
+	// the control-plane connection; point it at a separate instance in production.
+	if sharedURL := os.Getenv("SHARED_TENANT_SURREAL_URL"); sharedURL != "" {
+		surreal.UseSharedTenant(
+			sharedURL,
+			env("SHARED_TENANT_SURREAL_USER", "root"),
+			env("SHARED_TENANT_SURREAL_PASS", "root"),
+		)
+		slog.Info("shared tenant instance configured", "endpoint", sharedURL)
 	} else {
-		slog.Warn("INSTANCE_SECRET_KEY unset; per-org instance root passwords are stored unencrypted")
+		slog.Info("shared tenant instance defaulting to control-plane connection")
 	}
-	// Per-org instances run as StatefulSets in the kubernetes cluster the API is
-	// deployed into; instances are reached over their in-cluster Service DNS.
-	prov := provisioner.NewKubernetesProvisioner(provisioner.KubernetesConfig{
-		Image:        env("TENANT_SURREAL_IMAGE", "surrealdb/surrealdb:latest-dev"),
-		Namespace:    env("TENANT_K8S_NAMESPACE", "neoworks-tenants"),
-		StorageClass: os.Getenv("TENANT_K8S_STORAGE_CLASS"),
-		StorageSize:  env("TENANT_K8S_STORAGE_SIZE", "1Gi"),
-	})
-	surreal.UseInstanceProvisioner(prov, enc)
+
+	// Per-tenant query admission control on the shared instance: caps concurrent
+	// queries per tenant (and globally) via Redis so a noisy neighbour queues rather
+	// than starving the others.
+	surreal.UseThrottler(database.NewRedisThrottler(redis.Client(), database.ThrottleConfigFromEnv()))
+
+	// Sample per-database query metrics into the usage time-series on an interval.
 	surreal.StartInstanceMetering(context.Background(), time.Minute)
-	slog.Info("per-org SurrealDB instances enabled", "substrate", "kubernetes")
 
 	objects, err := objectstore.New(s3Endpoint, s3AccessKey, s3SecretKey, s3Bucket, s3UseSSL)
 	if err != nil {

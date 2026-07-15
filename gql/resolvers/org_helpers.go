@@ -23,6 +23,7 @@ type dbOrganization struct {
 	BillingEmail        *string          `json:"billing_email,omitempty"`
 	MollieCustomerID    *string          `json:"mollie_customer_id,omitempty"`
 	MollieMandateStatus *string          `json:"mollie_mandate_status,omitempty"`
+	Plan                *string          `json:"plan,omitempty"`
 	CreatedAt           time.Time        `json:"created_at"`
 }
 
@@ -81,8 +82,18 @@ func organizationToGQL(o *dbOrganization) *gql_model.Organization {
 		Description:  o.Description,
 		LogoURL:      o.LogoURL,
 		BillingEmail: o.BillingEmail,
+		Plan:         orgPlanOrDefault(o.Plan),
 		CreatedAt:    o.CreatedAt.String(),
 	}
+}
+
+// orgPlanOrDefault normalizes a possibly-absent plan to the free default, so
+// rows written before the plan field existed read as free.
+func orgPlanOrDefault(plan *string) string {
+	if plan != nil && *plan != "" {
+		return *plan
+	}
+	return "free"
 }
 
 func organizationsToGQL(results *[]surrealdb.QueryResult[[]dbOrganization]) []*gql_model.Organization {

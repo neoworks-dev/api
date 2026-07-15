@@ -25,13 +25,19 @@ type SurrealStore struct {
 
 	storageCache *storageUsageCache
 
-	// Per-organization instance routing: each client database lives on its org's
-	// dedicated instance, provisioned lazily on first use. Set via
-	// UseInstanceProvisioner; required for any client-database operation.
-	prov        provisioner.InstanceProvisioner
-	instanceEnc *Encryptor
-	targets     *targetCache
-	provLocks   sync.Map
+	// Tenant instance routing. Free-plan orgs share one SurrealDB instance
+	// (sharedTenant), isolated by the per-client namespace; pro-plan orgs may get a
+	// dedicated instance via the provisioner. sharedTenant defaults to the
+	// control-plane connection and is overridden with UseSharedTenant.
+	sharedTenant surrealTarget
+	prov         provisioner.InstanceProvisioner
+	instanceEnc  *Encryptor
+	targets      *targetCache
+	provLocks    sync.Map
+
+	// throttle admits/queues client-database queries per tenant to contain a noisy
+	// neighbour on the shared instance. Nil-safe: unset means no throttling.
+	throttle Throttler
 
 	// queryMetrics measures per-database query latency + in-flight counts, which
 	// SurrealDB does not expose, as the store brokers each client-database query.
@@ -80,6 +86,10 @@ func NewSurrealStore(url, user, pass, ns, dbName string) (*SurrealStore, error) 
 		storageCache: newStorageUsageCache(),
 		targets:      newTargetCache(60 * time.Second),
 		queryMetrics: newQueryMetrics(),
+		// Default the shared tenant instance to the control-plane connection so a
+		// single-SurrealDB deployment works out of the box; UseSharedTenant points it
+		// at a separate instance in production.
+		sharedTenant: surrealTarget{Endpoint: url, User: user, Pass: pass},
 	}
 	store.Contacts = &ContactStore{DB: db}
 	store.Events = &EventStore{DB: db}

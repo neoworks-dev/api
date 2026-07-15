@@ -5,6 +5,8 @@ type Organization {
   description: String
   logo_url: String
   billing_email: String
+  """Hosting plan: "free" (shared instance) or "pro" (dedicated database)."""
+  plan: String!
   created_at: String!
 }
 

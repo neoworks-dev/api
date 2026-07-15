@@ -12,14 +12,11 @@ import (
 	"github.com/surrealdb/surrealdb.go/pkg/models"
 )
 
-// StartInstanceMetering samples every active org instance on an interval and
-// records a compute billing event proportional to CPU load. It is a no-op when
-// per-org instances are disabled. Storage metering (open GB-month periods) is
+// StartInstanceMetering samples usage on an interval: per-database query metrics
+// (always) plus, for pro-plan orgs on a dedicated instance, a compute billing
+// event proportional to CPU load. Storage metering (open GB-month periods) is
 // tracked as a follow-up; this pass covers compute only.
 func (s *SurrealStore) StartInstanceMetering(ctx context.Context, interval time.Duration) {
-	if s.prov == nil {
-		return
-	}
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -36,6 +33,16 @@ func (s *SurrealStore) StartInstanceMetering(ctx context.Context, interval time.
 
 func (s *SurrealStore) sampleInstances(ctx context.Context, window time.Duration) {
 	sampledAt := time.Now()
+
+	// Fold the per-database query counters accrued since the last tick into the
+	// usage time-series. This runs regardless of provisioner (the shared instance
+	// has no per-org compute sample, but query activity is still metered).
+	s.sampleQueryMetrics(ctx, sampledAt)
+
+	// Dedicated per-org instances additionally get a CPU-based compute sample.
+	if s.prov == nil {
+		return
+	}
 
 	instances, err := s.listActiveInstances(ctx)
 	if err != nil {
@@ -70,9 +77,6 @@ func (s *SurrealStore) sampleInstances(ctx context.Context, window time.Duration
 			slog.Error("metering: record compute event", "error", err, "org", recordIDString(inst.Organization))
 		}
 	}
-
-	// Fold the query counters accrued since the last tick into per-database rows.
-	s.sampleQueryMetrics(ctx, sampledAt)
 }
 
 // recordInstanceMetric writes one instance-level usage sample (CPU/memory/storage).
