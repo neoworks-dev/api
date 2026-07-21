@@ -38,10 +38,10 @@ func (s *SurrealStore) CheckChunks(ctx context.Context, userID string, hashes []
 // CreateChunk persists a chunk record after it has been uploaded to object storage,
 // adds its size to the owning user's running storage_used_bytes total, and opens a
 // storage billing period for the chunk (atomically, in one transaction).
-// ref_count starts at 0 (DEFAULT) — it is bumped once the chunk is attached to a media.
+// ref_count starts at 0 (DEFAULT) — it is bumped once the chunk is attached to a file.
 //
 // The billing period is an open interval (end_time NONE) referencing the chunk;
-// it is closed when the chunk is garbage-collected (see DeleteMedia). Personal
+// it is closed when the chunk is garbage-collected (see DeleteFile). Personal
 // usage bills the user directly; the unit price + currency come from the rate
 // card (pricing.json) and are locked into the row at creation time.
 func (s *SurrealStore) CreateChunk(ctx context.Context, userID, hash string, size int64, storageKey string) (*oauth.Chunk, error) {
@@ -134,65 +134,65 @@ func (s *SurrealStore) GetChunkByHash(ctx context.Context, userID, hash string) 
 	return nil, ErrNotFound
 }
 
-// MediaChunkRef is a chunk's content hash and size — the manifest the SDK needs
-// to re-download and decrypt a media item.
-type MediaChunkRef struct {
+// FileChunkRef is a chunk's content hash and size — the manifest the SDK needs
+// to re-download and decrypt a file item.
+type FileChunkRef struct {
 	Hash string `json:"hash"`
 	Size int64  `json:"size"`
 }
 
-// MediaManifestData reassembles a media record into the manifest shape. The
+// FileManifestData reassembles a file record into the manifest shape. The
 // stored `chunks` are record links, so FETCH resolves their hashes. `WrappedDEK`
 // is the requester's own sealed copy of the object's DEK (the recipient entry
 // keyed by their user id), which their Vault can unseal to decrypt the chunks.
-type MediaManifestData struct {
+type FileManifestData struct {
 	ID         string          `json:"id"`
 	Filename   string          `json:"filename"`
 	MimeType   string          `json:"mime_type"`
-	Chunks     []MediaChunkRef `json:"chunks"`
+	Chunks     []FileChunkRef `json:"chunks"`
 	WrappedDEK string          `json:"wrapped_dek"`
 	// Scope the DEK is sealed under; empty ⇒ legacy account key. The client passes
 	// it back to the key-holder so it picks the right scope key on decrypt.
 	Scope string `json:"scope,omitempty"`
 }
 
-// GetMediaManifest returns a media item's manifest if the requester is the owner
+// GetFileManifest returns a file item's manifest if the requester is the owner
 // OR holds a share grant on it. Chunk records stay owner-scoped; FETCH resolves
 // their hashes regardless of who is reading.
-func (s *SurrealStore) GetMediaManifest(ctx context.Context, mediaID, requesterID string) (*MediaManifestData, error) {
+func (s *SurrealStore) GetFileManifest(ctx context.Context, fileID, requesterID string) (*FileManifestData, error) {
 	type row struct {
 		ID         *models.RecordID       `json:"id"`
 		Filename   string                 `json:"filename"`
 		MimeType   string                 `json:"mime_type"`
 		Chunks     []oauth.Chunk          `json:"chunks"`
-		Recipients []oauth.MediaRecipient `json:"recipients"`
+		Recipients []oauth.FileRecipient `json:"recipients"`
 		Scope      string                 `json:"scope"`
 	}
 	results, err := surrealdb.Query[[]row](
 		ctx, s.DB,
-		`SELECT id, filename, mime_type, chunks, recipients, scope FROM media
+		`SELECT id, filename, mime_type, chunks, recipients, scope FROM file
 		 WHERE id = $id
 		   AND (user = $user
-		        OR id IN (SELECT VALUE media FROM media_grant WHERE recipient = $user))
+		        OR id IN (SELECT VALUE file FROM file_grant WHERE recipient = $user))
 		 LIMIT 1 FETCH chunks`,
 		map[string]any{
-			"id":   models.NewRecordID("media", mediaID),
+			"id":   models.NewRecordID("file", fileID),
 			"user": models.NewRecordID("user", requesterID),
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("get media manifest: %w", err)
+		return nil, fmt.Errorf("get file manifest: %w", err)
 	}
 	for _, qr := range *results {
 		if len(qr.Result) == 0 {
 			continue
 		}
 		r := qr.Result[0]
-		chunks := make([]MediaChunkRef, len(r.Chunks))
+		chunks := make([]FileChunkRef, len(r.Chunks))
 		for i, c := range r.Chunks {
-			chunks[i] = MediaChunkRef{Hash: c.Hash, Size: c.Size}
+			chunks[i] = FileChunkRef{Hash: c.Hash, Size: c.Size}
 		}
-		id := mediaID
+		id := fileID
 		if r.ID != nil {
 			id = fmt.Sprintf("%v", r.ID.ID)
 		}
@@ -203,37 +203,37 @@ func (s *SurrealStore) GetMediaManifest(ctx context.Context, mediaID, requesterI
 				break
 			}
 		}
-		return &MediaManifestData{ID: id, Filename: r.Filename, MimeType: r.MimeType, Chunks: chunks, WrappedDEK: wrappedDEK, Scope: r.Scope}, nil
+		return &FileManifestData{ID: id, Filename: r.Filename, MimeType: r.MimeType, Chunks: chunks, WrappedDEK: wrappedDEK, Scope: r.Scope}, nil
 	}
 	return nil, ErrNotFound
 }
 
-// GetMediaManifests is the batch form of GetMediaManifest: it resolves every
+// GetFileManifests is the batch form of GetFileManifest: it resolves every
 // readable manifest for the given ids in a single query, so a whole grid page
 // warms its manifests in one round-trip. Unreadable / missing ids are silently
 // omitted. Order is not guaranteed.
-func (s *SurrealStore) GetMediaManifests(ctx context.Context, mediaIDs []string, requesterID string) ([]MediaManifestData, error) {
-	if len(mediaIDs) == 0 {
-		return []MediaManifestData{}, nil
+func (s *SurrealStore) GetFileManifests(ctx context.Context, fileIDs []string, requesterID string) ([]FileManifestData, error) {
+	if len(fileIDs) == 0 {
+		return []FileManifestData{}, nil
 	}
 	type row struct {
 		ID         *models.RecordID       `json:"id"`
 		Filename   string                 `json:"filename"`
 		MimeType   string                 `json:"mime_type"`
 		Chunks     []oauth.Chunk          `json:"chunks"`
-		Recipients []oauth.MediaRecipient `json:"recipients"`
+		Recipients []oauth.FileRecipient `json:"recipients"`
 		Scope      string                 `json:"scope"`
 	}
-	ids := make([]models.RecordID, len(mediaIDs))
-	for i, id := range mediaIDs {
-		ids[i] = models.NewRecordID("media", id)
+	ids := make([]models.RecordID, len(fileIDs))
+	for i, id := range fileIDs {
+		ids[i] = models.NewRecordID("file", id)
 	}
 	results, err := surrealdb.Query[[]row](
 		ctx, s.DB,
-		`SELECT id, filename, mime_type, chunks, recipients, scope FROM media
+		`SELECT id, filename, mime_type, chunks, recipients, scope FROM file
 		 WHERE id IN $ids
 		   AND (user = $user
-		        OR id IN (SELECT VALUE media FROM media_grant WHERE recipient = $user))
+		        OR id IN (SELECT VALUE file FROM file_grant WHERE recipient = $user))
 		 FETCH chunks`,
 		map[string]any{
 			"ids":  ids,
@@ -241,14 +241,14 @@ func (s *SurrealStore) GetMediaManifests(ctx context.Context, mediaIDs []string,
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("get media manifests: %w", err)
+		return nil, fmt.Errorf("get file manifests: %w", err)
 	}
-	out := []MediaManifestData{}
+	out := []FileManifestData{}
 	for _, qr := range *results {
 		for _, r := range qr.Result {
-			chunks := make([]MediaChunkRef, len(r.Chunks))
+			chunks := make([]FileChunkRef, len(r.Chunks))
 			for i, c := range r.Chunks {
-				chunks[i] = MediaChunkRef{Hash: c.Hash, Size: c.Size}
+				chunks[i] = FileChunkRef{Hash: c.Hash, Size: c.Size}
 			}
 			id := ""
 			if r.ID != nil {
@@ -261,56 +261,56 @@ func (s *SurrealStore) GetMediaManifests(ctx context.Context, mediaIDs []string,
 					break
 				}
 			}
-			out = append(out, MediaManifestData{ID: id, Filename: r.Filename, MimeType: r.MimeType, Chunks: chunks, WrappedDEK: wrappedDEK, Scope: r.Scope})
+			out = append(out, FileManifestData{ID: id, Filename: r.Filename, MimeType: r.MimeType, Chunks: chunks, WrappedDEK: wrappedDEK, Scope: r.Scope})
 		}
 	}
 	return out, nil
 }
 
 // GetReadableChunk fetches a single encrypted chunk for a reader who is either the
-// media owner or a grant holder. The chunk must actually belong to `mediaID` (a
-// grant on one media never exposes the owner's other chunks). Chunks are stored
-// under the owner, so the lookup resolves through the media's owner, not the
+// file owner or a grant holder. The chunk must actually belong to `fileID` (a
+// grant on one file never exposes the owner's other chunks). Chunks are stored
+// under the owner, so the lookup resolves through the file's owner, not the
 // requester.
-func (s *SurrealStore) GetReadableChunk(ctx context.Context, mediaID, hash, requesterID string) (*oauth.Chunk, error) {
-	type mediaRow struct {
+func (s *SurrealStore) GetReadableChunk(ctx context.Context, fileID, hash, requesterID string) (*oauth.Chunk, error) {
+	type fileRow struct {
 		User   *models.RecordID  `json:"user"`
 		Chunks []models.RecordID `json:"chunks"`
 	}
-	mediaResults, err := surrealdb.Query[[]mediaRow](
+	fileResults, err := surrealdb.Query[[]fileRow](
 		ctx, s.DB,
-		`SELECT user, chunks FROM media
+		`SELECT user, chunks FROM file
 		 WHERE id = $id
 		   AND (user = $requester
-		        OR id IN (SELECT VALUE media FROM media_grant WHERE recipient = $requester))
+		        OR id IN (SELECT VALUE file FROM file_grant WHERE recipient = $requester))
 		 LIMIT 1`,
 		map[string]any{
-			"id":        models.NewRecordID("media", mediaID),
+			"id":        models.NewRecordID("file", fileID),
 			"requester": models.NewRecordID("user", requesterID),
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("get readable chunk: media: %w", err)
+		return nil, fmt.Errorf("get readable chunk: file: %w", err)
 	}
-	var media *mediaRow
-	for _, qr := range *mediaResults {
+	var file *fileRow
+	for _, qr := range *fileResults {
 		if len(qr.Result) > 0 {
-			media = &qr.Result[0]
+			file = &qr.Result[0]
 			break
 		}
 	}
-	if media == nil || media.User == nil {
+	if file == nil || file.User == nil {
 		return nil, ErrNotFound
 	}
 
-	ownerID := fmt.Sprintf("%v", media.User.ID)
+	ownerID := fmt.Sprintf("%v", file.User.ID)
 	chunk, err := s.GetChunkByHash(ctx, ownerID, hash)
 	if err != nil {
 		return nil, err
 	}
 
-	// Confirm the chunk is part of THIS media, not just any chunk the owner holds.
-	if chunk.ID == nil || !containsRecordID(media.Chunks, *chunk.ID) {
+	// Confirm the chunk is part of THIS file, not just any chunk the owner holds.
+	if chunk.ID == nil || !containsRecordID(file.Chunks, *chunk.ID) {
 		return nil, ErrNotFound
 	}
 	return chunk, nil
@@ -325,26 +325,26 @@ func containsRecordID(ids []models.RecordID, target models.RecordID) bool {
 	return false
 }
 
-// GeoPoint is an unencrypted GPS coordinate stored on a media row, queryable via
+// GeoPoint is an unencrypted GPS coordinate stored on a file row, queryable via
 // the GeoFilter. Sourced from a photo's EXIF GPS tags at upload time.
 type GeoPoint struct {
 	Lat float64 `json:"lat"`
 	Lng float64 `json:"lng"`
 }
 
-type CreateMediaParams struct {
+type CreateFileParams struct {
 	UserID     string
 	Filename   string
 	MimeType   string
 	Size       int64
 	ChunkIDs   []models.RecordID
-	Recipients []oauth.MediaRecipient
+	Recipients []oauth.FileRecipient
 	// Scope is the encryption scope the object's DEK is sealed under (optional;
 	// absent ⇒ legacy account key).
 	Scope *string
-	// ThumbnailID links a derived thumbnail media (optional).
+	// ThumbnailID links a derived thumbnail file (optional).
 	ThumbnailID *string
-	// Purpose marks derived media (e.g. "thumbnail") so they are hidden from the
+	// Purpose marks derived file (e.g. "thumbnail") so they are hidden from the
 	// library listing and skipped by the embedding queue (optional).
 	Purpose *string
 	// CaptureDate is the photo's EXIF capture time (DateTimeOriginal), stored
@@ -356,11 +356,11 @@ type CreateMediaParams struct {
 	Exif map[string]any
 }
 
-// CreateMedia runs the versioned create pattern from CLAUDE.md. `recipients`
+// CreateFile runs the versioned create pattern from CLAUDE.md. `recipients`
 // holds the sealed DEK wrappers — at minimum the owner's own copy. Optional
 // thumbnail/purpose are omitted from the SET when absent (option<T> fields reject
 // NULL — see CLAUDE.md).
-func (s *SurrealStore) CreateMedia(ctx context.Context, p *CreateMediaParams) (*oauth.Media, error) {
+func (s *SurrealStore) CreateFile(ctx context.Context, p *CreateFileParams) (*oauth.File, error) {
 	params := map[string]any{
 		"user":       models.NewRecordID("user", p.UserID),
 		"filename":   p.Filename,
@@ -370,9 +370,9 @@ func (s *SurrealStore) CreateMedia(ctx context.Context, p *CreateMediaParams) (*
 		"recipients": p.Recipients,
 	}
 
-	mediaExtra := ""
+	fileExtra := ""
 	if p.ThumbnailID != nil && *p.ThumbnailID != "" {
-		mediaExtra += ", thumbnail = type::record('media', $thumbnail_id)"
+		fileExtra += ", thumbnail = type::record('file', $thumbnail_id)"
 		params["thumbnail_id"] = *p.ThumbnailID
 	}
 	purpose := ""
@@ -380,7 +380,7 @@ func (s *SurrealStore) CreateMedia(ctx context.Context, p *CreateMediaParams) (*
 		purpose = *p.Purpose
 	}
 	if purpose != "" {
-		mediaExtra += ", purpose = $purpose"
+		fileExtra += ", purpose = $purpose"
 		params["purpose"] = purpose
 	}
 	// Always bound for the embedding gate, even when not assigned to the row.
@@ -389,28 +389,28 @@ func (s *SurrealStore) CreateMedia(ctx context.Context, p *CreateMediaParams) (*
 	// Encryption scope (option<string>): omitted from the SET when absent so it
 	// defaults to NONE (legacy account key).
 	if p.Scope != nil && *p.Scope != "" {
-		mediaExtra += ", scope = $scope"
+		fileExtra += ", scope = $scope"
 		params["scope"] = *p.Scope
 	}
 
 	// Unencrypted EXIF metadata: each field is omitted from the SET when absent so
 	// the option<T> column defaults to NONE (see CLAUDE.md optional-field rule).
 	if p.CaptureDate != nil {
-		mediaExtra += ", capture_date = $capture_date"
+		fileExtra += ", capture_date = $capture_date"
 		params["capture_date"] = *p.CaptureDate
 	}
 	if p.Location != nil {
-		mediaExtra += ", location = $location"
+		fileExtra += ", location = $location"
 		params["location"] = map[string]any{"lat": p.Location.Lat, "lng": p.Location.Lng}
 	}
 	if len(p.Exif) > 0 {
-		mediaExtra += ", exif = $exif"
+		fileExtra += ", exif = $exif"
 		params["exif"] = p.Exif
 	}
 
 	query := fmt.Sprintf(`
 		BEGIN TRANSACTION;
-		LET $media = (CREATE media SET
+		LET $file = (CREATE file SET
 			user       = $user,
 			filename   = $filename,
 			mime_type  = $mime_type,
@@ -418,97 +418,97 @@ func (s *SurrealStore) CreateMedia(ctx context.Context, p *CreateMediaParams) (*
 			chunks     = $chunks,
 			recipients = $recipients%s
 		)[0];
-		LET $version = (CREATE media_version SET
-			media_id   = $media.id,
+		LET $version = (CREATE file_version SET
+			file_id   = $file.id,
 			user       = $user,
 			filename   = $filename,
 			mime_type  = $mime_type,
 			size       = $size,
 			chunks     = $chunks,
 			recipients = $recipients,
-			scope      = $media.scope
+			scope      = $file.scope
 		)[0];
-		LET $result = (UPDATE $media.id SET version = $version.id)[0];
+		LET $result = (UPDATE $file.id SET version = $version.id)[0];
 		FOR $c IN $chunks {
 			UPDATE $c SET ref_count += 2;
 		};
 		-- Queue a client-side image embedding (the server can't decrypt the bytes).
-		-- Thumbnails and other derived media are not embedded.
+		-- Thumbnails and other derived file are not embedded.
 		IF string::starts_with($mime_type, 'image/') AND $purpose_gate != 'thumbnail' {
-			CREATE media_embedding SET
-				media    = $media.id,
+			CREATE file_embedding SET
+				file    = $file.id,
 				user     = $user,
 				modality = 'image',
 				status   = 'pending';
 		};
 		RETURN [$result];
 		COMMIT TRANSACTION;
-	`, mediaExtra)
+	`, fileExtra)
 
-	results, err := surrealdb.Query[[]oauth.Media](ctx, s.DB, query, params)
+	results, err := surrealdb.Query[[]oauth.File](ctx, s.DB, query, params)
 	if err != nil {
-		return nil, fmt.Errorf("create media: %w", err)
+		return nil, fmt.Errorf("create file: %w", err)
 	}
-	return lastResult(*results, "create media: no result returned")
+	return lastResult(*results, "create file: no result returned")
 }
 
 // ── Sharing ─────────────────────────────────────────────────────────────────
 
-// CreateMediaShare grants `recipientID` read access to `mediaID` and appends the
-// recipient's sealed DEK wrapper to the media. Owner-scoped: a non-owner (or a
-// missing media) yields ErrNotFound. Idempotent on the wrapper — re-sharing
+// CreateFileShare grants `recipientID` read access to `fileID` and appends the
+// recipient's sealed DEK wrapper to the file. Owner-scoped: a non-owner (or a
+// missing file) yields ErrNotFound. Idempotent on the wrapper — re-sharing
 // replaces the recipient's existing wrapper rather than duplicating it.
-func (s *SurrealStore) CreateMediaShare(ctx context.Context, mediaID, ownerID, recipientID, wrappedDEK string) error {
-	if _, err := s.GetMedia(ctx, mediaID, ownerID); err != nil {
-		return err // ErrNotFound when the caller does not own the media
+func (s *SurrealStore) CreateFileShare(ctx context.Context, fileID, ownerID, recipientID, wrappedDEK string) error {
+	if _, err := s.GetFile(ctx, fileID, ownerID); err != nil {
+		return err // ErrNotFound when the caller does not own the file
 	}
 	_, err := surrealdb.Query[[]any](ctx, s.DB, `
 		BEGIN TRANSACTION;
-		UPDATE $media_id SET recipients = array::append(
+		UPDATE $file_id SET recipients = array::append(
 			recipients[WHERE key_id != $recipient_key],
 			{ key_id: $recipient_key, wrapped_dek: $wrapped_dek }
 		);
-		DELETE media_grant WHERE media = $media_id AND recipient = $recipient;
-		CREATE media_grant SET media = $media_id, owner = $owner, recipient = $recipient;
+		DELETE file_grant WHERE file = $file_id AND recipient = $recipient;
+		CREATE file_grant SET file = $file_id, owner = $owner, recipient = $recipient;
 		COMMIT TRANSACTION;
 	`, map[string]any{
-		"media_id":      models.NewRecordID("media", mediaID),
+		"file_id":      models.NewRecordID("file", fileID),
 		"owner":         models.NewRecordID("user", ownerID),
 		"recipient":     models.NewRecordID("user", recipientID),
 		"recipient_key": recipientID,
 		"wrapped_dek":   wrappedDEK,
 	})
 	if err != nil {
-		return fmt.Errorf("create media share: %w", err)
+		return fmt.Errorf("create file share: %w", err)
 	}
 	return nil
 }
 
-// DeleteMediaShare revokes `recipientID`'s access to `mediaID`: drops the grant
+// DeleteFileShare revokes `recipientID`'s access to `fileID`: drops the grant
 // and removes their sealed DEK wrapper. Owner-scoped. Does not rotate the DEK, so
 // content the recipient already fetched is not protected.
-func (s *SurrealStore) DeleteMediaShare(ctx context.Context, mediaID, ownerID, recipientID string) error {
-	if _, err := s.GetMedia(ctx, mediaID, ownerID); err != nil {
-		return err // ErrNotFound when the caller does not own the media
+func (s *SurrealStore) DeleteFileShare(ctx context.Context, fileID, ownerID, recipientID string) error {
+	if _, err := s.GetFile(ctx, fileID, ownerID); err != nil {
+		return err // ErrNotFound when the caller does not own the file
 	}
 	_, err := surrealdb.Query[[]any](ctx, s.DB, `
 		BEGIN TRANSACTION;
-		UPDATE $media_id SET recipients = recipients[WHERE key_id != $recipient_key];
-		DELETE media_grant WHERE media = $media_id AND recipient = $recipient;
+		UPDATE $file_id SET recipients = recipients[WHERE key_id != $recipient_key];
+		DELETE file_grant WHERE file = $file_id AND recipient = $recipient;
 		COMMIT TRANSACTION;
 	`, map[string]any{
-		"media_id":      models.NewRecordID("media", mediaID),
+		"file_id":      models.NewRecordID("file", fileID),
 		"recipient":     models.NewRecordID("user", recipientID),
 		"recipient_key": recipientID,
 	})
 	if err != nil {
-		return fmt.Errorf("delete media share: %w", err)
+		return fmt.Errorf("delete file share: %w", err)
 	}
 	return nil
 }
 
-type UpdateMediaParams struct {
-	MediaID         string
+type UpdateFileParams struct {
+	FileID         string
 	UserID          string
 	ParentVersionID models.RecordID
 	Filename        *string
@@ -517,15 +517,15 @@ type UpdateMediaParams struct {
 	ChunkIDs        []models.RecordID
 }
 
-// UpdateMedia runs the versioned update pattern from CLAUDE.md.
+// UpdateFile runs the versioned update pattern from CLAUDE.md.
 // The caller supplies the parent version ID to build the derived_from graph.
-func (s *SurrealStore) UpdateMedia(ctx context.Context, p *UpdateMediaParams) (*oauth.Media, error) {
-	results, err := surrealdb.Query[[]oauth.Media](ctx, s.DB, `
+func (s *SurrealStore) UpdateFile(ctx context.Context, p *UpdateFileParams) (*oauth.File, error) {
+	results, err := surrealdb.Query[[]oauth.File](ctx, s.DB, `
 		BEGIN TRANSACTION;
-		LET $current = (SELECT * FROM media WHERE id = $id AND user = $user LIMIT 1)[0];
+		LET $current = (SELECT * FROM file WHERE id = $id AND user = $user LIMIT 1)[0];
 		IF $current = NONE { RETURN NONE };
-		LET $new_version = (CREATE media_version SET
-			media_id  = $id,
+		LET $new_version = (CREATE file_version SET
+			file_id  = $id,
 			user      = $user,
 			filename  = $filename  ?? $current.filename,
 			mime_type = $mime_type ?? $current.mime_type,
@@ -541,9 +541,9 @@ func (s *SurrealStore) UpdateMedia(ctx context.Context, p *UpdateMediaParams) (*
 			version   = $new_version.id
 		)[0];
 
-		-- ref_count tracks array-slot references across media.chunks + media_version.chunks.
+		-- ref_count tracks array-slot references across file.chunks + file_version.chunks.
 		-- $new_version always adds one slot per chunk in $effective; chunks newly added to
-		-- media.chunks add a second slot, chunks dropped from media.chunks lose one.
+		-- file.chunks add a second slot, chunks dropped from file.chunks lose one.
 		LET $effective = $chunks ?? $current.chunks;
 		LET $added     = array::complement($effective, $current.chunks);
 		LET $removed   = array::complement($current.chunks, $effective);
@@ -554,7 +554,7 @@ func (s *SurrealStore) UpdateMedia(ctx context.Context, p *UpdateMediaParams) (*
 		RETURN [$result];
 		COMMIT TRANSACTION;
 	`, map[string]any{
-		"id":        models.NewRecordID("media", p.MediaID),
+		"id":        models.NewRecordID("file", p.FileID),
 		"user":      models.NewRecordID("user", p.UserID),
 		"parent":    p.ParentVersionID,
 		"filename":  derefStr(p.Filename),
@@ -563,7 +563,7 @@ func (s *SurrealStore) UpdateMedia(ctx context.Context, p *UpdateMediaParams) (*
 		"chunks":    nilIfEmpty(p.ChunkIDs),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("update media: %w", err)
+		return nil, fmt.Errorf("update file: %w", err)
 	}
 	m, err := lastResult(*results, "")
 	if err != nil {
@@ -572,17 +572,17 @@ func (s *SurrealStore) UpdateMedia(ctx context.Context, p *UpdateMediaParams) (*
 	return m, nil
 }
 
-func (s *SurrealStore) GetMedia(ctx context.Context, mediaID, userID string) (*oauth.Media, error) {
-	results, err := surrealdb.Query[[]oauth.Media](
+func (s *SurrealStore) GetFile(ctx context.Context, fileID, userID string) (*oauth.File, error) {
+	results, err := surrealdb.Query[[]oauth.File](
 		ctx, s.DB,
-		"SELECT * FROM media WHERE id = $id AND user = $user LIMIT 1",
+		"SELECT * FROM file WHERE id = $id AND user = $user LIMIT 1",
 		map[string]any{
-			"id":   models.NewRecordID("media", mediaID),
+			"id":   models.NewRecordID("file", fileID),
 			"user": models.NewRecordID("user", userID),
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("get media: %w", err)
+		return nil, fmt.Errorf("get file: %w", err)
 	}
 	for _, qr := range *results {
 		if len(qr.Result) > 0 {
@@ -605,34 +605,34 @@ type GCChunk struct {
 	StorageKey string          `json:"storage_key"`
 }
 
-// DeleteMedia removes a media item, its full version history, and the
+// DeleteFile removes a file item, its full version history, and the
 // derived_from edges between those versions. Every chunk referenced by the
-// current media.chunks or any media_version.chunks has ref_count decremented
+// current file.chunks or any file_version.chunks has ref_count decremented
 // by the number of array slots it occupied; chunks whose ref_count drops to
 // <= 0 are deleted from the chunk table and their bytes subtracted from the
 // user's storage_used_bytes. The caller is responsible for deleting the
 // returned chunks' blobs from object storage.
-func (s *SurrealStore) DeleteMedia(ctx context.Context, mediaID, userID string) ([]GCChunk, error) {
-	current, err := s.GetMedia(ctx, mediaID, userID)
+func (s *SurrealStore) DeleteFile(ctx context.Context, fileID, userID string) ([]GCChunk, error) {
+	current, err := s.GetFile(ctx, fileID, userID)
 	if err != nil {
 		return nil, err // ErrNotFound or wrapped query error
 	}
 
-	mediaRec := models.NewRecordID("media", mediaID)
+	fileRec := models.NewRecordID("file", fileID)
 	userRec := models.NewRecordID("user", userID)
 
 	// Capture the linked thumbnail (if any) so it is cascade-deleted after the
-	// parent. Thumbnails are their own media objects with their own chunks.
+	// parent. Thumbnails are their own file objects with their own chunks.
 	var thumbnailID string
 	thumbRes, err := surrealdb.Query[[]struct {
 		Thumbnail *models.RecordID `json:"thumbnail"`
 	}](
 		ctx, s.DB,
-		"SELECT thumbnail FROM media WHERE id = $id AND user = $user LIMIT 1",
-		map[string]any{"id": mediaRec, "user": userRec},
+		"SELECT thumbnail FROM file WHERE id = $id AND user = $user LIMIT 1",
+		map[string]any{"id": fileRec, "user": userRec},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("delete media: get thumbnail: %w", err)
+		return nil, fmt.Errorf("delete file: get thumbnail: %w", err)
 	}
 	for _, qr := range *thumbRes {
 		if len(qr.Result) > 0 && qr.Result[0].Thumbnail != nil {
@@ -645,14 +645,14 @@ func (s *SurrealStore) DeleteMedia(ctx context.Context, mediaID, userID string) 
 	}
 	versionResults, err := surrealdb.Query[[]versionChunks](
 		ctx, s.DB,
-		"SELECT chunks FROM media_version WHERE media_id = $id AND user = $user",
-		map[string]any{"id": mediaRec, "user": userRec},
+		"SELECT chunks FROM file_version WHERE file_id = $id AND user = $user",
+		map[string]any{"id": fileRec, "user": userRec},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("delete media: get versions: %w", err)
+		return nil, fmt.Errorf("delete file: get versions: %w", err)
 	}
 
-	// Tally how many array slots (media.chunks + every media_version.chunks)
+	// Tally how many array slots (file.chunks + every file_version.chunks)
 	// reference each chunk; ref_count drops by that amount.
 	counts := make(map[string]int)
 	idByKey := make(map[string]models.RecordID)
@@ -685,7 +685,7 @@ func (s *SurrealStore) DeleteMedia(ctx context.Context, mediaID, userID string) 
 		map[string]any{"chunk_ids": chunkIDs, "user": userRec},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("delete media: get chunks: %w", err)
+		return nil, fmt.Errorf("delete file: get chunks: %w", err)
 	}
 
 	aliveDecrements := make([]chunkDecrement, 0, len(counts))
@@ -708,13 +708,13 @@ func (s *SurrealStore) DeleteMedia(ctx context.Context, mediaID, userID string) 
 
 	_, err = surrealdb.Query[[]any](ctx, s.DB, `
 		BEGIN TRANSACTION;
-		LET $version_ids = (SELECT VALUE id FROM media_version WHERE media_id = $id AND user = $user);
+		LET $version_ids = (SELECT VALUE id FROM file_version WHERE file_id = $id AND user = $user);
 		DELETE derived_from WHERE in IN $version_ids OR out IN $version_ids;
-		DELETE media_embedding WHERE media = $id AND user = $user;
-		DELETE media_favorite WHERE media = $id AND user = $user;
-		DELETE album_media WHERE media = $id AND user = $user;
-		DELETE media_version WHERE media_id = $id AND user = $user;
-		DELETE media WHERE id = $id AND user = $user;
+		DELETE file_embedding WHERE file = $id AND user = $user;
+		DELETE file_favorite WHERE file = $id AND user = $user;
+		DELETE album_file WHERE file = $id AND user = $user;
+		DELETE file_version WHERE file_id = $id AND user = $user;
+		DELETE file WHERE id = $id AND user = $user;
 
 		FOR $d IN $alive_decrements {
 			UPDATE $d.chunk SET ref_count -= $d.count;
@@ -729,22 +729,22 @@ func (s *SurrealStore) DeleteMedia(ctx context.Context, mediaID, userID string) 
 		UPDATE $user SET storage_used_bytes -= $dead_size;
 		COMMIT TRANSACTION;
 	`, map[string]any{
-		"id":               mediaRec,
+		"id":               fileRec,
 		"user":             userRec,
 		"alive_decrements": aliveDecrements,
 		"dead_ids":         deadIDs,
 		"dead_size":        deadSize,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("delete media: %w", err)
+		return nil, fmt.Errorf("delete file: %w", err)
 	}
 
-	// Cascade: delete the linked thumbnail media (and its chunks). Tolerate an
+	// Cascade: delete the linked thumbnail file (and its chunks). Tolerate an
 	// already-removed thumbnail.
 	if thumbnailID != "" {
-		thumbDead, terr := s.DeleteMedia(ctx, thumbnailID, userID)
+		thumbDead, terr := s.DeleteFile(ctx, thumbnailID, userID)
 		if terr != nil && !errors.Is(terr, ErrNotFound) {
-			return nil, fmt.Errorf("delete media: thumbnail: %w", terr)
+			return nil, fmt.Errorf("delete file: thumbnail: %w", terr)
 		}
 		dead = append(dead, thumbDead...)
 	}
@@ -752,10 +752,10 @@ func (s *SurrealStore) DeleteMedia(ctx context.Context, mediaID, userID string) 
 	return dead, nil
 }
 
-func (s *SurrealStore) ListMedia(ctx context.Context, userID string, limit, offset int) ([]*oauth.Media, error) {
-	results, err := surrealdb.Query[[]oauth.Media](
+func (s *SurrealStore) ListFile(ctx context.Context, userID string, limit, offset int) ([]*oauth.File, error) {
+	results, err := surrealdb.Query[[]oauth.File](
 		ctx, s.DB,
-		"SELECT * FROM media WHERE user = $user ORDER BY capture_date DESC LIMIT $limit START $offset",
+		"SELECT * FROM file WHERE user = $user ORDER BY capture_date DESC LIMIT $limit START $offset",
 		map[string]any{
 			"user":   models.NewRecordID("user", userID),
 			"limit":  limit,
@@ -763,10 +763,10 @@ func (s *SurrealStore) ListMedia(ctx context.Context, userID string, limit, offs
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list media: %w", err)
+		return nil, fmt.Errorf("list file: %w", err)
 	}
 	for _, qr := range *results {
-		out := make([]*oauth.Media, len(qr.Result))
+		out := make([]*oauth.File, len(qr.Result))
 		for i := range qr.Result {
 			out[i] = &qr.Result[i]
 		}

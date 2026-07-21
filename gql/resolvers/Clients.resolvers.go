@@ -30,7 +30,7 @@ func (r *mutationResolver) CreateClient(ctx context.Context, input gql_model.Cre
 	// Clients are owned by an organization; the caller must be a member of it.
 	orgRef := models.NewRecordID("organization", input.OrganizationID)
 	if !r.callerIsMember(ctx, claim.Subject, orgRef) {
-		return nil, fmt.Errorf("forbidden: caller is not a member of organization %q", input.OrganizationID)
+		return nil, Public(fmt.Sprintf("forbidden: caller is not a member of organization %q", input.OrganizationID))
 	}
 
 	// Auto-grant skips the consent screen entirely, so it is reserved for

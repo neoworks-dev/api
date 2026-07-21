@@ -13,7 +13,7 @@ schema:
   - schema/Notifications.graphql
   - schema/Memories.graphql
   - schema/Settings.graphql
-  - schema/Media.graphql
+  - schema/File.graphql
   - schema/Albums.graphql
   - schema/Storage.graphql
 exec:

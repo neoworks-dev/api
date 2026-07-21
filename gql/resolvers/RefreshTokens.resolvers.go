@@ -34,7 +34,7 @@ func (r *mutationResolver) RevokeRefreshToken(ctx context.Context, id string) (b
 		}
 	}
 	if !canRevoke {
-		return false, fmt.Errorf("forbidden: requires tokens:read or tokens:all:read scope")
+		return false, Public("forbidden: requires tokens:read or tokens:all:read scope")
 	}
 
 	if !allRead {
@@ -43,7 +43,7 @@ func (r *mutationResolver) RevokeRefreshToken(ctx context.Context, id string) (b
 			return false, fmt.Errorf("refresh token not found")
 		}
 		if rt.User.ID.(string) != claim.Subject {
-			return false, fmt.Errorf("forbidden: token belongs to another user")
+			return false, Public("forbidden: token belongs to another user")
 		}
 	}
 
@@ -68,7 +68,7 @@ func (r *queryResolver) RefreshTokens(ctx context.Context, limit *int, offset *i
 		}
 	}
 	if !allRead && !clientRead {
-		return nil, fmt.Errorf("forbidden: requires tokens:read or tokens:all:read scope")
+		return nil, Public("forbidden: requires tokens:read or tokens:all:read scope")
 	}
 
 	l := 50

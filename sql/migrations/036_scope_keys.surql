@@ -14,9 +14,9 @@ DEFINE FIELD updated_at ON user_scope_key TYPE datetime VALUE time::now();
 
 DEFINE INDEX idx_user_scope_key_unique ON user_scope_key FIELDS user, scope UNIQUE;
 
--- ── Media encryption scope ─────────────────────────────────────────────────────
--- Which scope key a media object's DEK is sealed under. Absent ⇒ the legacy
+-- ── File encryption scope ─────────────────────────────────────────────────────
+-- Which scope key a file object's DEK is sealed under. Absent ⇒ the legacy
 -- account key (pre-migration objects). The tag lets the key-holder pick the right
 -- keypair when unsealing on read.
-DEFINE FIELD scope ON media         TYPE option<string>;
-DEFINE FIELD scope ON media_version TYPE option<string> READONLY;
+DEFINE FIELD scope ON file         TYPE option<string>;
+DEFINE FIELD scope ON file_version TYPE option<string> READONLY;

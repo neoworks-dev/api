@@ -191,7 +191,7 @@ func customFieldsToGQL(in []CustomFieldData) []*gql_model.CustomField {
 	return out
 }
 
-func mediaID(r *models.RecordID) *string {
+func fileID(r *models.RecordID) *string {
 	if r == nil {
 		return nil
 	}
@@ -228,10 +228,10 @@ func (c *dbContact) toGQL() *gql_model.Contact {
 		Fburl:         c.Fburl,
 		Caluri:        c.Caluri,
 		Caladruri:     c.Caladruri,
-		Photo:         mediaID(c.Photo),
-		Logo:          mediaID(c.Logo),
-		Sound:         mediaID(c.Sound),
-		Key:           mediaID(c.Key),
+		Photo:         fileID(c.Photo),
+		Logo:          fileID(c.Logo),
+		Sound:         fileID(c.Sound),
+		Key:           fileID(c.Key),
 		CustomFields:  customFieldsToGQL(c.CustomFields),
 		Favorite:      c.Favorite,
 		Archived:      c.Archived,

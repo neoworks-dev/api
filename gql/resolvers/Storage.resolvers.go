@@ -7,7 +7,6 @@ package gql
 
 import (
 	"context"
-	"fmt"
 
 	gql_model "github.com/neoworks/auth/gql/model"
 	"github.com/neoworks/auth/middleware"
@@ -20,7 +19,7 @@ func (r *queryResolver) StorageUsage(ctx context.Context) (*gql_model.StorageUsa
 		return nil, errUnauthenticated
 	}
 	if !claimHasScope(claim, "storage:read") {
-		return nil, fmt.Errorf("forbidden: requires storage:read scope")
+		return nil, Public("forbidden: requires storage:read scope")
 	}
 
 	usage, err := r.store.StorageUsage(ctx, claim.Subject)

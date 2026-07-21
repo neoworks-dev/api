@@ -26,7 +26,7 @@ import (
 	approvalhandlers "github.com/neoworks/auth/handlers/approvals"
 	keyhandlers "github.com/neoworks/auth/handlers/keys"
 	linkpreviewhandlers "github.com/neoworks/auth/handlers/linkpreview"
-	mediahandlers "github.com/neoworks/auth/handlers/media"
+	filehandlers "github.com/neoworks/auth/handlers/file"
 	molliehandlers "github.com/neoworks/auth/handlers/mollie"
 	"github.com/neoworks/auth/middleware"
 	"github.com/neoworks/auth/mollie"
@@ -129,7 +129,7 @@ func main() {
 			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 			// Custom response headers the browser must be allowed to read cross-origin
 			// (the single-shot thumbnail carries its wrapped DEK here).
-			w.Header().Set("Access-Control-Expose-Headers", "X-Wrapped-DEK, X-Media-Mime, X-Media-Scope")
+			w.Header().Set("Access-Control-Expose-Headers", "X-Wrapped-DEK, X-File-Mime, X-File-Scope")
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)
 				return
@@ -197,7 +197,7 @@ func main() {
 		r.Handle("/graphql", middleware.Batch(srv))
 		keysHandler.RegisterAuthenticated(r)
 		approvalhandlers.NewHandler(surreal, redis, pushSender).RegisterAuthenticated(r)
-		mediahandlers.NewHandler(surreal, objects).Register(r)
+		filehandlers.NewHandler(surreal, objects).Register(r)
 		linkpreviewhandlers.NewHandler().Register(r)
 	})
 

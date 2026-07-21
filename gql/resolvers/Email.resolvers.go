@@ -21,7 +21,7 @@ func (r *mutationResolver) SendEmail(ctx context.Context, input gql_model.SendEm
 		return nil, errUnauthenticated
 	}
 	if !claimHasScope(claim, "email:write") {
-		return nil, fmt.Errorf("forbidden: requires email:write scope")
+		return nil, Public("forbidden: requires email:write scope")
 	}
 	if len(input.To) == 0 {
 		return nil, fmt.Errorf("at least one recipient is required")

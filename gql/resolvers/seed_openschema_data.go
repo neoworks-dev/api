@@ -217,8 +217,8 @@ model Membership {
 			tags: []string{"tickets", "sla", "overlay"},
 		},
 		{
-			scope: "neoworks", name: "media",
-			description: "Assets, encodings, and thumbnails for the encrypted media surface.",
+			scope: "neoworks", name: "file",
+			description: "Assets, encodings, and thumbnails for the encrypted file surface.",
 			version:     "1.4.0", downloads: 6710, official: true,
 			tags: []string{"assets", "thumbnails"},
 		},

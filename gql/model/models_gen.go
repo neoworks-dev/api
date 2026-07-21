@@ -41,9 +41,9 @@ type Album struct {
 	Name      string `json:"name"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
-	// Number of media in the album.
+	// Number of file in the album.
 	Count int `json:"count"`
-	// Thumbnail media id of the most-recently-added member, or null when empty.
+	// Thumbnail file id of the most-recently-added member, or null when empty.
 	//   Use it for the album card; null renders a placeholder cover.
 	CoverThumbnailID *string `json:"coverThumbnailId,omitempty"`
 }
@@ -124,7 +124,7 @@ type Contact struct {
 	Fburl         *string                `json:"fburl,omitempty"`
 	Caluri        *string                `json:"caluri,omitempty"`
 	Caladruri     *string                `json:"caladruri,omitempty"`
-	// Media handler id for the encrypted PHOTO/LOGO/SOUND/KEY (null = none).
+	// File handler id for the encrypted PHOTO/LOGO/SOUND/KEY (null = none).
 	Photo        *string        `json:"photo,omitempty"`
 	Logo         *string        `json:"logo,omitempty"`
 	Sound        *string        `json:"sound,omitempty"`
@@ -365,13 +365,13 @@ type CreateEventInput struct {
 }
 
 // Create a memory. `sourceText` is required for searchable text memories; binary
-// kinds reference encrypted bytes via `media`. `searchable` defaults to false on
+// kinds reference encrypted bytes via `file`. `searchable` defaults to false on
 // multi-tenant deployments (forced true on self-host).
 type CreateMemoryInput struct {
 	Kind           *string `json:"kind,omitempty"`
 	Title          *string `json:"title,omitempty"`
 	SourceText     *string `json:"sourceText,omitempty"`
-	Media          *string `json:"media,omitempty"`
+	File           *string `json:"file,omitempty"`
 	Searchable     *bool   `json:"searchable,omitempty"`
 	OrganizationID *string `json:"organizationId,omitempty"`
 }
@@ -504,6 +504,49 @@ type FieldListFilter struct {
 	Size    *IntFilter          `json:"size,omitempty"`
 }
 
+type File struct {
+	ID        string `json:"id"`
+	Filename  string `json:"filename"`
+	MimeType  string `json:"mime_type"`
+	Size      int    `json:"size"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+	// The linked thumbnail file id, if one was generated. Load this for grids;
+	//   load the original (id) only for fullsize viewing.
+	ThumbnailID *string `json:"thumbnailId,omitempty"`
+	// Embedding lifecycle for visual/text search: pending | ready | failed | none.
+	EmbeddingStatus *string `json:"embeddingStatus,omitempty"`
+	// Original capture time from the photo's EXIF (DateTimeOriginal), if present.
+	//   Distinct from created_at, which is when the upload reached the server.
+	CaptureDate *string `json:"captureDate,omitempty"`
+	// GPS coordinate from the photo's EXIF, if present. Stored unencrypted.
+	Location *GeoPoint `json:"location,omitempty"`
+	// Full parsed EXIF tag set, stored unencrypted. Shape varies by camera.
+	Exif map[string]any `json:"exif,omitempty"`
+	// True when the caller has favorited this file (per-user, resolved via a
+	//   file_favorite subquery — like embeddingStatus).
+	Favorite bool `json:"favorite"`
+}
+
+type FileFilter struct {
+	Filename    *StringFilter `json:"filename,omitempty"`
+	MimeType    *StringFilter `json:"mime_type,omitempty"`
+	Size        *IntFilter    `json:"size,omitempty"`
+	CreatedAt   *DateFilter   `json:"created_at,omitempty"`
+	UpdatedAt   *DateFilter   `json:"updated_at,omitempty"`
+	CaptureDate *DateFilter   `json:"captureDate,omitempty"`
+	Location    *GeoFilter    `json:"location,omitempty"`
+	And         []*FileFilter `json:"and,omitempty"`
+	Or          []*FileFilter `json:"or,omitempty"`
+	Not         *FileFilter   `json:"not,omitempty"`
+}
+
+// One sort key. Pass a list to sort by several columns in order.
+type FileSort struct {
+	Field     FileSortField  `json:"field"`
+	Direction *SortDirection `json:"direction,omitempty"`
+}
+
 // vCard GENDER.
 type Gender struct {
 	// vCard sex component: M F O N U.
@@ -569,49 +612,6 @@ type InvitePolicy struct {
 	Policy string `json:"policy"`
 }
 
-type Media struct {
-	ID        string `json:"id"`
-	Filename  string `json:"filename"`
-	MimeType  string `json:"mime_type"`
-	Size      int    `json:"size"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
-	// The linked thumbnail media id, if one was generated. Load this for grids;
-	//   load the original (id) only for fullsize viewing.
-	ThumbnailID *string `json:"thumbnailId,omitempty"`
-	// Embedding lifecycle for visual/text search: pending | ready | failed | none.
-	EmbeddingStatus *string `json:"embeddingStatus,omitempty"`
-	// Original capture time from the photo's EXIF (DateTimeOriginal), if present.
-	//   Distinct from created_at, which is when the upload reached the server.
-	CaptureDate *string `json:"captureDate,omitempty"`
-	// GPS coordinate from the photo's EXIF, if present. Stored unencrypted.
-	Location *GeoPoint `json:"location,omitempty"`
-	// Full parsed EXIF tag set, stored unencrypted. Shape varies by camera.
-	Exif map[string]any `json:"exif,omitempty"`
-	// True when the caller has favorited this media (per-user, resolved via a
-	//   media_favorite subquery — like embeddingStatus).
-	Favorite bool `json:"favorite"`
-}
-
-type MediaFilter struct {
-	Filename    *StringFilter  `json:"filename,omitempty"`
-	MimeType    *StringFilter  `json:"mime_type,omitempty"`
-	Size        *IntFilter     `json:"size,omitempty"`
-	CreatedAt   *DateFilter    `json:"created_at,omitempty"`
-	UpdatedAt   *DateFilter    `json:"updated_at,omitempty"`
-	CaptureDate *DateFilter    `json:"captureDate,omitempty"`
-	Location    *GeoFilter     `json:"location,omitempty"`
-	And         []*MediaFilter `json:"and,omitempty"`
-	Or          []*MediaFilter `json:"or,omitempty"`
-	Not         *MediaFilter   `json:"not,omitempty"`
-}
-
-// One sort key. Pass a list to sort by several columns in order.
-type MediaSort struct {
-	Field     MediaSortField `json:"field"`
-	Direction *SortDirection `json:"direction,omitempty"`
-}
-
 type Memory struct {
 	ID string `json:"id"`
 	// Owning organization id, when the memory is shared in an org (null = personal).
@@ -621,8 +621,8 @@ type Memory struct {
 	Title *string `json:"title,omitempty"`
 	// Plaintext source — present only when searchable; null otherwise.
 	SourceText *string `json:"source_text,omitempty"`
-	// Media handler id for encrypted bytes (null = none).
-	Media      *string `json:"media,omitempty"`
+	// File handler id for encrypted bytes (null = none).
+	File       *string `json:"file,omitempty"`
 	Searchable bool    `json:"searchable"`
 	Deleted    bool    `json:"deleted"`
 	CreatedAt  string  `json:"created_at"`
@@ -1186,55 +1186,55 @@ func (e ContactSortField) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// Sortable media columns (whitelisted).
-type MediaSortField string
+// Sortable file columns (whitelisted).
+type FileSortField string
 
 const (
-	MediaSortFieldFilename    MediaSortField = "FILENAME"
-	MediaSortFieldCreatedAt   MediaSortField = "CREATED_AT"
-	MediaSortFieldUpdatedAt   MediaSortField = "UPDATED_AT"
-	MediaSortFieldSize        MediaSortField = "SIZE"
-	MediaSortFieldCaptureDate MediaSortField = "CAPTURE_DATE"
+	FileSortFieldFilename    FileSortField = "FILENAME"
+	FileSortFieldCreatedAt   FileSortField = "CREATED_AT"
+	FileSortFieldUpdatedAt   FileSortField = "UPDATED_AT"
+	FileSortFieldSize        FileSortField = "SIZE"
+	FileSortFieldCaptureDate FileSortField = "CAPTURE_DATE"
 )
 
-var AllMediaSortField = []MediaSortField{
-	MediaSortFieldFilename,
-	MediaSortFieldCreatedAt,
-	MediaSortFieldUpdatedAt,
-	MediaSortFieldSize,
-	MediaSortFieldCaptureDate,
+var AllFileSortField = []FileSortField{
+	FileSortFieldFilename,
+	FileSortFieldCreatedAt,
+	FileSortFieldUpdatedAt,
+	FileSortFieldSize,
+	FileSortFieldCaptureDate,
 }
 
-func (e MediaSortField) IsValid() bool {
+func (e FileSortField) IsValid() bool {
 	switch e {
-	case MediaSortFieldFilename, MediaSortFieldCreatedAt, MediaSortFieldUpdatedAt, MediaSortFieldSize, MediaSortFieldCaptureDate:
+	case FileSortFieldFilename, FileSortFieldCreatedAt, FileSortFieldUpdatedAt, FileSortFieldSize, FileSortFieldCaptureDate:
 		return true
 	}
 	return false
 }
 
-func (e MediaSortField) String() string {
+func (e FileSortField) String() string {
 	return string(e)
 }
 
-func (e *MediaSortField) UnmarshalGQL(v any) error {
+func (e *FileSortField) UnmarshalGQL(v any) error {
 	str, ok := v.(string)
 	if !ok {
 		return fmt.Errorf("enums must be strings")
 	}
 
-	*e = MediaSortField(str)
+	*e = FileSortField(str)
 	if !e.IsValid() {
-		return fmt.Errorf("%s is not a valid MediaSortField", str)
+		return fmt.Errorf("%s is not a valid FileSortField", str)
 	}
 	return nil
 }
 
-func (e MediaSortField) MarshalGQL(w io.Writer) {
+func (e FileSortField) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
-func (e *MediaSortField) UnmarshalJSON(b []byte) error {
+func (e *FileSortField) UnmarshalJSON(b []byte) error {
 	s, err := strconv.Unquote(string(b))
 	if err != nil {
 		return err
@@ -1242,7 +1242,7 @@ func (e *MediaSortField) UnmarshalJSON(b []byte) error {
 	return e.UnmarshalGQL(s)
 }
 
-func (e MediaSortField) MarshalJSON() ([]byte, error) {
+func (e FileSortField) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

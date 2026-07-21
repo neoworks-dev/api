@@ -1,16 +1,16 @@
-# Encrypted media (images/files). Bytes are uploaded + decrypted via the REST
-# media API (content-addressed, AMK-sealed chunks); this GraphQL surface is the
-# queryable metadata layer — list/count/search over media a user owns or has been
+# Encrypted file (images/files). Bytes are uploaded + decrypted via the REST
+# file API (content-addressed, AMK-sealed chunks); this GraphQL surface is the
+# queryable metadata layer — list/count/search over file a user owns or has been
 # granted. Filters reuse the shared primitives (see _shared.graphql).
 
-type Media {
+type File {
   id: ID!
   filename: String!
   mime_type: String!
   size: Int!
   created_at: String!
   updated_at: String!
-  """The linked thumbnail media id, if one was generated. Load this for grids;
+  """The linked thumbnail file id, if one was generated. Load this for grids;
   load the original (id) only for fullsize viewing."""
   thumbnailId: ID
   """Embedding lifecycle for visual/text search: pending | ready | failed | none."""
@@ -30,7 +30,7 @@ type GeoPoint {
   lng: Float!
 }
 
-input MediaFilter {
+input FileFilter {
   filename: StringFilter
   mime_type: StringFilter
   size: IntFilter
@@ -39,13 +39,13 @@ input MediaFilter {
   captureDate: DateFilter
   location: GeoFilter
 
-  and: [MediaFilter!]
-  or: [MediaFilter!]
-  not: MediaFilter
+  and: [FileFilter!]
+  or: [FileFilter!]
+  not: FileFilter
 }
 
-"""Sortable media columns (whitelisted)."""
-enum MediaSortField {
+"""Sortable file columns (whitelisted)."""
+enum FileSortField {
   FILENAME
   CREATED_AT
   UPDATED_AT
@@ -54,24 +54,24 @@ enum MediaSortField {
 }
 
 """One sort key. Pass a list to sort by several columns in order."""
-input MediaSort {
-  field: MediaSortField!
+input FileSort {
+  field: FileSortField!
   direction: SortDirection = ASC
 }
 
 extend type Query {
-  """Media the caller owns."""
-  media(filter: MediaFilter, sort: [MediaSort!], limit: Int, offset: Int): [Media!]!
-  """Total owned media matching the same filter (ignores paging)."""
-  mediaCount(filter: MediaFilter): Int!
-  """Media shared with the caller via a media grant."""
-  sharedMedia(filter: MediaFilter, sort: [MediaSort!], limit: Int, offset: Int): [Media!]!
-  """Total media shared with the caller matching the same filter (ignores paging)."""
-  sharedMediaCount(filter: MediaFilter): Int!
-  """Hybrid (vector + BM25) search over the caller's media. When the user's
+  """File the caller owns."""
+  file(filter: FileFilter, sort: [FileSort!], limit: Int, offset: Int): [File!]!
+  """Total owned file matching the same filter (ignores paging)."""
+  fileCount(filter: FileFilter): Int!
+  """File shared with the caller via a file grant."""
+  sharedFile(filter: FileFilter, sort: [FileSort!], limit: Int, offset: Int): [File!]!
+  """Total file shared with the caller matching the same filter (ignores paging)."""
+  sharedFileCount(filter: FileFilter): Int!
+  """Hybrid (vector + BM25) search over the caller's file. When the user's
   `search_embedding_mode` setting is `client`, pass `queryVector` (a normalized
   query embedding computed in the browser); otherwise the server embeds the query
   text. Falls back to lexical-only when neither a vector nor a model server is
   available."""
-  mediaSearch(query: String!, limit: Int, queryVector: [Float!]): [Media!]!
+  fileSearch(query: String!, limit: Int, queryVector: [Float!]): [File!]!
 }

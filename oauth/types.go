@@ -137,22 +137,22 @@ type Chunk struct {
 	CreatedAt  time.Time        `json:"created_at"`
 }
 
-// MediaRecipient is one sealed copy of a media object's DEK. The DEK is sealed
+// FileRecipient is one sealed copy of a file object's DEK. The DEK is sealed
 // (crypto_box_seal) to the recipient's account public key; KeyID is the bare
 // recipient user id so the reader can pick its own wrapper.
-type MediaRecipient struct {
+type FileRecipient struct {
 	KeyID      string `json:"key_id"`
 	WrappedDEK string `json:"wrapped_dek"`
 }
 
-type Media struct {
+type File struct {
 	ID         *models.RecordID  `json:"id,omitempty"`
 	User       *models.RecordID  `json:"user"`
 	Filename   string            `json:"filename"`
 	MimeType   string            `json:"mime_type"`
 	Size       int64             `json:"size"`
 	Chunks     []models.RecordID `json:"chunks"`
-	Recipients []MediaRecipient  `json:"recipients"`
+	Recipients []FileRecipient  `json:"recipients"`
 	Version    *models.RecordID  `json:"version"`
 	CreatedAt  time.Time         `json:"created_at"`
 	UpdatedAt  time.Time         `json:"updated_at"`
@@ -162,8 +162,8 @@ type Media struct {
 // driver's {Table, ID} struct, so HTTP responses never leak the internal record
 // shape. The embedded alias supplies every non-id field; the named fields shadow
 // the id JSON keys. DB I/O is unaffected (the driver uses CBOR, not encoding/json).
-func (m Media) MarshalJSON() ([]byte, error) {
-	type alias Media
+func (m File) MarshalJSON() ([]byte, error) {
+	type alias File
 	return json.Marshal(&struct {
 		ID      string   `json:"id,omitempty"`
 		User    string   `json:"user"`
@@ -208,7 +208,7 @@ type Device struct {
 	LastSeenAt time.Time        `json:"last_seen_at"`
 }
 
-// MarshalJSON emits the record-id fields as bare id strings (see Media.MarshalJSON).
+// MarshalJSON emits the record-id fields as bare id strings (see File.MarshalJSON).
 func (d Device) MarshalJSON() ([]byte, error) {
 	type alias Device
 	return json.Marshal(&struct {
@@ -239,7 +239,7 @@ type ApprovalRequest struct {
 	ExpiresAt           time.Time        `json:"expires_at"`
 }
 
-// MarshalJSON emits the record-id fields as bare id strings (see Media.MarshalJSON).
+// MarshalJSON emits the record-id fields as bare id strings (see File.MarshalJSON).
 func (a ApprovalRequest) MarshalJSON() ([]byte, error) {
 	type alias ApprovalRequest
 	return json.Marshal(&struct {

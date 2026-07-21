@@ -39,9 +39,9 @@ func (r *mutationResolver) CreateMemory(ctx context.Context, input gql_model.Cre
 		SourceText: input.SourceText,
 		Searchable: &searchable,
 	}
-	if input.Media != nil {
-		media := models.NewRecordID("media", *input.Media)
-		fields.Media = &media
+	if input.File != nil {
+		file := models.NewRecordID("file", *input.File)
+		fields.File = &file
 	}
 
 	memory, err := r.store.Memories.Create(ctx, &database.CreateMemoryParams{

@@ -8,17 +8,17 @@ import (
 	"github.com/surrealdb/surrealdb.go/pkg/models"
 )
 
-// Media JSON must expose record ids as bare strings, never the driver's
+// File JSON must expose record ids as bare strings, never the driver's
 // {Table, ID} struct, which would leak the internal record shape to clients.
-func TestMediaMarshalJSONEmitsStringIDs(t *testing.T) {
-	mediaID := models.NewRecordID("media", "abc123")
+func TestFileMarshalJSONEmitsStringIDs(t *testing.T) {
+	fileID := models.NewRecordID("file", "abc123")
 	userID := models.NewRecordID("user", "u1")
-	versionID := models.NewRecordID("media_version", "v1")
+	versionID := models.NewRecordID("file_version", "v1")
 	chunkA := models.NewRecordID("chunk", "h1")
 	chunkB := models.NewRecordID("chunk", "h2")
 
-	m := Media{
-		ID:        &mediaID,
+	m := File{
+		ID:        &fileID,
 		User:      &userID,
 		Filename:  "chat-backup.bin",
 		MimeType:  "application/octet-stream",
@@ -66,8 +66,8 @@ func TestMediaMarshalJSONEmitsStringIDs(t *testing.T) {
 }
 
 // A nil id pointer must marshal away cleanly (omitempty) rather than panic or emit null.
-func TestMediaMarshalJSONNilIDs(t *testing.T) {
-	raw, err := json.Marshal(Media{Filename: "x"})
+func TestFileMarshalJSONNilIDs(t *testing.T) {
+	raw, err := json.Marshal(File{Filename: "x"})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}

@@ -1,6 +1,6 @@
 # Contacts aligned to vCard 4.0 (RFC 6350), versioned (contact / contact_version)
 # and user-scoped. Multi-valued properties are typed lists; PHOTO/LOGO/SOUND/KEY
-# are media references (ID), not inline base64. Beyond vCard: custom_fields, and
+# are file references (ID), not inline base64. Beyond vCard: custom_fields, and
 # the favorite / archived / deleted flags (deleted drives the Trash tab).
 
 # ── Structured value objects ──────────────────────────────────────────────────
@@ -109,7 +109,7 @@ type Contact {
   caluri: String
   caladruri: String
 
-  """Media handler id for the encrypted PHOTO/LOGO/SOUND/KEY (null = none)."""
+  """File handler id for the encrypted PHOTO/LOGO/SOUND/KEY (null = none)."""
   photo: ID
   logo: ID
   sound: ID

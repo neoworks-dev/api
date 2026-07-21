@@ -31,7 +31,7 @@ func TestStorageUsageBreakdown(t *testing.T) {
 
 	t.Cleanup(func() {
 		_, _ = surrealdb.Query[[]any](ctx, root, "DELETE billing_storage_period WHERE billed_to = $u", map[string]any{"u": owner})
-		_, _ = surrealdb.Query[[]any](ctx, root, "DELETE media WHERE user = $u", map[string]any{"u": owner})
+		_, _ = surrealdb.Query[[]any](ctx, root, "DELETE file WHERE user = $u", map[string]any{"u": owner})
 		_, _ = surrealdb.Query[[]any](ctx, root, "DELETE chunk WHERE user = $u", map[string]any{"u": owner})
 		_, _ = surrealdb.Query[[]any](ctx, root, "DELETE $u", map[string]any{"u": owner})
 	})
@@ -40,13 +40,13 @@ func TestStorageUsageBreakdown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create chunk: %v", err)
 	}
-	_, err = store.CreateMedia(ctx, &CreateMediaParams{
+	_, err = store.CreateFile(ctx, &CreateFileParams{
 		UserID: ownerID, Filename: "photo.jpg", MimeType: "image/jpeg", Size: 4096,
 		ChunkIDs:   []models.RecordID{*chunk.ID},
-		Recipients: []oauth.MediaRecipient{{KeyID: ownerID, WrappedDEK: "w"}},
+		Recipients: []oauth.FileRecipient{{KeyID: ownerID, WrappedDEK: "w"}},
 	})
 	if err != nil {
-		t.Fatalf("create media: %v", err)
+		t.Fatalf("create file: %v", err)
 	}
 
 	usage, err := store.StorageUsage(ctx, ownerID)

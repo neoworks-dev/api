@@ -22,7 +22,7 @@ func (r *mutationResolver) SendNotification(ctx context.Context, input gql_model
 		return nil, errUnauthenticated
 	}
 	if !claimHasScope(claim, "notification:write") {
-		return nil, fmt.Errorf("forbidden: requires notification:write scope")
+		return nil, Public("forbidden: requires notification:write scope")
 	}
 
 	// An omitted userId targets the calling user.

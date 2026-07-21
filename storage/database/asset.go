@@ -10,7 +10,7 @@ import (
 )
 
 // Asset is a stored object served by the assets service (public/cached, plaintext
-// — distinct from the encrypted owner-only media surface).
+// — distinct from the encrypted owner-only file surface).
 type Asset struct {
 	ID           *models.RecordID `json:"id,omitempty"`
 	StorageKey   string           `json:"storage_key"`

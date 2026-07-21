@@ -1,4 +1,4 @@
-package media
+package file
 
 import (
 	"context"
@@ -32,36 +32,36 @@ func NewHandler(store *database.SurrealStore, objects *objectstore.Store) *Handl
 }
 
 func (h *Handler) Register(r chi.Router) {
-	r.Post("/api/v1/media/check", h.checkChunks)
-	r.Put("/api/v1/media/chunks/{hash}", h.uploadChunk)
-	r.Get("/api/v1/media/chunks/{hash}", h.downloadChunk)
-	r.Post("/api/v1/media", h.createMedia)
-	r.Post("/api/v1/media/batch", h.batchCreateMedia)
-	r.Put("/api/v1/media/{id}", h.updateMedia)
-	r.Post("/api/v1/media/delete", h.batchDeleteMedia)
-	r.Delete("/api/v1/media/{id}", h.deleteMedia)
-	r.Get("/api/v1/media", h.listMedia)
+	r.Post("/api/v1/file/check", h.checkChunks)
+	r.Put("/api/v1/file/chunks/{hash}", h.uploadChunk)
+	r.Get("/api/v1/file/chunks/{hash}", h.downloadChunk)
+	r.Post("/api/v1/file", h.createFile)
+	r.Post("/api/v1/file/batch", h.batchCreateFile)
+	r.Put("/api/v1/file/{id}", h.updateFile)
+	r.Post("/api/v1/file/delete", h.batchDeleteFile)
+	r.Delete("/api/v1/file/{id}", h.deleteFile)
+	r.Get("/api/v1/file", h.listFile)
 	// Client-side embedding fill: the browser indexer pulls pending jobs, decrypts
 	// + embeds locally (the server can't read the bytes), and uploads the vector.
-	r.Get("/api/v1/media/embeddings/pending", h.listPendingEmbeddings)
-	r.Put("/api/v1/media/{id}/embedding", h.putEmbedding)
-	r.Get("/api/v1/media/{id}/manifest", h.getManifest)
+	r.Get("/api/v1/file/embeddings/pending", h.listPendingEmbeddings)
+	r.Put("/api/v1/file/{id}/embedding", h.putEmbedding)
+	r.Get("/api/v1/file/{id}/manifest", h.getManifest)
 	// Batch manifest: warm a whole grid page's manifests in one request.
-	r.Post("/api/v1/media/manifests", h.batchManifests)
+	r.Post("/api/v1/file/manifests", h.batchManifests)
 	// Single-shot thumbnail: one request returns the encrypted bytes + wrapped DEK
 	// header for single-chunk objects (thumbnails), skipping the manifest hop.
-	r.Get("/api/v1/media/{id}/thumbnail", h.downloadThumbnail)
-	// Media-scoped chunk read: authorizes by ownership OR a share grant, so a
+	r.Get("/api/v1/file/{id}/thumbnail", h.downloadThumbnail)
+	// File-scoped chunk read: authorizes by ownership OR a share grant, so a
 	// recipient can fetch a shared object's chunks (the owner-scoped flat route
 	// above stays for the owner's own uploads).
-	r.Get("/api/v1/media/{id}/chunks/{hash}", h.downloadMediaChunk)
-	r.Post("/api/v1/media/{id}/share", h.shareMedia)
-	r.Delete("/api/v1/media/{id}/share/{recipient}", h.unshareMedia)
-	r.Get("/api/v1/media/{id}", h.getMedia)
+	r.Get("/api/v1/file/{id}/chunks/{hash}", h.downloadFileChunk)
+	r.Post("/api/v1/file/{id}/share", h.shareFile)
+	r.Delete("/api/v1/file/{id}/share/{recipient}", h.unshareFile)
+	r.Get("/api/v1/file/{id}", h.getFile)
 }
 
-// getManifest returns a media item's chunk hashes so a client that only stored
-// the media id (e.g. a contact's photo) can reassemble and decrypt it.
+// getManifest returns a file item's chunk hashes so a client that only stored
+// the file id (e.g. a contact's photo) can reassemble and decrypt it.
 func (h *Handler) getManifest(w http.ResponseWriter, r *http.Request) {
 	userID := mustUserID(r)
 	if userID == "" {
@@ -69,7 +69,7 @@ func (h *Handler) getManifest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	manifest, err := h.store.GetMediaManifest(r.Context(), chi.URLParam(r, "id"), userID)
+	manifest, err := h.store.GetFileManifest(r.Context(), chi.URLParam(r, "id"), userID)
 	if errors.Is(err, database.ErrNotFound) {
 		jsonErr(w, "not found", http.StatusNotFound)
 		return
@@ -112,7 +112,7 @@ func (h *Handler) batchManifests(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	manifests, err := h.store.GetMediaManifests(r.Context(), body.IDs, userID)
+	manifests, err := h.store.GetFileManifests(r.Context(), body.IDs, userID)
 	if err != nil {
 		slog.Error("batchManifests", "err", err)
 		jsonErr(w, "server error", http.StatusInternalServerError)
@@ -133,10 +133,10 @@ func (h *Handler) batchManifests(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, readable)
 }
 
-// downloadThumbnail streams a single-chunk media object's encrypted bytes in one
+// downloadThumbnail streams a single-chunk file object's encrypted bytes in one
 // request, carrying the requester's wrapped DEK in a header so no separate
 // manifest fetch is needed. Thumbnails are small (single chunk); multi-chunk
-// media gets a 409 so the client falls back to the manifest path.
+// file gets a 409 so the client falls back to the manifest path.
 func (h *Handler) downloadThumbnail(w http.ResponseWriter, r *http.Request) {
 	userID := mustUserID(r)
 	if userID == "" {
@@ -144,8 +144,8 @@ func (h *Handler) downloadThumbnail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mediaID := chi.URLParam(r, "id")
-	manifest, err := h.store.GetMediaManifest(r.Context(), mediaID, userID)
+	fileID := chi.URLParam(r, "id")
+	manifest, err := h.store.GetFileManifest(r.Context(), fileID, userID)
 	if errors.Is(err, database.ErrNotFound) {
 		jsonErr(w, "not found", http.StatusNotFound)
 		return
@@ -168,7 +168,7 @@ func (h *Handler) downloadThumbnail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	chunk, err := h.store.GetReadableChunk(r.Context(), mediaID, manifest.Chunks[0].Hash, userID)
+	chunk, err := h.store.GetReadableChunk(r.Context(), fileID, manifest.Chunks[0].Hash, userID)
 	if errors.Is(err, database.ErrNotFound) {
 		jsonErr(w, "not found", http.StatusNotFound)
 		return
@@ -190,9 +190,9 @@ func (h *Handler) downloadThumbnail(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Length", strconv.FormatInt(chunk.Size, 10))
 	w.Header().Set("X-Wrapped-DEK", manifest.WrappedDEK)
-	w.Header().Set("X-Media-Mime", manifest.MimeType)
+	w.Header().Set("X-File-Mime", manifest.MimeType)
 	if manifest.Scope != "" {
-		w.Header().Set("X-Media-Scope", manifest.Scope)
+		w.Header().Set("X-File-Scope", manifest.Scope)
 	}
 	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	w.Header().Set("ETag", `"`+manifest.Chunks[0].Hash+`"`)
@@ -368,11 +368,11 @@ func (h *Handler) downloadChunk(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// downloadMediaChunk streams an encrypted chunk to a reader authorized for the
-// given media — its owner, or a user holding a share grant. The chunk must belong
-// to that media. This is the read path the SDK uses for both owned and shared
-// objects (it always knows the media id from the manifest).
-func (h *Handler) downloadMediaChunk(w http.ResponseWriter, r *http.Request) {
+// downloadFileChunk streams an encrypted chunk to a reader authorized for the
+// given file — its owner, or a user holding a share grant. The chunk must belong
+// to that file. This is the read path the SDK uses for both owned and shared
+// objects (it always knows the file id from the manifest).
+func (h *Handler) downloadFileChunk(w http.ResponseWriter, r *http.Request) {
 	userID := mustUserID(r)
 	if userID == "" {
 		jsonErr(w, "unauthorized", http.StatusUnauthorized)
@@ -391,14 +391,14 @@ func (h *Handler) downloadMediaChunk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.Error("downloadMediaChunk: get chunk", "err", err)
+		slog.Error("downloadFileChunk: get chunk", "err", err)
 		jsonErr(w, "server error", http.StatusInternalServerError)
 		return
 	}
 
 	obj, err := h.objects.GetChunk(r.Context(), chunk.StorageKey)
 	if err != nil {
-		slog.Error("downloadMediaChunk: object storage", "err", err)
+		slog.Error("downloadFileChunk: object storage", "err", err)
 		jsonErr(w, "server error", http.StatusInternalServerError)
 		return
 	}
@@ -409,16 +409,16 @@ func (h *Handler) downloadMediaChunk(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	w.Header().Set("ETag", `"`+hash+`"`)
 	if _, err := io.Copy(w, obj); err != nil {
-		slog.Error("downloadMediaChunk: stream", "err", err)
+		slog.Error("downloadFileChunk: stream", "err", err)
 	}
 }
 
 // ── Share / unshare ─────────────────────────────────────────────────────────
 
-// shareMedia grants another user read access to a media object and stores the
+// shareFile grants another user read access to a file object and stores the
 // recipient's sealed DEK wrapper (produced by the owner's Vault re-wrap). Owner
 // only. The DEK plaintext is never seen by the server.
-func (h *Handler) shareMedia(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) shareFile(w http.ResponseWriter, r *http.Request) {
 	userID := mustUserID(r)
 	if userID == "" {
 		jsonErr(w, "unauthorized", http.StatusUnauthorized)
@@ -439,13 +439,13 @@ func (h *Handler) shareMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.store.CreateMediaShare(r.Context(), chi.URLParam(r, "id"), userID, body.RecipientUserID, body.WrappedDEK)
+	err := h.store.CreateFileShare(r.Context(), chi.URLParam(r, "id"), userID, body.RecipientUserID, body.WrappedDEK)
 	if errors.Is(err, database.ErrNotFound) {
 		jsonErr(w, "not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		slog.Error("shareMedia", "err", err)
+		slog.Error("shareFile", "err", err)
 		jsonErr(w, "server error", http.StatusInternalServerError)
 		return
 	}
@@ -453,22 +453,22 @@ func (h *Handler) shareMedia(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// unshareMedia revokes a recipient's access: drops the grant and their wrapper.
+// unshareFile revokes a recipient's access: drops the grant and their wrapper.
 // Owner only. Does not rotate the DEK (already-fetched data is not protected).
-func (h *Handler) unshareMedia(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) unshareFile(w http.ResponseWriter, r *http.Request) {
 	userID := mustUserID(r)
 	if userID == "" {
 		jsonErr(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	err := h.store.DeleteMediaShare(r.Context(), chi.URLParam(r, "id"), userID, chi.URLParam(r, "recipient"))
+	err := h.store.DeleteFileShare(r.Context(), chi.URLParam(r, "id"), userID, chi.URLParam(r, "recipient"))
 	if errors.Is(err, database.ErrNotFound) {
 		jsonErr(w, "not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		slog.Error("unshareMedia", "err", err)
+		slog.Error("unshareFile", "err", err)
 		jsonErr(w, "server error", http.StatusInternalServerError)
 		return
 	}
@@ -476,37 +476,37 @@ func (h *Handler) unshareMedia(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ── Create media ──────────────────────────────────────────────────────────────
+// ── Create file ──────────────────────────────────────────────────────────────
 
-// createMedia finalises an upload by creating a versioned media record.
+// createFile finalises an upload by creating a versioned file record.
 // All chunks must have been uploaded first.
-func (h *Handler) createMedia(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) createFile(w http.ResponseWriter, r *http.Request) {
 	userID := mustUserID(r)
 	if userID == "" {
 		jsonErr(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	var body createMediaBody
+	var body createFileBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		jsonErr(w, "invalid body", http.StatusBadRequest)
 		return
 	}
 
-	media, err := h.createOne(r.Context(), userID, &body)
+	file, err := h.createOne(r.Context(), userID, &body)
 	if err != nil {
-		writeCreateMediaError(w, err)
+		writeCreateFileError(w, err)
 		return
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, media)
+	writeJSON(w, file)
 }
 
-// batchCreateMedia finalises several uploads in one round-trip. Each item is
+// batchCreateFile finalises several uploads in one round-trip. Each item is
 // created independently; a per-item failure aborts with that item's error rather
 // than leaving a partial batch silently.
-func (h *Handler) batchCreateMedia(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) batchCreateFile(w http.ResponseWriter, r *http.Request) {
 	userID := mustUserID(r)
 	if userID == "" {
 		jsonErr(w, "unauthorized", http.StatusUnauthorized)
@@ -514,7 +514,7 @@ func (h *Handler) batchCreateMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Items []createMediaBody `json:"items"`
+		Items []createFileBody `json:"items"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		jsonErr(w, "invalid body", http.StatusBadRequest)
@@ -525,26 +525,26 @@ func (h *Handler) batchCreateMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	out := make([]*oauth.Media, 0, len(body.Items))
+	out := make([]*oauth.File, 0, len(body.Items))
 	for i := range body.Items {
-		media, err := h.createOne(r.Context(), userID, &body.Items[i])
+		file, err := h.createOne(r.Context(), userID, &body.Items[i])
 		if err != nil {
-			writeCreateMediaError(w, err)
+			writeCreateFileError(w, err)
 			return
 		}
-		out = append(out, media)
+		out = append(out, file)
 	}
 
 	w.WriteHeader(http.StatusCreated)
 	writeJSON(w, out)
 }
 
-type mediaLocationBody struct {
+type fileLocationBody struct {
 	Lat float64 `json:"lat"`
 	Lng float64 `json:"lng"`
 }
 
-type createMediaBody struct {
+type createFileBody struct {
 	Filename    string             `json:"filename"`
 	MimeType    string             `json:"mime_type"`
 	Chunks      []chunkRef         `json:"chunks"`
@@ -556,42 +556,42 @@ type createMediaBody struct {
 	Purpose     *string            `json:"purpose"`
 	// Unencrypted EXIF metadata extracted client-side from the original image.
 	CaptureDate *string            `json:"capture_date"` // RFC3339
-	Location    *mediaLocationBody `json:"location"`
+	Location    *fileLocationBody `json:"location"`
 	Exif        map[string]any     `json:"exif"`
 }
 
-// createMediaError carries an HTTP status alongside the message so the single and
+// createFileError carries an HTTP status alongside the message so the single and
 // batch handlers can share validation.
-type createMediaError struct {
+type createFileError struct {
 	status int
 	msg    string
 }
 
-func (e *createMediaError) Error() string { return e.msg }
+func (e *createFileError) Error() string { return e.msg }
 
-func writeCreateMediaError(w http.ResponseWriter, err error) {
-	var ce *createMediaError
+func writeCreateFileError(w http.ResponseWriter, err error) {
+	var ce *createFileError
 	if errors.As(err, &ce) {
 		jsonErr(w, ce.msg, ce.status)
 		return
 	}
-	slog.Error("createMedia", "err", err)
+	slog.Error("createFile", "err", err)
 	jsonErr(w, "server error", http.StatusInternalServerError)
 }
 
-// createOne validates a single media spec and persists it.
-func (h *Handler) createOne(ctx context.Context, userID string, body *createMediaBody) (*oauth.Media, error) {
+// createOne validates a single file spec and persists it.
+func (h *Handler) createOne(ctx context.Context, userID string, body *createFileBody) (*oauth.File, error) {
 	if body.Filename == "" || body.MimeType == "" || len(body.Chunks) == 0 {
-		return nil, &createMediaError{http.StatusBadRequest, "filename, mime_type, and chunks required"}
+		return nil, &createFileError{http.StatusBadRequest, "filename, mime_type, and chunks required"}
 	}
 	if body.WrappedDEK == "" {
-		return nil, &createMediaError{http.StatusBadRequest, "wrapped_dek required (the owner's sealed object key)"}
+		return nil, &createFileError{http.StatusBadRequest, "wrapped_dek required (the owner's sealed object key)"}
 	}
 
 	hashes := make([]string, len(body.Chunks))
 	for i, c := range body.Chunks {
 		if !validHash(c.Hash) {
-			return nil, &createMediaError{http.StatusBadRequest, "invalid hash: " + c.Hash}
+			return nil, &createFileError{http.StatusBadRequest, "invalid hash: " + c.Hash}
 		}
 		hashes[i] = c.Hash
 	}
@@ -599,7 +599,7 @@ func (h *Handler) createOne(ctx context.Context, userID string, body *createMedi
 	chunks, err := h.store.GetChunksByHashes(ctx, userID, hashes)
 	if err != nil {
 		if errors.Is(err, database.ErrNotFound) || containsNotFound(err) {
-			return nil, &createMediaError{http.StatusUnprocessableEntity, "one or more chunks not uploaded yet"}
+			return nil, &createFileError{http.StatusUnprocessableEntity, "one or more chunks not uploaded yet"}
 		}
 		return nil, err
 	}
@@ -622,13 +622,13 @@ func (h *Handler) createOne(ctx context.Context, userID string, body *createMedi
 
 	// The owner is always the first recipient. The server stamps key_id from the
 	// authenticated subject so it always matches the manifest reader check.
-	return h.store.CreateMedia(ctx, &database.CreateMediaParams{
+	return h.store.CreateFile(ctx, &database.CreateFileParams{
 		UserID:      userID,
 		Filename:    body.Filename,
 		MimeType:    body.MimeType,
 		Size:        totalSize,
 		ChunkIDs:    chunkIDs,
-		Recipients:  []oauth.MediaRecipient{{KeyID: userID, WrappedDEK: body.WrappedDEK}},
+		Recipients:  []oauth.FileRecipient{{KeyID: userID, WrappedDEK: body.WrappedDEK}},
 		Scope:       body.Scope,
 		ThumbnailID: body.ThumbnailID,
 		Purpose:     body.Purpose,
@@ -645,23 +645,23 @@ func parseCaptureDate(raw *string) (*time.Time, error) {
 	}
 	parsed, err := time.Parse(time.RFC3339, *raw)
 	if err != nil {
-		return nil, &createMediaError{http.StatusBadRequest, "invalid capture_date (want RFC3339)"}
+		return nil, &createFileError{http.StatusBadRequest, "invalid capture_date (want RFC3339)"}
 	}
 	return &parsed, nil
 }
 
-// ── Update media ──────────────────────────────────────────────────────────────
+// ── Update file ──────────────────────────────────────────────────────────────
 
-// updateMedia replaces the content of an existing media record (new version).
+// updateFile replaces the content of an existing file record (new version).
 // The caller must supply parent_version_id to maintain the derived_from graph.
-func (h *Handler) updateMedia(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) updateFile(w http.ResponseWriter, r *http.Request) {
 	userID := mustUserID(r)
 	if userID == "" {
 		jsonErr(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	mediaID := chi.URLParam(r, "id")
+	fileID := chi.URLParam(r, "id")
 
 	var body struct {
 		ParentVersionID string     `json:"parent_version_id"`
@@ -711,10 +711,10 @@ func (h *Handler) updateMedia(w http.ResponseWriter, r *http.Request) {
 		sizePtr = &totalSize
 	}
 
-	media, err := h.store.UpdateMedia(r.Context(), &database.UpdateMediaParams{
-		MediaID:         mediaID,
+	file, err := h.store.UpdateFile(r.Context(), &database.UpdateFileParams{
+		FileID:         fileID,
 		UserID:          userID,
-		ParentVersionID: models.NewRecordID("media_version", body.ParentVersionID),
+		ParentVersionID: models.NewRecordID("file_version", body.ParentVersionID),
 		Filename:        body.Filename,
 		MimeType:        body.MimeType,
 		Size:            sizePtr,
@@ -725,53 +725,53 @@ func (h *Handler) updateMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.Error("updateMedia: update media record", "err", err)
+		slog.Error("updateFile: update file record", "err", err)
 		jsonErr(w, "server error", http.StatusInternalServerError)
 		return
 	}
 
-	writeJSON(w, media)
+	writeJSON(w, file)
 }
 
-// ── Delete media ──────────────────────────────────────────────────────────────
+// ── Delete file ──────────────────────────────────────────────────────────────
 
-// deleteMedia removes a media item and its full version history. Chunks no
-// longer referenced by any media or version are garbage collected from object
+// deleteFile removes a file item and its full version history. Chunks no
+// longer referenced by any file or version are garbage collected from object
 // storage and the user's storage_used_bytes is reduced accordingly.
-func (h *Handler) deleteMedia(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) deleteFile(w http.ResponseWriter, r *http.Request) {
 	userID := mustUserID(r)
 	if userID == "" {
 		jsonErr(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	dead, err := h.store.DeleteMedia(r.Context(), chi.URLParam(r, "id"), userID)
+	dead, err := h.store.DeleteFile(r.Context(), chi.URLParam(r, "id"), userID)
 	if errors.Is(err, database.ErrNotFound) {
 		jsonErr(w, "not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		slog.Error("deleteMedia", "err", err)
+		slog.Error("deleteFile", "err", err)
 		jsonErr(w, "server error", http.StatusInternalServerError)
 		return
 	}
 
 	for _, gc := range dead {
 		if err := h.objects.DeleteChunk(r.Context(), gc.StorageKey); err != nil {
-			slog.Error("deleteMedia: object storage cleanup", "err", err, "key", gc.StorageKey)
+			slog.Error("deleteFile: object storage cleanup", "err", err, "key", gc.StorageKey)
 		}
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// batchDeleteMedia deletes several media items in one round-trip. Deletes run
-// sequentially on purpose: each DeleteMedia is a multi-statement transaction that
+// batchDeleteFile deletes several file items in one round-trip. Deletes run
+// sequentially on purpose: each DeleteFile is a multi-statement transaction that
 // touches shared rows (the user's storage counter, billing periods, the chunk
 // table), so running them concurrently makes SurrealDB return "resource busy".
 // A per-item failure is reported in `failed` rather than aborting the rest; an
 // already-deleted id counts as deleted.
-func (h *Handler) batchDeleteMedia(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) batchDeleteFile(w http.ResponseWriter, r *http.Request) {
 	userID := mustUserID(r)
 	if userID == "" {
 		jsonErr(w, "unauthorized", http.StatusUnauthorized)
@@ -798,15 +798,15 @@ func (h *Handler) batchDeleteMedia(w http.ResponseWriter, r *http.Request) {
 	failed := make([]failure, 0)
 
 	for _, id := range body.IDs {
-		dead, err := h.store.DeleteMedia(r.Context(), id, userID)
+		dead, err := h.store.DeleteFile(r.Context(), id, userID)
 		if err != nil && !errors.Is(err, database.ErrNotFound) {
-			slog.Error("batchDeleteMedia", "err", err, "id", id)
+			slog.Error("batchDeleteFile", "err", err, "id", id)
 			failed = append(failed, failure{ID: id, Error: "server error"})
 			continue
 		}
 		for _, gc := range dead {
 			if cerr := h.objects.DeleteChunk(r.Context(), gc.StorageKey); cerr != nil {
-				slog.Error("batchDeleteMedia: object storage cleanup", "err", cerr, "key", gc.StorageKey)
+				slog.Error("batchDeleteFile: object storage cleanup", "err", cerr, "key", gc.StorageKey)
 			}
 		}
 		deleted = append(deleted, id)
@@ -817,7 +817,7 @@ func (h *Handler) batchDeleteMedia(w http.ResponseWriter, r *http.Request) {
 
 // ── Embedding fill ────────────────────────────────────────────────────────────
 
-// listPendingEmbeddings returns the caller's media that still need an embedding,
+// listPendingEmbeddings returns the caller's file that still need an embedding,
 // so the in-browser indexer can download, decrypt, embed, and upload the vector.
 func (h *Handler) listPendingEmbeddings(w http.ResponseWriter, r *http.Request) {
 	userID := mustUserID(r)
@@ -831,7 +831,7 @@ func (h *Handler) listPendingEmbeddings(w http.ResponseWriter, r *http.Request) 
 		limit = 200
 	}
 
-	items, err := h.store.ListPendingMediaEmbeddings(r.Context(), models.NewRecordID("user", userID), limit)
+	items, err := h.store.ListPendingFileEmbeddings(r.Context(), models.NewRecordID("user", userID), limit)
 	if err != nil {
 		slog.Error("listPendingEmbeddings", "err", err)
 		jsonErr(w, "server error", http.StatusInternalServerError)
@@ -841,19 +841,19 @@ func (h *Handler) listPendingEmbeddings(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, items)
 }
 
-// putEmbedding stores a client-computed vector for one of the caller's media.
+// putEmbedding stores a client-computed vector for one of the caller's file.
 // The vector is plaintext (queryable) by design — the privacy tradeoff that lets
-// the server run HNSW/BM25 search over otherwise-E2E media.
+// the server run HNSW/BM25 search over otherwise-E2E file.
 func (h *Handler) putEmbedding(w http.ResponseWriter, r *http.Request) {
 	userID := mustUserID(r)
 	if userID == "" {
 		jsonErr(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	mediaID := chi.URLParam(r, "id")
+	fileID := chi.URLParam(r, "id")
 
-	// Ownership gate: GetMedia is owner-scoped, so a non-owner gets ErrNotFound.
-	if _, err := h.store.GetMedia(r.Context(), mediaID, userID); err != nil {
+	// Ownership gate: GetFile is owner-scoped, so a non-owner gets ErrNotFound.
+	if _, err := h.store.GetFile(r.Context(), fileID, userID); err != nil {
 		if errors.Is(err, database.ErrNotFound) {
 			jsonErr(w, "not found", http.StatusNotFound)
 			return
@@ -888,8 +888,8 @@ func (h *Handler) putEmbedding(w http.ResponseWriter, r *http.Request) {
 		modality = "image"
 	}
 
-	err := h.store.SetMediaEmbedding(r.Context(), &database.SetMediaEmbeddingParams{
-		MediaID:  mediaID,
+	err := h.store.SetFileEmbedding(r.Context(), &database.SetFileEmbeddingParams{
+		FileID:  fileID,
 		UserID:   userID,
 		Modality: modality,
 		Model:    body.Model,
@@ -909,7 +909,7 @@ func (h *Handler) putEmbedding(w http.ResponseWriter, r *http.Request) {
 
 // ── List / Get ────────────────────────────────────────────────────────────────
 
-func (h *Handler) listMedia(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) listFile(w http.ResponseWriter, r *http.Request) {
 	userID := mustUserID(r)
 	if userID == "" {
 		jsonErr(w, "unauthorized", http.StatusUnauthorized)
@@ -922,9 +922,9 @@ func (h *Handler) listMedia(w http.ResponseWriter, r *http.Request) {
 		limit = 200
 	}
 
-	items, err := h.store.ListMedia(r.Context(), userID, limit, offset)
+	items, err := h.store.ListFile(r.Context(), userID, limit, offset)
 	if err != nil {
-		slog.Error("listMedia", "err", err)
+		slog.Error("listFile", "err", err)
 		jsonErr(w, "server error", http.StatusInternalServerError)
 		return
 	}
@@ -932,20 +932,20 @@ func (h *Handler) listMedia(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, items)
 }
 
-func (h *Handler) getMedia(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getFile(w http.ResponseWriter, r *http.Request) {
 	userID := mustUserID(r)
 	if userID == "" {
 		jsonErr(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	item, err := h.store.GetMedia(r.Context(), chi.URLParam(r, "id"), userID)
+	item, err := h.store.GetFile(r.Context(), chi.URLParam(r, "id"), userID)
 	if errors.Is(err, database.ErrNotFound) {
 		jsonErr(w, "not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		slog.Error("getMedia", "err", err)
+		slog.Error("getFile", "err", err)
 		jsonErr(w, "server error", http.StatusInternalServerError)
 		return
 	}

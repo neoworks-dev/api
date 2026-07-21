@@ -1,6 +1,6 @@
 -- Memories: searchable embeddings for contextual recall (rambles, transcripts,
 -- documents) alongside the structured data already in the database. A memory is
--- its own entity, NOT media — it may *reference* an encrypted media blob but never
+-- its own entity, NOT file — it may *reference* an encrypted file blob but never
 -- inlines the bytes.
 --
 -- Privacy is decided by deployment, not per-query crypto. On a user-owned
@@ -9,7 +9,7 @@
 -- indexing is opt-in per memory via `searchable`:
 --   searchable = true  → `source_text` + chunk embeddings stored plaintext, indexed.
 --   searchable = false → `source_text`/embeddings cleared, bytes kept in the
---                        encrypted `media` ref (encryption is client-side, via the
+--                        encrypted `file` ref (encryption is client-side, via the
 --                        Vault/AMK sandbox — the server never encrypts).
 --
 -- The embedding model is tiered by deployment (CPU self-host = Qwen3-Embedding-0.6b,
@@ -31,8 +31,8 @@ DEFINE FIELD title ON memory TYPE option<string>;
 -- Raw source text when the memory is searchable; cleared (NONE) when not.
 DEFINE FIELD source_text ON memory TYPE option<string>;
 
--- Reference into the encrypted media handler for non-searchable / binary bytes.
-DEFINE FIELD media ON memory TYPE option<record<media>>;
+-- Reference into the encrypted file handler for non-searchable / binary bytes.
+DEFINE FIELD file ON memory TYPE option<record<file>>;
 
 -- Opt-in toggle. On self-host the Go layer forces this true; on hosted it is the
 -- user's choice and gates whether chunks carry plaintext content + vectors.
@@ -48,7 +48,7 @@ DEFINE INDEX idx_memory_deleted ON memory FIELDS user, deleted;
 -- ── memory_chunk: embeddable pieces of a memory ───────────────────────────────
 -- One memory fans out to many chunks (token windows for text). `user` is
 -- denormalized for scoped vector search. NOTE: named `memory_chunk`, not `chunk` —
--- `chunk` is the encrypted-media block table from migration 005.
+-- `chunk` is the encrypted-file block table from migration 005.
 DEFINE TABLE memory_chunk SCHEMAFULL;
 
 DEFINE FIELD memory ON memory_chunk TYPE record<memory> READONLY;

@@ -256,6 +256,21 @@ type ComplexityRoot struct {
 		VirtualLocations        func(childComplexity int) int
 	}
 
+	File struct {
+		CaptureDate     func(childComplexity int) int
+		CreatedAt       func(childComplexity int) int
+		EmbeddingStatus func(childComplexity int) int
+		Exif            func(childComplexity int) int
+		Favorite        func(childComplexity int) int
+		Filename        func(childComplexity int) int
+		ID              func(childComplexity int) int
+		Location        func(childComplexity int) int
+		MimeType        func(childComplexity int) int
+		Size            func(childComplexity int) int
+		ThumbnailID     func(childComplexity int) int
+		UpdatedAt       func(childComplexity int) int
+	}
+
 	Gender struct {
 		Identity func(childComplexity int) int
 		Sex      func(childComplexity int) int
@@ -276,27 +291,12 @@ type ComplexityRoot struct {
 		User   func(childComplexity int) int
 	}
 
-	Media struct {
-		CaptureDate     func(childComplexity int) int
-		CreatedAt       func(childComplexity int) int
-		EmbeddingStatus func(childComplexity int) int
-		Exif            func(childComplexity int) int
-		Favorite        func(childComplexity int) int
-		Filename        func(childComplexity int) int
-		ID              func(childComplexity int) int
-		Location        func(childComplexity int) int
-		MimeType        func(childComplexity int) int
-		Size            func(childComplexity int) int
-		ThumbnailID     func(childComplexity int) int
-		UpdatedAt       func(childComplexity int) int
-	}
-
 	Memory struct {
 		CreatedAt      func(childComplexity int) int
 		Deleted        func(childComplexity int) int
+		File           func(childComplexity int) int
 		ID             func(childComplexity int) int
 		Kind           func(childComplexity int) int
-		Media          func(childComplexity int) int
 		OrganizationID func(childComplexity int) int
 		Searchable     func(childComplexity int) int
 		SourceText     func(childComplexity int) int
@@ -317,8 +317,8 @@ type ComplexityRoot struct {
 
 	Mutation struct {
 		AcceptOrgInvite               func(childComplexity int, token string) int
+		AddFileToAlbum                func(childComplexity int, albumID string, fileIds []string) int
 		AddGroupMember                func(childComplexity int, groupID string, memberID string) int
-		AddMediaToAlbum               func(childComplexity int, albumID string, mediaIds []string) int
 		AddOrganizationMember         func(childComplexity int, organizationID string, userID string, role string) int
 		ApplyClientDatabaseMigrations func(childComplexity int, clientID string, name string, migrations []*gql_model.MigrationInput) int
 		ArchiveContact                func(childComplexity int, id string) int
@@ -344,8 +344,8 @@ type ComplexityRoot struct {
 		MarkNotificationRead          func(childComplexity int, id string) int
 		RelateContacts                func(childComplexity int, fromID string, toID string, types []string, pref *int) int
 		RemoveConnection              func(childComplexity int, userID string) int
+		RemoveFileFromAlbum           func(childComplexity int, albumID string, fileIds []string) int
 		RemoveGroupMember             func(childComplexity int, groupID string, memberID string) int
-		RemoveMediaFromAlbum          func(childComplexity int, albumID string, mediaIds []string) int
 		RemoveOrganizationMember      func(childComplexity int, organizationID string, userID string) int
 		RenameAlbum                   func(childComplexity int, id string, name string) int
 		RespondToConnectionRequest    func(childComplexity int, userID string, accept bool) int
@@ -359,8 +359,8 @@ type ComplexityRoot struct {
 		SendEmail                     func(childComplexity int, input gql_model.SendEmailInput) int
 		SendNotification              func(childComplexity int, input gql_model.SendNotificationInput) int
 		SetContactFavorite            func(childComplexity int, id string, favorite bool) int
+		SetFileFavorite               func(childComplexity int, id string, favorite bool) int
 		SetInvitePolicy               func(childComplexity int, userID string, policy string) int
-		SetMediaFavorite              func(childComplexity int, id string, favorite bool) int
 		SetMemorySearchable           func(childComplexity int, id string, searchable bool) int
 		SetSetting                    func(childComplexity int, key string, value string) int
 		TrashContact                  func(childComplexity int, id string) int
@@ -444,7 +444,7 @@ type ComplexityRoot struct {
 
 	Query struct {
 		Album                     func(childComplexity int, id string) int
-		AlbumMedia                func(childComplexity int, id string, sort []*gql_model.MediaSort, limit *int, offset *int) int
+		AlbumFile                 func(childComplexity int, id string, sort []*gql_model.FileSort, limit *int, offset *int) int
 		Albums                    func(childComplexity int) int
 		Calendars                 func(childComplexity int) int
 		ClientDatabases           func(childComplexity int, clientID string) int
@@ -457,10 +457,10 @@ type ComplexityRoot struct {
 		DatabaseUsage             func(childComplexity int, clientID string, name string, sinceMinutes *int) int
 		Event                     func(childComplexity int, id string) int
 		Events                    func(childComplexity int, from *string, to *string, filter *gql_model.EventFilter) int
-		FavoriteMedia             func(childComplexity int, sort []*gql_model.MediaSort, limit *int, offset *int) int
-		Media                     func(childComplexity int, filter *gql_model.MediaFilter, sort []*gql_model.MediaSort, limit *int, offset *int) int
-		MediaCount                func(childComplexity int, filter *gql_model.MediaFilter) int
-		MediaSearch               func(childComplexity int, query string, limit *int, queryVector []float64) int
+		FavoriteFile              func(childComplexity int, sort []*gql_model.FileSort, limit *int, offset *int) int
+		File                      func(childComplexity int, filter *gql_model.FileFilter, sort []*gql_model.FileSort, limit *int, offset *int) int
+		FileCount                 func(childComplexity int, filter *gql_model.FileFilter) int
+		FileSearch                func(childComplexity int, query string, limit *int, queryVector []float64) int
 		Memories                  func(childComplexity int, filter *gql_model.MemoryFilter, sort []*gql_model.MemorySort, limit *int, offset *int) int
 		Memory                    func(childComplexity int, id string) int
 		MemoryCount               func(childComplexity int, filter *gql_model.MemoryFilter) int
@@ -481,8 +481,8 @@ type ComplexityRoot struct {
 		SearchUsers               func(childComplexity int, query string, limit *int) int
 		Setting                   func(childComplexity int, key string, clientID *string) int
 		Settings                  func(childComplexity int, clientID *string) int
-		SharedMedia               func(childComplexity int, filter *gql_model.MediaFilter, sort []*gql_model.MediaSort, limit *int, offset *int) int
-		SharedMediaCount          func(childComplexity int, filter *gql_model.MediaFilter) int
+		SharedFile                func(childComplexity int, filter *gql_model.FileFilter, sort []*gql_model.FileSort, limit *int, offset *int) int
+		SharedFileCount           func(childComplexity int, filter *gql_model.FileFilter) int
 		StorageUsage              func(childComplexity int) int
 	}
 
@@ -642,9 +642,9 @@ type MutationResolver interface {
 	CreateAlbum(ctx context.Context, name string) (*gql_model.Album, error)
 	RenameAlbum(ctx context.Context, id string, name string) (*gql_model.Album, error)
 	DeleteAlbum(ctx context.Context, id string) (bool, error)
-	AddMediaToAlbum(ctx context.Context, albumID string, mediaIds []string) (*gql_model.Album, error)
-	RemoveMediaFromAlbum(ctx context.Context, albumID string, mediaIds []string) (*gql_model.Album, error)
-	SetMediaFavorite(ctx context.Context, id string, favorite bool) (*gql_model.Media, error)
+	AddFileToAlbum(ctx context.Context, albumID string, fileIds []string) (*gql_model.Album, error)
+	RemoveFileFromAlbum(ctx context.Context, albumID string, fileIds []string) (*gql_model.Album, error)
+	SetFileFavorite(ctx context.Context, id string, favorite bool) (*gql_model.File, error)
 }
 type QueryResolver interface {
 	Contacts(ctx context.Context, scope *gql_model.ContactScope, favorite *bool, search *string, filter *gql_model.ContactFilter, sort []*gql_model.ContactSort, limit *int, offset *int) ([]*gql_model.Contact, error)
@@ -678,15 +678,15 @@ type QueryResolver interface {
 	SearchMemories(ctx context.Context, query string, limit *int, queryVector []float64) ([]*gql_model.MemorySearchHit, error)
 	Setting(ctx context.Context, key string, clientID *string) (*gql_model.Setting, error)
 	Settings(ctx context.Context, clientID *string) ([]*gql_model.Setting, error)
-	Media(ctx context.Context, filter *gql_model.MediaFilter, sort []*gql_model.MediaSort, limit *int, offset *int) ([]*gql_model.Media, error)
-	MediaCount(ctx context.Context, filter *gql_model.MediaFilter) (int, error)
-	SharedMedia(ctx context.Context, filter *gql_model.MediaFilter, sort []*gql_model.MediaSort, limit *int, offset *int) ([]*gql_model.Media, error)
-	SharedMediaCount(ctx context.Context, filter *gql_model.MediaFilter) (int, error)
-	MediaSearch(ctx context.Context, query string, limit *int, queryVector []float64) ([]*gql_model.Media, error)
+	File(ctx context.Context, filter *gql_model.FileFilter, sort []*gql_model.FileSort, limit *int, offset *int) ([]*gql_model.File, error)
+	FileCount(ctx context.Context, filter *gql_model.FileFilter) (int, error)
+	SharedFile(ctx context.Context, filter *gql_model.FileFilter, sort []*gql_model.FileSort, limit *int, offset *int) ([]*gql_model.File, error)
+	SharedFileCount(ctx context.Context, filter *gql_model.FileFilter) (int, error)
+	FileSearch(ctx context.Context, query string, limit *int, queryVector []float64) ([]*gql_model.File, error)
 	Albums(ctx context.Context) ([]*gql_model.Album, error)
 	Album(ctx context.Context, id string) (*gql_model.Album, error)
-	AlbumMedia(ctx context.Context, id string, sort []*gql_model.MediaSort, limit *int, offset *int) ([]*gql_model.Media, error)
-	FavoriteMedia(ctx context.Context, sort []*gql_model.MediaSort, limit *int, offset *int) ([]*gql_model.Media, error)
+	AlbumFile(ctx context.Context, id string, sort []*gql_model.FileSort, limit *int, offset *int) ([]*gql_model.File, error)
+	FavoriteFile(ctx context.Context, sort []*gql_model.FileSort, limit *int, offset *int) ([]*gql_model.File, error)
 	StorageUsage(ctx context.Context) (*gql_model.StorageUsage, error)
 }
 
@@ -1741,6 +1741,79 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Event.VirtualLocations(childComplexity), true
 
+	case "File.captureDate":
+		if e.ComplexityRoot.File.CaptureDate == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.CaptureDate(childComplexity), true
+	case "File.created_at":
+		if e.ComplexityRoot.File.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.CreatedAt(childComplexity), true
+	case "File.embeddingStatus":
+		if e.ComplexityRoot.File.EmbeddingStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.EmbeddingStatus(childComplexity), true
+	case "File.exif":
+		if e.ComplexityRoot.File.Exif == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.Exif(childComplexity), true
+	case "File.favorite":
+		if e.ComplexityRoot.File.Favorite == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.Favorite(childComplexity), true
+	case "File.filename":
+		if e.ComplexityRoot.File.Filename == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.Filename(childComplexity), true
+	case "File.id":
+		if e.ComplexityRoot.File.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.ID(childComplexity), true
+	case "File.location":
+		if e.ComplexityRoot.File.Location == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.Location(childComplexity), true
+	case "File.mime_type":
+		if e.ComplexityRoot.File.MimeType == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.MimeType(childComplexity), true
+	case "File.size":
+		if e.ComplexityRoot.File.Size == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.Size(childComplexity), true
+	case "File.thumbnailId":
+		if e.ComplexityRoot.File.ThumbnailID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.ThumbnailID(childComplexity), true
+	case "File.updated_at":
+		if e.ComplexityRoot.File.UpdatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.UpdatedAt(childComplexity), true
+
 	case "Gender.identity":
 		if e.ComplexityRoot.Gender.Identity == nil {
 			break
@@ -1793,79 +1866,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.InvitePolicy.User(childComplexity), true
 
-	case "Media.captureDate":
-		if e.ComplexityRoot.Media.CaptureDate == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Media.CaptureDate(childComplexity), true
-	case "Media.created_at":
-		if e.ComplexityRoot.Media.CreatedAt == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Media.CreatedAt(childComplexity), true
-	case "Media.embeddingStatus":
-		if e.ComplexityRoot.Media.EmbeddingStatus == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Media.EmbeddingStatus(childComplexity), true
-	case "Media.exif":
-		if e.ComplexityRoot.Media.Exif == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Media.Exif(childComplexity), true
-	case "Media.favorite":
-		if e.ComplexityRoot.Media.Favorite == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Media.Favorite(childComplexity), true
-	case "Media.filename":
-		if e.ComplexityRoot.Media.Filename == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Media.Filename(childComplexity), true
-	case "Media.id":
-		if e.ComplexityRoot.Media.ID == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Media.ID(childComplexity), true
-	case "Media.location":
-		if e.ComplexityRoot.Media.Location == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Media.Location(childComplexity), true
-	case "Media.mime_type":
-		if e.ComplexityRoot.Media.MimeType == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Media.MimeType(childComplexity), true
-	case "Media.size":
-		if e.ComplexityRoot.Media.Size == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Media.Size(childComplexity), true
-	case "Media.thumbnailId":
-		if e.ComplexityRoot.Media.ThumbnailID == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Media.ThumbnailID(childComplexity), true
-	case "Media.updated_at":
-		if e.ComplexityRoot.Media.UpdatedAt == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Media.UpdatedAt(childComplexity), true
-
 	case "Memory.created_at":
 		if e.ComplexityRoot.Memory.CreatedAt == nil {
 			break
@@ -1878,6 +1878,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Memory.Deleted(childComplexity), true
+	case "Memory.file":
+		if e.ComplexityRoot.Memory.File == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Memory.File(childComplexity), true
 	case "Memory.id":
 		if e.ComplexityRoot.Memory.ID == nil {
 			break
@@ -1890,12 +1896,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Memory.Kind(childComplexity), true
-	case "Memory.media":
-		if e.ComplexityRoot.Memory.Media == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Memory.Media(childComplexity), true
 	case "Memory.organization_id":
 		if e.ComplexityRoot.Memory.OrganizationID == nil {
 			break
@@ -1970,6 +1970,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AcceptOrgInvite(childComplexity, args["token"].(string)), true
+	case "Mutation.addFileToAlbum":
+		if e.ComplexityRoot.Mutation.AddFileToAlbum == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_addFileToAlbum_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AddFileToAlbum(childComplexity, args["albumId"].(string), args["fileIds"].([]string)), true
 	case "Mutation.addGroupMember":
 		if e.ComplexityRoot.Mutation.AddGroupMember == nil {
 			break
@@ -1981,17 +1992,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AddGroupMember(childComplexity, args["groupId"].(string), args["memberId"].(string)), true
-	case "Mutation.addMediaToAlbum":
-		if e.ComplexityRoot.Mutation.AddMediaToAlbum == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_addMediaToAlbum_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.ComplexityRoot.Mutation.AddMediaToAlbum(childComplexity, args["albumId"].(string), args["mediaIds"].([]string)), true
 	case "Mutation.addOrganizationMember":
 		if e.ComplexityRoot.Mutation.AddOrganizationMember == nil {
 			break
@@ -2267,6 +2267,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RemoveConnection(childComplexity, args["userId"].(string)), true
+	case "Mutation.removeFileFromAlbum":
+		if e.ComplexityRoot.Mutation.RemoveFileFromAlbum == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_removeFileFromAlbum_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RemoveFileFromAlbum(childComplexity, args["albumId"].(string), args["fileIds"].([]string)), true
 	case "Mutation.removeGroupMember":
 		if e.ComplexityRoot.Mutation.RemoveGroupMember == nil {
 			break
@@ -2278,17 +2289,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RemoveGroupMember(childComplexity, args["groupId"].(string), args["memberId"].(string)), true
-	case "Mutation.removeMediaFromAlbum":
-		if e.ComplexityRoot.Mutation.RemoveMediaFromAlbum == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_removeMediaFromAlbum_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.ComplexityRoot.Mutation.RemoveMediaFromAlbum(childComplexity, args["albumId"].(string), args["mediaIds"].([]string)), true
 	case "Mutation.removeOrganizationMember":
 		if e.ComplexityRoot.Mutation.RemoveOrganizationMember == nil {
 			break
@@ -2432,6 +2432,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetContactFavorite(childComplexity, args["id"].(string), args["favorite"].(bool)), true
+	case "Mutation.setFileFavorite":
+		if e.ComplexityRoot.Mutation.SetFileFavorite == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setFileFavorite_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SetFileFavorite(childComplexity, args["id"].(string), args["favorite"].(bool)), true
 	case "Mutation.setInvitePolicy":
 		if e.ComplexityRoot.Mutation.SetInvitePolicy == nil {
 			break
@@ -2443,17 +2454,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetInvitePolicy(childComplexity, args["userId"].(string), args["policy"].(string)), true
-	case "Mutation.setMediaFavorite":
-		if e.ComplexityRoot.Mutation.SetMediaFavorite == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_setMediaFavorite_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.ComplexityRoot.Mutation.SetMediaFavorite(childComplexity, args["id"].(string), args["favorite"].(bool)), true
 	case "Mutation.setMemorySearchable":
 		if e.ComplexityRoot.Mutation.SetMemorySearchable == nil {
 			break
@@ -2847,17 +2847,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Album(childComplexity, args["id"].(string)), true
-	case "Query.albumMedia":
-		if e.ComplexityRoot.Query.AlbumMedia == nil {
+	case "Query.albumFile":
+		if e.ComplexityRoot.Query.AlbumFile == nil {
 			break
 		}
 
-		args, err := ec.field_Query_albumMedia_args(ctx, rawArgs)
+		args, err := ec.field_Query_albumFile_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.AlbumMedia(childComplexity, args["id"].(string), args["sort"].([]*gql_model.MediaSort), args["limit"].(*int), args["offset"].(*int)), true
+		return e.ComplexityRoot.Query.AlbumFile(childComplexity, args["id"].(string), args["sort"].([]*gql_model.FileSort), args["limit"].(*int), args["offset"].(*int)), true
 	case "Query.albums":
 		if e.ComplexityRoot.Query.Albums == nil {
 			break
@@ -2980,51 +2980,51 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Events(childComplexity, args["from"].(*string), args["to"].(*string), args["filter"].(*gql_model.EventFilter)), true
-	case "Query.favoriteMedia":
-		if e.ComplexityRoot.Query.FavoriteMedia == nil {
+	case "Query.favoriteFile":
+		if e.ComplexityRoot.Query.FavoriteFile == nil {
 			break
 		}
 
-		args, err := ec.field_Query_favoriteMedia_args(ctx, rawArgs)
+		args, err := ec.field_Query_favoriteFile_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.FavoriteMedia(childComplexity, args["sort"].([]*gql_model.MediaSort), args["limit"].(*int), args["offset"].(*int)), true
-
-	case "Query.media":
-		if e.ComplexityRoot.Query.Media == nil {
+		return e.ComplexityRoot.Query.FavoriteFile(childComplexity, args["sort"].([]*gql_model.FileSort), args["limit"].(*int), args["offset"].(*int)), true
+	case "Query.file":
+		if e.ComplexityRoot.Query.File == nil {
 			break
 		}
 
-		args, err := ec.field_Query_media_args(ctx, rawArgs)
+		args, err := ec.field_Query_file_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.Media(childComplexity, args["filter"].(*gql_model.MediaFilter), args["sort"].([]*gql_model.MediaSort), args["limit"].(*int), args["offset"].(*int)), true
-	case "Query.mediaCount":
-		if e.ComplexityRoot.Query.MediaCount == nil {
+		return e.ComplexityRoot.Query.File(childComplexity, args["filter"].(*gql_model.FileFilter), args["sort"].([]*gql_model.FileSort), args["limit"].(*int), args["offset"].(*int)), true
+	case "Query.fileCount":
+		if e.ComplexityRoot.Query.FileCount == nil {
 			break
 		}
 
-		args, err := ec.field_Query_mediaCount_args(ctx, rawArgs)
+		args, err := ec.field_Query_fileCount_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.MediaCount(childComplexity, args["filter"].(*gql_model.MediaFilter)), true
-	case "Query.mediaSearch":
-		if e.ComplexityRoot.Query.MediaSearch == nil {
+		return e.ComplexityRoot.Query.FileCount(childComplexity, args["filter"].(*gql_model.FileFilter)), true
+	case "Query.fileSearch":
+		if e.ComplexityRoot.Query.FileSearch == nil {
 			break
 		}
 
-		args, err := ec.field_Query_mediaSearch_args(ctx, rawArgs)
+		args, err := ec.field_Query_fileSearch_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.MediaSearch(childComplexity, args["query"].(string), args["limit"].(*int), args["queryVector"].([]float64)), true
+		return e.ComplexityRoot.Query.FileSearch(childComplexity, args["query"].(string), args["limit"].(*int), args["queryVector"].([]float64)), true
+
 	case "Query.memories":
 		if e.ComplexityRoot.Query.Memories == nil {
 			break
@@ -3220,28 +3220,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Settings(childComplexity, args["clientId"].(*string)), true
-	case "Query.sharedMedia":
-		if e.ComplexityRoot.Query.SharedMedia == nil {
+	case "Query.sharedFile":
+		if e.ComplexityRoot.Query.SharedFile == nil {
 			break
 		}
 
-		args, err := ec.field_Query_sharedMedia_args(ctx, rawArgs)
+		args, err := ec.field_Query_sharedFile_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.SharedMedia(childComplexity, args["filter"].(*gql_model.MediaFilter), args["sort"].([]*gql_model.MediaSort), args["limit"].(*int), args["offset"].(*int)), true
-	case "Query.sharedMediaCount":
-		if e.ComplexityRoot.Query.SharedMediaCount == nil {
+		return e.ComplexityRoot.Query.SharedFile(childComplexity, args["filter"].(*gql_model.FileFilter), args["sort"].([]*gql_model.FileSort), args["limit"].(*int), args["offset"].(*int)), true
+	case "Query.sharedFileCount":
+		if e.ComplexityRoot.Query.SharedFileCount == nil {
 			break
 		}
 
-		args, err := ec.field_Query_sharedMediaCount_args(ctx, rawArgs)
+		args, err := ec.field_Query_sharedFileCount_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.SharedMediaCount(childComplexity, args["filter"].(*gql_model.MediaFilter)), true
+		return e.ComplexityRoot.Query.SharedFileCount(childComplexity, args["filter"].(*gql_model.FileFilter)), true
 	case "Query.storageUsage":
 		if e.ComplexityRoot.Query.StorageUsage == nil {
 			break
@@ -3639,13 +3639,13 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputEventFilter,
 		ec.unmarshalInputFieldDefInput,
 		ec.unmarshalInputFieldListFilter,
+		ec.unmarshalInputFileFilter,
+		ec.unmarshalInputFileSort,
 		ec.unmarshalInputGenderInput,
 		ec.unmarshalInputGeoFilter,
 		ec.unmarshalInputGeoInput,
 		ec.unmarshalInputIndexDefInput,
 		ec.unmarshalInputIntFilter,
-		ec.unmarshalInputMediaFilter,
-		ec.unmarshalInputMediaSort,
 		ec.unmarshalInputMemoryFilter,
 		ec.unmarshalInputMemorySort,
 		ec.unmarshalInputMigrationInput,
@@ -3814,7 +3814,7 @@ enum SortDirection {
 `, BuiltIn: false},
 	{Name: "../schema/Contacts.graphql", Input: `# Contacts aligned to vCard 4.0 (RFC 6350), versioned (contact / contact_version)
 # and user-scoped. Multi-valued properties are typed lists; PHOTO/LOGO/SOUND/KEY
-# are media references (ID), not inline base64. Beyond vCard: custom_fields, and
+# are file references (ID), not inline base64. Beyond vCard: custom_fields, and
 # the favorite / archived / deleted flags (deleted drives the Trash tab).
 
 # ── Structured value objects ──────────────────────────────────────────────────
@@ -3923,7 +3923,7 @@ type Contact {
   caluri: String
   caladruri: String
 
-  """Media handler id for the encrypted PHOTO/LOGO/SOUND/KEY (null = none)."""
+  """File handler id for the encrypted PHOTO/LOGO/SOUND/KEY (null = none)."""
   photo: ID
   logo: ID
   sound: ID
@@ -4930,11 +4930,11 @@ extend type Mutation {
 `, BuiltIn: false},
 	{Name: "../schema/Memories.graphql", Input: `# Memories: free-form text stored as searchable embeddings for contextual recall,
 # complementing the structured data in the database. User-scoped with an optional
-# organization. A memory may reference encrypted media but never inlines bytes.
+# organization. A memory may reference encrypted file but never inlines bytes.
 #
 # ` + "`" + `searchable` + "`" + ` is the single privacy switch: when true the server holds plaintext
 # ` + "`" + `source_text` + "`" + ` + chunk embeddings and indexes them; when false the content lives
-# only in the encrypted media reference (client-side encryption) and the memory is
+# only in the encrypted file reference (client-side encryption) and the memory is
 # not contextually searchable. On self-hosted deployments the flag is forced true.
 
 type Memory {
@@ -4946,8 +4946,8 @@ type Memory {
   title: String
   """Plaintext source — present only when searchable; null otherwise."""
   source_text: String
-  """Media handler id for encrypted bytes (null = none)."""
-  media: ID
+  """File handler id for encrypted bytes (null = none)."""
+  file: ID
   searchable: Boolean!
   deleted: Boolean!
   created_at: String!
@@ -4965,13 +4965,13 @@ type MemorySearchHit {
 # ── Inputs ────────────────────────────────────────────────────────────────────
 
 """Create a memory. ` + "`" + `sourceText` + "`" + ` is required for searchable text memories; binary
-kinds reference encrypted bytes via ` + "`" + `media` + "`" + `. ` + "`" + `searchable` + "`" + ` defaults to false on
+kinds reference encrypted bytes via ` + "`" + `file` + "`" + `. ` + "`" + `searchable` + "`" + ` defaults to false on
 multi-tenant deployments (forced true on self-host)."""
 input CreateMemoryInput {
   kind: String
   title: String
   sourceText: String
-  media: ID
+  file: ID
   searchable: Boolean
   organizationId: ID
 }
@@ -5063,19 +5063,19 @@ extend type Mutation {
   deleteSetting(key: String!): Boolean!
 }
 `, BuiltIn: false},
-	{Name: "../schema/Media.graphql", Input: `# Encrypted media (images/files). Bytes are uploaded + decrypted via the REST
-# media API (content-addressed, AMK-sealed chunks); this GraphQL surface is the
-# queryable metadata layer — list/count/search over media a user owns or has been
+	{Name: "../schema/File.graphql", Input: `# Encrypted file (images/files). Bytes are uploaded + decrypted via the REST
+# file API (content-addressed, AMK-sealed chunks); this GraphQL surface is the
+# queryable metadata layer — list/count/search over file a user owns or has been
 # granted. Filters reuse the shared primitives (see _shared.graphql).
 
-type Media {
+type File {
   id: ID!
   filename: String!
   mime_type: String!
   size: Int!
   created_at: String!
   updated_at: String!
-  """The linked thumbnail media id, if one was generated. Load this for grids;
+  """The linked thumbnail file id, if one was generated. Load this for grids;
   load the original (id) only for fullsize viewing."""
   thumbnailId: ID
   """Embedding lifecycle for visual/text search: pending | ready | failed | none."""
@@ -5095,7 +5095,7 @@ type GeoPoint {
   lng: Float!
 }
 
-input MediaFilter {
+input FileFilter {
   filename: StringFilter
   mime_type: StringFilter
   size: IntFilter
@@ -5104,13 +5104,13 @@ input MediaFilter {
   captureDate: DateFilter
   location: GeoFilter
 
-  and: [MediaFilter!]
-  or: [MediaFilter!]
-  not: MediaFilter
+  and: [FileFilter!]
+  or: [FileFilter!]
+  not: FileFilter
 }
 
-"""Sortable media columns (whitelisted)."""
-enum MediaSortField {
+"""Sortable file columns (whitelisted)."""
+enum FileSortField {
   FILENAME
   CREATED_AT
   UPDATED_AT
@@ -5119,48 +5119,48 @@ enum MediaSortField {
 }
 
 """One sort key. Pass a list to sort by several columns in order."""
-input MediaSort {
-  field: MediaSortField!
+input FileSort {
+  field: FileSortField!
   direction: SortDirection = ASC
 }
 
 extend type Query {
-  """Media the caller owns."""
-  media(filter: MediaFilter, sort: [MediaSort!], limit: Int, offset: Int): [Media!]!
-  """Total owned media matching the same filter (ignores paging)."""
-  mediaCount(filter: MediaFilter): Int!
-  """Media shared with the caller via a media grant."""
-  sharedMedia(filter: MediaFilter, sort: [MediaSort!], limit: Int, offset: Int): [Media!]!
-  """Total media shared with the caller matching the same filter (ignores paging)."""
-  sharedMediaCount(filter: MediaFilter): Int!
-  """Hybrid (vector + BM25) search over the caller's media. When the user's
+  """File the caller owns."""
+  file(filter: FileFilter, sort: [FileSort!], limit: Int, offset: Int): [File!]!
+  """Total owned file matching the same filter (ignores paging)."""
+  fileCount(filter: FileFilter): Int!
+  """File shared with the caller via a file grant."""
+  sharedFile(filter: FileFilter, sort: [FileSort!], limit: Int, offset: Int): [File!]!
+  """Total file shared with the caller matching the same filter (ignores paging)."""
+  sharedFileCount(filter: FileFilter): Int!
+  """Hybrid (vector + BM25) search over the caller's file. When the user's
   ` + "`" + `search_embedding_mode` + "`" + ` setting is ` + "`" + `client` + "`" + `, pass ` + "`" + `queryVector` + "`" + ` (a normalized
   query embedding computed in the browser); otherwise the server embeds the query
   text. Falls back to lexical-only when neither a vector nor a model server is
   available."""
-  mediaSearch(query: String!, limit: Int, queryVector: [Float!]): [Media!]!
+  fileSearch(query: String!, limit: Int, queryVector: [Float!]): [File!]!
 }
 `, BuiltIn: false},
-	{Name: "../schema/Albums.graphql", Input: `# User-owned albums (flat, non-versioned collections of media) and favorites.
+	{Name: "../schema/Albums.graphql", Input: `# User-owned albums (flat, non-versioned collections of file) and favorites.
 # Pure metadata — no chunks/crypto — so unlike upload/delete these live entirely
 # on the GraphQL surface (mutations + queries), mirroring contacts' setContactFavorite.
-# Sorts reuse the shared MediaSort/SortDirection from Media.graphql/_shared.graphql.
+# Sorts reuse the shared FileSort/SortDirection from File.graphql/_shared.graphql.
 
 type Album {
   id: ID!
   name: String!
   created_at: String!
   updated_at: String!
-  """Number of media in the album."""
+  """Number of file in the album."""
   count: Int!
-  """Thumbnail media id of the most-recently-added member, or null when empty.
+  """Thumbnail file id of the most-recently-added member, or null when empty.
   Use it for the album card; null renders a placeholder cover."""
   coverThumbnailId: ID
 }
 
-extend type Media {
-  """True when the caller has favorited this media (per-user, resolved via a
-  media_favorite subquery — like embeddingStatus)."""
+extend type File {
+  """True when the caller has favorited this file (per-user, resolved via a
+  file_favorite subquery — like embeddingStatus)."""
   favorite: Boolean!
 }
 
@@ -5169,23 +5169,23 @@ extend type Query {
   albums: [Album!]!
   """One album the caller owns, or null."""
   album(id: ID!): Album
-  """Media in an album the caller owns, paged."""
-  albumMedia(id: ID!, sort: [MediaSort!], limit: Int, offset: Int): [Media!]!
-  """Media the caller has favorited, paged."""
-  favoriteMedia(sort: [MediaSort!], limit: Int, offset: Int): [Media!]!
+  """File in an album the caller owns, paged."""
+  albumFile(id: ID!, sort: [FileSort!], limit: Int, offset: Int): [File!]!
+  """File the caller has favorited, paged."""
+  favoriteFile(sort: [FileSort!], limit: Int, offset: Int): [File!]!
 }
 
 extend type Mutation {
   createAlbum(name: String!): Album!
   renameAlbum(id: ID!, name: String!): Album!
-  """Deletes the album and drops all its membership edges (the media stay)."""
+  """Deletes the album and drops all its membership edges (the file stay)."""
   deleteAlbum(id: ID!): Boolean!
   """Idempotent add (UNIQUE edge); returns the updated album."""
-  addMediaToAlbum(albumId: ID!, mediaIds: [ID!]!): Album!
-  """Drops the given media from the album; returns the updated album."""
-  removeMediaFromAlbum(albumId: ID!, mediaIds: [ID!]!): Album!
-  """Toggle a favorite; returns the affected media with its new favorite flag."""
-  setMediaFavorite(id: ID!, favorite: Boolean!): Media!
+  addFileToAlbum(albumId: ID!, fileIds: [ID!]!): Album!
+  """Drops the given file from the album; returns the updated album."""
+  removeFileFromAlbum(albumId: ID!, fileIds: [ID!]!): Album!
+  """Toggle a favorite; returns the affected file with its new favorite flag."""
+  setFileFavorite(id: ID!, favorite: Boolean!): File!
 }
 `, BuiltIn: false},
 	{Name: "../schema/Storage.graphql", Input: `"""Storage usage for the authenticated user, broken down by file category and billing tier."""
@@ -5243,6 +5243,22 @@ func (ec *executionContext) field_Mutation_acceptOrgInvite_args(ctx context.Cont
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_addFileToAlbum_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "albumId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["albumId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "fileIds", ec.unmarshalNID2ᚕstringᚄ)
+	if err != nil {
+		return nil, err
+	}
+	args["fileIds"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_addGroupMember_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -5256,22 +5272,6 @@ func (ec *executionContext) field_Mutation_addGroupMember_args(ctx context.Conte
 		return nil, err
 	}
 	args["memberId"] = arg1
-	return args, nil
-}
-
-func (ec *executionContext) field_Mutation_addMediaToAlbum_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "albumId", ec.unmarshalNID2string)
-	if err != nil {
-		return nil, err
-	}
-	args["albumId"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "mediaIds", ec.unmarshalNID2ᚕstringᚄ)
-	if err != nil {
-		return nil, err
-	}
-	args["mediaIds"] = arg1
 	return args, nil
 }
 
@@ -5610,6 +5610,22 @@ func (ec *executionContext) field_Mutation_removeConnection_args(ctx context.Con
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_removeFileFromAlbum_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "albumId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["albumId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "fileIds", ec.unmarshalNID2ᚕstringᚄ)
+	if err != nil {
+		return nil, err
+	}
+	args["fileIds"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_removeGroupMember_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -5623,22 +5639,6 @@ func (ec *executionContext) field_Mutation_removeGroupMember_args(ctx context.Co
 		return nil, err
 	}
 	args["memberId"] = arg1
-	return args, nil
-}
-
-func (ec *executionContext) field_Mutation_removeMediaFromAlbum_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "albumId", ec.unmarshalNID2string)
-	if err != nil {
-		return nil, err
-	}
-	args["albumId"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "mediaIds", ec.unmarshalNID2ᚕstringᚄ)
-	if err != nil {
-		return nil, err
-	}
-	args["mediaIds"] = arg1
 	return args, nil
 }
 
@@ -5815,6 +5815,22 @@ func (ec *executionContext) field_Mutation_setContactFavorite_args(ctx context.C
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_setFileFavorite_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "favorite", ec.unmarshalNBoolean2bool)
+	if err != nil {
+		return nil, err
+	}
+	args["favorite"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_setInvitePolicy_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -5828,22 +5844,6 @@ func (ec *executionContext) field_Mutation_setInvitePolicy_args(ctx context.Cont
 		return nil, err
 	}
 	args["policy"] = arg1
-	return args, nil
-}
-
-func (ec *executionContext) field_Mutation_setMediaFavorite_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
-	if err != nil {
-		return nil, err
-	}
-	args["id"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "favorite", ec.unmarshalNBoolean2bool)
-	if err != nil {
-		return nil, err
-	}
-	args["favorite"] = arg1
 	return args, nil
 }
 
@@ -6050,7 +6050,7 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 	return args, nil
 }
 
-func (ec *executionContext) field_Query_albumMedia_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+func (ec *executionContext) field_Query_albumFile_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
@@ -6058,7 +6058,7 @@ func (ec *executionContext) field_Query_albumMedia_args(ctx context.Context, raw
 		return nil, err
 	}
 	args["id"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "sort", ec.unmarshalOMediaSort2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaSortᚄ)
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "sort", ec.unmarshalOFileSort2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileSortᚄ)
 	if err != nil {
 		return nil, err
 	}
@@ -6277,10 +6277,10 @@ func (ec *executionContext) field_Query_events_args(ctx context.Context, rawArgs
 	return args, nil
 }
 
-func (ec *executionContext) field_Query_favoriteMedia_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+func (ec *executionContext) field_Query_favoriteFile_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "sort", ec.unmarshalOMediaSort2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaSortᚄ)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "sort", ec.unmarshalOFileSort2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileSortᚄ)
 	if err != nil {
 		return nil, err
 	}
@@ -6298,10 +6298,10 @@ func (ec *executionContext) field_Query_favoriteMedia_args(ctx context.Context, 
 	return args, nil
 }
 
-func (ec *executionContext) field_Query_mediaCount_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+func (ec *executionContext) field_Query_fileCount_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "filter", ec.unmarshalOMediaFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaFilter)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "filter", ec.unmarshalOFileFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -6309,7 +6309,7 @@ func (ec *executionContext) field_Query_mediaCount_args(ctx context.Context, raw
 	return args, nil
 }
 
-func (ec *executionContext) field_Query_mediaSearch_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+func (ec *executionContext) field_Query_fileSearch_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "query", ec.unmarshalNString2string)
@@ -6330,15 +6330,15 @@ func (ec *executionContext) field_Query_mediaSearch_args(ctx context.Context, ra
 	return args, nil
 }
 
-func (ec *executionContext) field_Query_media_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+func (ec *executionContext) field_Query_file_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "filter", ec.unmarshalOMediaFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaFilter)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "filter", ec.unmarshalOFileFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileFilter)
 	if err != nil {
 		return nil, err
 	}
 	args["filter"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "sort", ec.unmarshalOMediaSort2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaSortᚄ)
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "sort", ec.unmarshalOFileSort2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileSortᚄ)
 	if err != nil {
 		return nil, err
 	}
@@ -6561,10 +6561,10 @@ func (ec *executionContext) field_Query_settings_args(ctx context.Context, rawAr
 	return args, nil
 }
 
-func (ec *executionContext) field_Query_sharedMediaCount_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+func (ec *executionContext) field_Query_sharedFileCount_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "filter", ec.unmarshalOMediaFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaFilter)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "filter", ec.unmarshalOFileFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -6572,15 +6572,15 @@ func (ec *executionContext) field_Query_sharedMediaCount_args(ctx context.Contex
 	return args, nil
 }
 
-func (ec *executionContext) field_Query_sharedMedia_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+func (ec *executionContext) field_Query_sharedFile_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "filter", ec.unmarshalOMediaFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaFilter)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "filter", ec.unmarshalOFileFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileFilter)
 	if err != nil {
 		return nil, err
 	}
 	args["filter"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "sort", ec.unmarshalOMediaSort2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaSortᚄ)
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "sort", ec.unmarshalOFileSort2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileSortᚄ)
 	if err != nil {
 		return nil, err
 	}
@@ -11924,6 +11924,360 @@ func (ec *executionContext) fieldContext_Event_updated_at(_ context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _File_id(ctx context.Context, field graphql.CollectedField, obj *gql_model.File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_File_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_File_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "File",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _File_filename(ctx context.Context, field graphql.CollectedField, obj *gql_model.File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_File_filename,
+		func(ctx context.Context) (any, error) {
+			return obj.Filename, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_File_filename(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "File",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _File_mime_type(ctx context.Context, field graphql.CollectedField, obj *gql_model.File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_File_mime_type,
+		func(ctx context.Context) (any, error) {
+			return obj.MimeType, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_File_mime_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "File",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _File_size(ctx context.Context, field graphql.CollectedField, obj *gql_model.File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_File_size,
+		func(ctx context.Context) (any, error) {
+			return obj.Size, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_File_size(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "File",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _File_created_at(ctx context.Context, field graphql.CollectedField, obj *gql_model.File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_File_created_at,
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_File_created_at(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "File",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _File_updated_at(ctx context.Context, field graphql.CollectedField, obj *gql_model.File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_File_updated_at,
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_File_updated_at(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "File",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _File_thumbnailId(ctx context.Context, field graphql.CollectedField, obj *gql_model.File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_File_thumbnailId,
+		func(ctx context.Context) (any, error) {
+			return obj.ThumbnailID, nil
+		},
+		nil,
+		ec.marshalOID2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_File_thumbnailId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "File",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _File_embeddingStatus(ctx context.Context, field graphql.CollectedField, obj *gql_model.File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_File_embeddingStatus,
+		func(ctx context.Context) (any, error) {
+			return obj.EmbeddingStatus, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_File_embeddingStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "File",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _File_captureDate(ctx context.Context, field graphql.CollectedField, obj *gql_model.File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_File_captureDate,
+		func(ctx context.Context) (any, error) {
+			return obj.CaptureDate, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_File_captureDate(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "File",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _File_location(ctx context.Context, field graphql.CollectedField, obj *gql_model.File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_File_location,
+		func(ctx context.Context) (any, error) {
+			return obj.Location, nil
+		},
+		nil,
+		ec.marshalOGeoPoint2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐGeoPoint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_File_location(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "File",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "lat":
+				return ec.fieldContext_GeoPoint_lat(ctx, field)
+			case "lng":
+				return ec.fieldContext_GeoPoint_lng(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type GeoPoint", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _File_exif(ctx context.Context, field graphql.CollectedField, obj *gql_model.File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_File_exif,
+		func(ctx context.Context) (any, error) {
+			return obj.Exif, nil
+		},
+		nil,
+		ec.marshalOMap2map,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_File_exif(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "File",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Map does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _File_favorite(ctx context.Context, field graphql.CollectedField, obj *gql_model.File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_File_favorite,
+		func(ctx context.Context) (any, error) {
+			return obj.Favorite, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_File_favorite(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "File",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Gender_sex(ctx context.Context, field graphql.CollectedField, obj *gql_model.Gender) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -12168,360 +12522,6 @@ func (ec *executionContext) fieldContext_InvitePolicy_policy(_ context.Context, 
 	return fc, nil
 }
 
-func (ec *executionContext) _Media_id(ctx context.Context, field graphql.CollectedField, obj *gql_model.Media) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Media_id,
-		func(ctx context.Context) (any, error) {
-			return obj.ID, nil
-		},
-		nil,
-		ec.marshalNID2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_Media_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Media",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type ID does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Media_filename(ctx context.Context, field graphql.CollectedField, obj *gql_model.Media) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Media_filename,
-		func(ctx context.Context) (any, error) {
-			return obj.Filename, nil
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_Media_filename(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Media",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Media_mime_type(ctx context.Context, field graphql.CollectedField, obj *gql_model.Media) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Media_mime_type,
-		func(ctx context.Context) (any, error) {
-			return obj.MimeType, nil
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_Media_mime_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Media",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Media_size(ctx context.Context, field graphql.CollectedField, obj *gql_model.Media) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Media_size,
-		func(ctx context.Context) (any, error) {
-			return obj.Size, nil
-		},
-		nil,
-		ec.marshalNInt2int,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_Media_size(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Media",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Media_created_at(ctx context.Context, field graphql.CollectedField, obj *gql_model.Media) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Media_created_at,
-		func(ctx context.Context) (any, error) {
-			return obj.CreatedAt, nil
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_Media_created_at(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Media",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Media_updated_at(ctx context.Context, field graphql.CollectedField, obj *gql_model.Media) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Media_updated_at,
-		func(ctx context.Context) (any, error) {
-			return obj.UpdatedAt, nil
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_Media_updated_at(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Media",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Media_thumbnailId(ctx context.Context, field graphql.CollectedField, obj *gql_model.Media) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Media_thumbnailId,
-		func(ctx context.Context) (any, error) {
-			return obj.ThumbnailID, nil
-		},
-		nil,
-		ec.marshalOID2ᚖstring,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_Media_thumbnailId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Media",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type ID does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Media_embeddingStatus(ctx context.Context, field graphql.CollectedField, obj *gql_model.Media) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Media_embeddingStatus,
-		func(ctx context.Context) (any, error) {
-			return obj.EmbeddingStatus, nil
-		},
-		nil,
-		ec.marshalOString2ᚖstring,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_Media_embeddingStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Media",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Media_captureDate(ctx context.Context, field graphql.CollectedField, obj *gql_model.Media) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Media_captureDate,
-		func(ctx context.Context) (any, error) {
-			return obj.CaptureDate, nil
-		},
-		nil,
-		ec.marshalOString2ᚖstring,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_Media_captureDate(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Media",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Media_location(ctx context.Context, field graphql.CollectedField, obj *gql_model.Media) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Media_location,
-		func(ctx context.Context) (any, error) {
-			return obj.Location, nil
-		},
-		nil,
-		ec.marshalOGeoPoint2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐGeoPoint,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_Media_location(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Media",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "lat":
-				return ec.fieldContext_GeoPoint_lat(ctx, field)
-			case "lng":
-				return ec.fieldContext_GeoPoint_lng(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type GeoPoint", field.Name)
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Media_exif(ctx context.Context, field graphql.CollectedField, obj *gql_model.Media) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Media_exif,
-		func(ctx context.Context) (any, error) {
-			return obj.Exif, nil
-		},
-		nil,
-		ec.marshalOMap2map,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_Media_exif(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Media",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Map does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Media_favorite(ctx context.Context, field graphql.CollectedField, obj *gql_model.Media) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Media_favorite,
-		func(ctx context.Context) (any, error) {
-			return obj.Favorite, nil
-		},
-		nil,
-		ec.marshalNBoolean2bool,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_Media_favorite(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Media",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Boolean does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _Memory_id(ctx context.Context, field graphql.CollectedField, obj *gql_model.Memory) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -12667,14 +12667,14 @@ func (ec *executionContext) fieldContext_Memory_source_text(_ context.Context, f
 	return fc, nil
 }
 
-func (ec *executionContext) _Memory_media(ctx context.Context, field graphql.CollectedField, obj *gql_model.Memory) (ret graphql.Marshaler) {
+func (ec *executionContext) _Memory_file(ctx context.Context, field graphql.CollectedField, obj *gql_model.Memory) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Memory_media,
+		ec.fieldContext_Memory_file,
 		func(ctx context.Context) (any, error) {
-			return obj.Media, nil
+			return obj.File, nil
 		},
 		nil,
 		ec.marshalOID2ᚖstring,
@@ -12683,7 +12683,7 @@ func (ec *executionContext) _Memory_media(ctx context.Context, field graphql.Col
 	)
 }
 
-func (ec *executionContext) fieldContext_Memory_media(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Memory_file(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Memory",
 		Field:      field,
@@ -12846,8 +12846,8 @@ func (ec *executionContext) fieldContext_MemorySearchHit_memory(_ context.Contex
 				return ec.fieldContext_Memory_title(ctx, field)
 			case "source_text":
 				return ec.fieldContext_Memory_source_text(ctx, field)
-			case "media":
-				return ec.fieldContext_Memory_media(ctx, field)
+			case "file":
+				return ec.fieldContext_Memory_file(ctx, field)
 			case "searchable":
 				return ec.fieldContext_Memory_searchable(ctx, field)
 			case "deleted":
@@ -15899,8 +15899,8 @@ func (ec *executionContext) fieldContext_Mutation_createMemory(ctx context.Conte
 				return ec.fieldContext_Memory_title(ctx, field)
 			case "source_text":
 				return ec.fieldContext_Memory_source_text(ctx, field)
-			case "media":
-				return ec.fieldContext_Memory_media(ctx, field)
+			case "file":
+				return ec.fieldContext_Memory_file(ctx, field)
 			case "searchable":
 				return ec.fieldContext_Memory_searchable(ctx, field)
 			case "deleted":
@@ -15962,8 +15962,8 @@ func (ec *executionContext) fieldContext_Mutation_updateMemory(ctx context.Conte
 				return ec.fieldContext_Memory_title(ctx, field)
 			case "source_text":
 				return ec.fieldContext_Memory_source_text(ctx, field)
-			case "media":
-				return ec.fieldContext_Memory_media(ctx, field)
+			case "file":
+				return ec.fieldContext_Memory_file(ctx, field)
 			case "searchable":
 				return ec.fieldContext_Memory_searchable(ctx, field)
 			case "deleted":
@@ -16066,8 +16066,8 @@ func (ec *executionContext) fieldContext_Mutation_setMemorySearchable(ctx contex
 				return ec.fieldContext_Memory_title(ctx, field)
 			case "source_text":
 				return ec.fieldContext_Memory_source_text(ctx, field)
-			case "media":
-				return ec.fieldContext_Memory_media(ctx, field)
+			case "file":
+				return ec.fieldContext_Memory_file(ctx, field)
 			case "searchable":
 				return ec.fieldContext_Memory_searchable(ctx, field)
 			case "deleted":
@@ -16337,15 +16337,15 @@ func (ec *executionContext) fieldContext_Mutation_deleteAlbum(ctx context.Contex
 	return fc, nil
 }
 
-func (ec *executionContext) _Mutation_addMediaToAlbum(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Mutation_addFileToAlbum(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Mutation_addMediaToAlbum,
+		ec.fieldContext_Mutation_addFileToAlbum,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().AddMediaToAlbum(ctx, fc.Args["albumId"].(string), fc.Args["mediaIds"].([]string))
+			return ec.Resolvers.Mutation().AddFileToAlbum(ctx, fc.Args["albumId"].(string), fc.Args["fileIds"].([]string))
 		},
 		nil,
 		ec.marshalNAlbum2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐAlbum,
@@ -16354,7 +16354,7 @@ func (ec *executionContext) _Mutation_addMediaToAlbum(ctx context.Context, field
 	)
 }
 
-func (ec *executionContext) fieldContext_Mutation_addMediaToAlbum(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Mutation_addFileToAlbum(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Mutation",
 		Field:      field,
@@ -16385,22 +16385,22 @@ func (ec *executionContext) fieldContext_Mutation_addMediaToAlbum(ctx context.Co
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Mutation_addMediaToAlbum_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_Mutation_addFileToAlbum_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
 	return fc, nil
 }
 
-func (ec *executionContext) _Mutation_removeMediaFromAlbum(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Mutation_removeFileFromAlbum(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Mutation_removeMediaFromAlbum,
+		ec.fieldContext_Mutation_removeFileFromAlbum,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().RemoveMediaFromAlbum(ctx, fc.Args["albumId"].(string), fc.Args["mediaIds"].([]string))
+			return ec.Resolvers.Mutation().RemoveFileFromAlbum(ctx, fc.Args["albumId"].(string), fc.Args["fileIds"].([]string))
 		},
 		nil,
 		ec.marshalNAlbum2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐAlbum,
@@ -16409,7 +16409,7 @@ func (ec *executionContext) _Mutation_removeMediaFromAlbum(ctx context.Context, 
 	)
 }
 
-func (ec *executionContext) fieldContext_Mutation_removeMediaFromAlbum(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Mutation_removeFileFromAlbum(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Mutation",
 		Field:      field,
@@ -16440,31 +16440,31 @@ func (ec *executionContext) fieldContext_Mutation_removeMediaFromAlbum(ctx conte
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Mutation_removeMediaFromAlbum_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_Mutation_removeFileFromAlbum_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
 	return fc, nil
 }
 
-func (ec *executionContext) _Mutation_setMediaFavorite(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Mutation_setFileFavorite(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Mutation_setMediaFavorite,
+		ec.fieldContext_Mutation_setFileFavorite,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().SetMediaFavorite(ctx, fc.Args["id"].(string), fc.Args["favorite"].(bool))
+			return ec.Resolvers.Mutation().SetFileFavorite(ctx, fc.Args["id"].(string), fc.Args["favorite"].(bool))
 		},
 		nil,
-		ec.marshalNMedia2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMedia,
+		ec.marshalNFile2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFile,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Mutation_setMediaFavorite(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Mutation_setFileFavorite(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Mutation",
 		Field:      field,
@@ -16473,31 +16473,31 @@ func (ec *executionContext) fieldContext_Mutation_setMediaFavorite(ctx context.C
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "id":
-				return ec.fieldContext_Media_id(ctx, field)
+				return ec.fieldContext_File_id(ctx, field)
 			case "filename":
-				return ec.fieldContext_Media_filename(ctx, field)
+				return ec.fieldContext_File_filename(ctx, field)
 			case "mime_type":
-				return ec.fieldContext_Media_mime_type(ctx, field)
+				return ec.fieldContext_File_mime_type(ctx, field)
 			case "size":
-				return ec.fieldContext_Media_size(ctx, field)
+				return ec.fieldContext_File_size(ctx, field)
 			case "created_at":
-				return ec.fieldContext_Media_created_at(ctx, field)
+				return ec.fieldContext_File_created_at(ctx, field)
 			case "updated_at":
-				return ec.fieldContext_Media_updated_at(ctx, field)
+				return ec.fieldContext_File_updated_at(ctx, field)
 			case "thumbnailId":
-				return ec.fieldContext_Media_thumbnailId(ctx, field)
+				return ec.fieldContext_File_thumbnailId(ctx, field)
 			case "embeddingStatus":
-				return ec.fieldContext_Media_embeddingStatus(ctx, field)
+				return ec.fieldContext_File_embeddingStatus(ctx, field)
 			case "captureDate":
-				return ec.fieldContext_Media_captureDate(ctx, field)
+				return ec.fieldContext_File_captureDate(ctx, field)
 			case "location":
-				return ec.fieldContext_Media_location(ctx, field)
+				return ec.fieldContext_File_location(ctx, field)
 			case "exif":
-				return ec.fieldContext_Media_exif(ctx, field)
+				return ec.fieldContext_File_exif(ctx, field)
 			case "favorite":
-				return ec.fieldContext_Media_favorite(ctx, field)
+				return ec.fieldContext_File_favorite(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Media", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type File", field.Name)
 		},
 	}
 	defer func() {
@@ -16507,7 +16507,7 @@ func (ec *executionContext) fieldContext_Mutation_setMediaFavorite(ctx context.C
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Mutation_setMediaFavorite_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_Mutation_setFileFavorite_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -19254,8 +19254,8 @@ func (ec *executionContext) fieldContext_Query_memories(ctx context.Context, fie
 				return ec.fieldContext_Memory_title(ctx, field)
 			case "source_text":
 				return ec.fieldContext_Memory_source_text(ctx, field)
-			case "media":
-				return ec.fieldContext_Memory_media(ctx, field)
+			case "file":
+				return ec.fieldContext_Memory_file(ctx, field)
 			case "searchable":
 				return ec.fieldContext_Memory_searchable(ctx, field)
 			case "deleted":
@@ -19358,8 +19358,8 @@ func (ec *executionContext) fieldContext_Query_memory(ctx context.Context, field
 				return ec.fieldContext_Memory_title(ctx, field)
 			case "source_text":
 				return ec.fieldContext_Memory_source_text(ctx, field)
-			case "media":
-				return ec.fieldContext_Memory_media(ctx, field)
+			case "file":
+				return ec.fieldContext_Memory_file(ctx, field)
 			case "searchable":
 				return ec.fieldContext_Memory_searchable(ctx, field)
 			case "deleted":
@@ -19537,24 +19537,24 @@ func (ec *executionContext) fieldContext_Query_settings(ctx context.Context, fie
 	return fc, nil
 }
 
-func (ec *executionContext) _Query_media(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Query_file(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Query_media,
+		ec.fieldContext_Query_file,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().Media(ctx, fc.Args["filter"].(*gql_model.MediaFilter), fc.Args["sort"].([]*gql_model.MediaSort), fc.Args["limit"].(*int), fc.Args["offset"].(*int))
+			return ec.Resolvers.Query().File(ctx, fc.Args["filter"].(*gql_model.FileFilter), fc.Args["sort"].([]*gql_model.FileSort), fc.Args["limit"].(*int), fc.Args["offset"].(*int))
 		},
 		nil,
-		ec.marshalNMedia2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaᚄ,
+		ec.marshalNFile2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileᚄ,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_media(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_file(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -19563,31 +19563,31 @@ func (ec *executionContext) fieldContext_Query_media(ctx context.Context, field 
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "id":
-				return ec.fieldContext_Media_id(ctx, field)
+				return ec.fieldContext_File_id(ctx, field)
 			case "filename":
-				return ec.fieldContext_Media_filename(ctx, field)
+				return ec.fieldContext_File_filename(ctx, field)
 			case "mime_type":
-				return ec.fieldContext_Media_mime_type(ctx, field)
+				return ec.fieldContext_File_mime_type(ctx, field)
 			case "size":
-				return ec.fieldContext_Media_size(ctx, field)
+				return ec.fieldContext_File_size(ctx, field)
 			case "created_at":
-				return ec.fieldContext_Media_created_at(ctx, field)
+				return ec.fieldContext_File_created_at(ctx, field)
 			case "updated_at":
-				return ec.fieldContext_Media_updated_at(ctx, field)
+				return ec.fieldContext_File_updated_at(ctx, field)
 			case "thumbnailId":
-				return ec.fieldContext_Media_thumbnailId(ctx, field)
+				return ec.fieldContext_File_thumbnailId(ctx, field)
 			case "embeddingStatus":
-				return ec.fieldContext_Media_embeddingStatus(ctx, field)
+				return ec.fieldContext_File_embeddingStatus(ctx, field)
 			case "captureDate":
-				return ec.fieldContext_Media_captureDate(ctx, field)
+				return ec.fieldContext_File_captureDate(ctx, field)
 			case "location":
-				return ec.fieldContext_Media_location(ctx, field)
+				return ec.fieldContext_File_location(ctx, field)
 			case "exif":
-				return ec.fieldContext_Media_exif(ctx, field)
+				return ec.fieldContext_File_exif(ctx, field)
 			case "favorite":
-				return ec.fieldContext_Media_favorite(ctx, field)
+				return ec.fieldContext_File_favorite(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Media", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type File", field.Name)
 		},
 	}
 	defer func() {
@@ -19597,22 +19597,22 @@ func (ec *executionContext) fieldContext_Query_media(ctx context.Context, field 
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Query_media_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_Query_file_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
 	return fc, nil
 }
 
-func (ec *executionContext) _Query_mediaCount(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Query_fileCount(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Query_mediaCount,
+		ec.fieldContext_Query_fileCount,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().MediaCount(ctx, fc.Args["filter"].(*gql_model.MediaFilter))
+			return ec.Resolvers.Query().FileCount(ctx, fc.Args["filter"].(*gql_model.FileFilter))
 		},
 		nil,
 		ec.marshalNInt2int,
@@ -19621,7 +19621,7 @@ func (ec *executionContext) _Query_mediaCount(ctx context.Context, field graphql
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_mediaCount(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_fileCount(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -19638,31 +19638,31 @@ func (ec *executionContext) fieldContext_Query_mediaCount(ctx context.Context, f
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Query_mediaCount_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_Query_fileCount_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
 	return fc, nil
 }
 
-func (ec *executionContext) _Query_sharedMedia(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Query_sharedFile(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Query_sharedMedia,
+		ec.fieldContext_Query_sharedFile,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().SharedMedia(ctx, fc.Args["filter"].(*gql_model.MediaFilter), fc.Args["sort"].([]*gql_model.MediaSort), fc.Args["limit"].(*int), fc.Args["offset"].(*int))
+			return ec.Resolvers.Query().SharedFile(ctx, fc.Args["filter"].(*gql_model.FileFilter), fc.Args["sort"].([]*gql_model.FileSort), fc.Args["limit"].(*int), fc.Args["offset"].(*int))
 		},
 		nil,
-		ec.marshalNMedia2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaᚄ,
+		ec.marshalNFile2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileᚄ,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_sharedMedia(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_sharedFile(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -19671,31 +19671,31 @@ func (ec *executionContext) fieldContext_Query_sharedMedia(ctx context.Context, 
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "id":
-				return ec.fieldContext_Media_id(ctx, field)
+				return ec.fieldContext_File_id(ctx, field)
 			case "filename":
-				return ec.fieldContext_Media_filename(ctx, field)
+				return ec.fieldContext_File_filename(ctx, field)
 			case "mime_type":
-				return ec.fieldContext_Media_mime_type(ctx, field)
+				return ec.fieldContext_File_mime_type(ctx, field)
 			case "size":
-				return ec.fieldContext_Media_size(ctx, field)
+				return ec.fieldContext_File_size(ctx, field)
 			case "created_at":
-				return ec.fieldContext_Media_created_at(ctx, field)
+				return ec.fieldContext_File_created_at(ctx, field)
 			case "updated_at":
-				return ec.fieldContext_Media_updated_at(ctx, field)
+				return ec.fieldContext_File_updated_at(ctx, field)
 			case "thumbnailId":
-				return ec.fieldContext_Media_thumbnailId(ctx, field)
+				return ec.fieldContext_File_thumbnailId(ctx, field)
 			case "embeddingStatus":
-				return ec.fieldContext_Media_embeddingStatus(ctx, field)
+				return ec.fieldContext_File_embeddingStatus(ctx, field)
 			case "captureDate":
-				return ec.fieldContext_Media_captureDate(ctx, field)
+				return ec.fieldContext_File_captureDate(ctx, field)
 			case "location":
-				return ec.fieldContext_Media_location(ctx, field)
+				return ec.fieldContext_File_location(ctx, field)
 			case "exif":
-				return ec.fieldContext_Media_exif(ctx, field)
+				return ec.fieldContext_File_exif(ctx, field)
 			case "favorite":
-				return ec.fieldContext_Media_favorite(ctx, field)
+				return ec.fieldContext_File_favorite(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Media", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type File", field.Name)
 		},
 	}
 	defer func() {
@@ -19705,22 +19705,22 @@ func (ec *executionContext) fieldContext_Query_sharedMedia(ctx context.Context, 
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Query_sharedMedia_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_Query_sharedFile_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
 	return fc, nil
 }
 
-func (ec *executionContext) _Query_sharedMediaCount(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Query_sharedFileCount(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Query_sharedMediaCount,
+		ec.fieldContext_Query_sharedFileCount,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().SharedMediaCount(ctx, fc.Args["filter"].(*gql_model.MediaFilter))
+			return ec.Resolvers.Query().SharedFileCount(ctx, fc.Args["filter"].(*gql_model.FileFilter))
 		},
 		nil,
 		ec.marshalNInt2int,
@@ -19729,7 +19729,7 @@ func (ec *executionContext) _Query_sharedMediaCount(ctx context.Context, field g
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_sharedMediaCount(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_sharedFileCount(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -19746,31 +19746,31 @@ func (ec *executionContext) fieldContext_Query_sharedMediaCount(ctx context.Cont
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Query_sharedMediaCount_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_Query_sharedFileCount_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
 	return fc, nil
 }
 
-func (ec *executionContext) _Query_mediaSearch(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Query_fileSearch(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Query_mediaSearch,
+		ec.fieldContext_Query_fileSearch,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().MediaSearch(ctx, fc.Args["query"].(string), fc.Args["limit"].(*int), fc.Args["queryVector"].([]float64))
+			return ec.Resolvers.Query().FileSearch(ctx, fc.Args["query"].(string), fc.Args["limit"].(*int), fc.Args["queryVector"].([]float64))
 		},
 		nil,
-		ec.marshalNMedia2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaᚄ,
+		ec.marshalNFile2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileᚄ,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_mediaSearch(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_fileSearch(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -19779,31 +19779,31 @@ func (ec *executionContext) fieldContext_Query_mediaSearch(ctx context.Context, 
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "id":
-				return ec.fieldContext_Media_id(ctx, field)
+				return ec.fieldContext_File_id(ctx, field)
 			case "filename":
-				return ec.fieldContext_Media_filename(ctx, field)
+				return ec.fieldContext_File_filename(ctx, field)
 			case "mime_type":
-				return ec.fieldContext_Media_mime_type(ctx, field)
+				return ec.fieldContext_File_mime_type(ctx, field)
 			case "size":
-				return ec.fieldContext_Media_size(ctx, field)
+				return ec.fieldContext_File_size(ctx, field)
 			case "created_at":
-				return ec.fieldContext_Media_created_at(ctx, field)
+				return ec.fieldContext_File_created_at(ctx, field)
 			case "updated_at":
-				return ec.fieldContext_Media_updated_at(ctx, field)
+				return ec.fieldContext_File_updated_at(ctx, field)
 			case "thumbnailId":
-				return ec.fieldContext_Media_thumbnailId(ctx, field)
+				return ec.fieldContext_File_thumbnailId(ctx, field)
 			case "embeddingStatus":
-				return ec.fieldContext_Media_embeddingStatus(ctx, field)
+				return ec.fieldContext_File_embeddingStatus(ctx, field)
 			case "captureDate":
-				return ec.fieldContext_Media_captureDate(ctx, field)
+				return ec.fieldContext_File_captureDate(ctx, field)
 			case "location":
-				return ec.fieldContext_Media_location(ctx, field)
+				return ec.fieldContext_File_location(ctx, field)
 			case "exif":
-				return ec.fieldContext_Media_exif(ctx, field)
+				return ec.fieldContext_File_exif(ctx, field)
 			case "favorite":
-				return ec.fieldContext_Media_favorite(ctx, field)
+				return ec.fieldContext_File_favorite(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Media", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type File", field.Name)
 		},
 	}
 	defer func() {
@@ -19813,7 +19813,7 @@ func (ec *executionContext) fieldContext_Query_mediaSearch(ctx context.Context, 
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Query_mediaSearch_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_Query_fileSearch_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -19918,24 +19918,24 @@ func (ec *executionContext) fieldContext_Query_album(ctx context.Context, field 
 	return fc, nil
 }
 
-func (ec *executionContext) _Query_albumMedia(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Query_albumFile(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Query_albumMedia,
+		ec.fieldContext_Query_albumFile,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().AlbumMedia(ctx, fc.Args["id"].(string), fc.Args["sort"].([]*gql_model.MediaSort), fc.Args["limit"].(*int), fc.Args["offset"].(*int))
+			return ec.Resolvers.Query().AlbumFile(ctx, fc.Args["id"].(string), fc.Args["sort"].([]*gql_model.FileSort), fc.Args["limit"].(*int), fc.Args["offset"].(*int))
 		},
 		nil,
-		ec.marshalNMedia2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaᚄ,
+		ec.marshalNFile2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileᚄ,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_albumMedia(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_albumFile(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -19944,31 +19944,31 @@ func (ec *executionContext) fieldContext_Query_albumMedia(ctx context.Context, f
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "id":
-				return ec.fieldContext_Media_id(ctx, field)
+				return ec.fieldContext_File_id(ctx, field)
 			case "filename":
-				return ec.fieldContext_Media_filename(ctx, field)
+				return ec.fieldContext_File_filename(ctx, field)
 			case "mime_type":
-				return ec.fieldContext_Media_mime_type(ctx, field)
+				return ec.fieldContext_File_mime_type(ctx, field)
 			case "size":
-				return ec.fieldContext_Media_size(ctx, field)
+				return ec.fieldContext_File_size(ctx, field)
 			case "created_at":
-				return ec.fieldContext_Media_created_at(ctx, field)
+				return ec.fieldContext_File_created_at(ctx, field)
 			case "updated_at":
-				return ec.fieldContext_Media_updated_at(ctx, field)
+				return ec.fieldContext_File_updated_at(ctx, field)
 			case "thumbnailId":
-				return ec.fieldContext_Media_thumbnailId(ctx, field)
+				return ec.fieldContext_File_thumbnailId(ctx, field)
 			case "embeddingStatus":
-				return ec.fieldContext_Media_embeddingStatus(ctx, field)
+				return ec.fieldContext_File_embeddingStatus(ctx, field)
 			case "captureDate":
-				return ec.fieldContext_Media_captureDate(ctx, field)
+				return ec.fieldContext_File_captureDate(ctx, field)
 			case "location":
-				return ec.fieldContext_Media_location(ctx, field)
+				return ec.fieldContext_File_location(ctx, field)
 			case "exif":
-				return ec.fieldContext_Media_exif(ctx, field)
+				return ec.fieldContext_File_exif(ctx, field)
 			case "favorite":
-				return ec.fieldContext_Media_favorite(ctx, field)
+				return ec.fieldContext_File_favorite(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Media", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type File", field.Name)
 		},
 	}
 	defer func() {
@@ -19978,31 +19978,31 @@ func (ec *executionContext) fieldContext_Query_albumMedia(ctx context.Context, f
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Query_albumMedia_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_Query_albumFile_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
 	return fc, nil
 }
 
-func (ec *executionContext) _Query_favoriteMedia(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Query_favoriteFile(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Query_favoriteMedia,
+		ec.fieldContext_Query_favoriteFile,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().FavoriteMedia(ctx, fc.Args["sort"].([]*gql_model.MediaSort), fc.Args["limit"].(*int), fc.Args["offset"].(*int))
+			return ec.Resolvers.Query().FavoriteFile(ctx, fc.Args["sort"].([]*gql_model.FileSort), fc.Args["limit"].(*int), fc.Args["offset"].(*int))
 		},
 		nil,
-		ec.marshalNMedia2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaᚄ,
+		ec.marshalNFile2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileᚄ,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_favoriteMedia(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_favoriteFile(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -20011,31 +20011,31 @@ func (ec *executionContext) fieldContext_Query_favoriteMedia(ctx context.Context
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "id":
-				return ec.fieldContext_Media_id(ctx, field)
+				return ec.fieldContext_File_id(ctx, field)
 			case "filename":
-				return ec.fieldContext_Media_filename(ctx, field)
+				return ec.fieldContext_File_filename(ctx, field)
 			case "mime_type":
-				return ec.fieldContext_Media_mime_type(ctx, field)
+				return ec.fieldContext_File_mime_type(ctx, field)
 			case "size":
-				return ec.fieldContext_Media_size(ctx, field)
+				return ec.fieldContext_File_size(ctx, field)
 			case "created_at":
-				return ec.fieldContext_Media_created_at(ctx, field)
+				return ec.fieldContext_File_created_at(ctx, field)
 			case "updated_at":
-				return ec.fieldContext_Media_updated_at(ctx, field)
+				return ec.fieldContext_File_updated_at(ctx, field)
 			case "thumbnailId":
-				return ec.fieldContext_Media_thumbnailId(ctx, field)
+				return ec.fieldContext_File_thumbnailId(ctx, field)
 			case "embeddingStatus":
-				return ec.fieldContext_Media_embeddingStatus(ctx, field)
+				return ec.fieldContext_File_embeddingStatus(ctx, field)
 			case "captureDate":
-				return ec.fieldContext_Media_captureDate(ctx, field)
+				return ec.fieldContext_File_captureDate(ctx, field)
 			case "location":
-				return ec.fieldContext_Media_location(ctx, field)
+				return ec.fieldContext_File_location(ctx, field)
 			case "exif":
-				return ec.fieldContext_Media_exif(ctx, field)
+				return ec.fieldContext_File_exif(ctx, field)
 			case "favorite":
-				return ec.fieldContext_Media_favorite(ctx, field)
+				return ec.fieldContext_File_favorite(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Media", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type File", field.Name)
 		},
 	}
 	defer func() {
@@ -20045,7 +20045,7 @@ func (ec *executionContext) fieldContext_Query_favoriteMedia(ctx context.Context
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Query_favoriteMedia_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_Query_favoriteFile_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -24456,7 +24456,7 @@ func (ec *executionContext) unmarshalInputCreateMemoryInput(ctx context.Context,
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"kind", "title", "sourceText", "media", "searchable", "organizationId"}
+	fieldsInOrder := [...]string{"kind", "title", "sourceText", "file", "searchable", "organizationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -24484,13 +24484,13 @@ func (ec *executionContext) unmarshalInputCreateMemoryInput(ctx context.Context,
 				return it, err
 			}
 			it.SourceText = data
-		case "media":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("media"))
+		case "file":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("file"))
 			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
-			it.Media = data
+			it.File = data
 		case "searchable":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("searchable"))
 			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
@@ -24895,6 +24895,140 @@ func (ec *executionContext) unmarshalInputFieldListFilter(ctx context.Context, o
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputFileFilter(ctx context.Context, obj any) (gql_model.FileFilter, error) {
+	var it gql_model.FileFilter
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"filename", "mime_type", "size", "created_at", "updated_at", "captureDate", "location", "and", "or", "not"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "filename":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("filename"))
+			data, err := ec.unmarshalOStringFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐStringFilter(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Filename = data
+		case "mime_type":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("mime_type"))
+			data, err := ec.unmarshalOStringFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐStringFilter(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MimeType = data
+		case "size":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("size"))
+			data, err := ec.unmarshalOIntFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐIntFilter(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Size = data
+		case "created_at":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("created_at"))
+			data, err := ec.unmarshalODateFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐDateFilter(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CreatedAt = data
+		case "updated_at":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("updated_at"))
+			data, err := ec.unmarshalODateFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐDateFilter(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.UpdatedAt = data
+		case "captureDate":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("captureDate"))
+			data, err := ec.unmarshalODateFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐDateFilter(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CaptureDate = data
+		case "location":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("location"))
+			data, err := ec.unmarshalOGeoFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐGeoFilter(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Location = data
+		case "and":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("and"))
+			data, err := ec.unmarshalOFileFilter2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileFilterᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.And = data
+		case "or":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("or"))
+			data, err := ec.unmarshalOFileFilter2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileFilterᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Or = data
+		case "not":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("not"))
+			data, err := ec.unmarshalOFileFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileFilter(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Not = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputFileSort(ctx context.Context, obj any) (gql_model.FileSort, error) {
+	var it gql_model.FileSort
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	if _, present := asMap["direction"]; !present {
+		asMap["direction"] = "ASC"
+	}
+
+	fieldsInOrder := [...]string{"field", "direction"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "field":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("field"))
+			data, err := ec.unmarshalNFileSortField2githubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileSortField(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Field = data
+		case "direction":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("direction"))
+			data, err := ec.unmarshalOSortDirection2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐSortDirection(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Direction = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputGenderInput(ctx context.Context, obj any) (gql_model.GenderInput, error) {
 	var it gql_model.GenderInput
 	if obj == nil {
@@ -25110,140 +25244,6 @@ func (ec *executionContext) unmarshalInputIntFilter(ctx context.Context, obj any
 				return it, err
 			}
 			it.Lt = data
-		}
-	}
-	return it, nil
-}
-
-func (ec *executionContext) unmarshalInputMediaFilter(ctx context.Context, obj any) (gql_model.MediaFilter, error) {
-	var it gql_model.MediaFilter
-	if obj == nil {
-		return it, nil
-	}
-
-	asMap := map[string]any{}
-	for k, v := range obj.(map[string]any) {
-		asMap[k] = v
-	}
-
-	fieldsInOrder := [...]string{"filename", "mime_type", "size", "created_at", "updated_at", "captureDate", "location", "and", "or", "not"}
-	for _, k := range fieldsInOrder {
-		v, ok := asMap[k]
-		if !ok {
-			continue
-		}
-		switch k {
-		case "filename":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("filename"))
-			data, err := ec.unmarshalOStringFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐStringFilter(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Filename = data
-		case "mime_type":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("mime_type"))
-			data, err := ec.unmarshalOStringFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐStringFilter(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.MimeType = data
-		case "size":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("size"))
-			data, err := ec.unmarshalOIntFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐIntFilter(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Size = data
-		case "created_at":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("created_at"))
-			data, err := ec.unmarshalODateFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐDateFilter(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.CreatedAt = data
-		case "updated_at":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("updated_at"))
-			data, err := ec.unmarshalODateFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐDateFilter(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.UpdatedAt = data
-		case "captureDate":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("captureDate"))
-			data, err := ec.unmarshalODateFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐDateFilter(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.CaptureDate = data
-		case "location":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("location"))
-			data, err := ec.unmarshalOGeoFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐGeoFilter(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Location = data
-		case "and":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("and"))
-			data, err := ec.unmarshalOMediaFilter2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaFilterᚄ(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.And = data
-		case "or":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("or"))
-			data, err := ec.unmarshalOMediaFilter2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaFilterᚄ(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Or = data
-		case "not":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("not"))
-			data, err := ec.unmarshalOMediaFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaFilter(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Not = data
-		}
-	}
-	return it, nil
-}
-
-func (ec *executionContext) unmarshalInputMediaSort(ctx context.Context, obj any) (gql_model.MediaSort, error) {
-	var it gql_model.MediaSort
-	if obj == nil {
-		return it, nil
-	}
-
-	asMap := map[string]any{}
-	for k, v := range obj.(map[string]any) {
-		asMap[k] = v
-	}
-
-	if _, present := asMap["direction"]; !present {
-		asMap["direction"] = "ASC"
-	}
-
-	fieldsInOrder := [...]string{"field", "direction"}
-	for _, k := range fieldsInOrder {
-		v, ok := asMap[k]
-		if !ok {
-			continue
-		}
-		switch k {
-		case "field":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("field"))
-			data, err := ec.unmarshalNMediaSortField2githubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaSortField(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Field = data
-		case "direction":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("direction"))
-			data, err := ec.unmarshalOSortDirection2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐSortDirection(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Direction = data
 		}
 	}
 	return it, nil
@@ -27680,6 +27680,85 @@ func (ec *executionContext) _Event(ctx context.Context, sel ast.SelectionSet, ob
 	return out
 }
 
+var fileImplementors = []string{"File"}
+
+func (ec *executionContext) _File(ctx context.Context, sel ast.SelectionSet, obj *gql_model.File) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, fileImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("File")
+		case "id":
+			out.Values[i] = ec._File_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "filename":
+			out.Values[i] = ec._File_filename(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mime_type":
+			out.Values[i] = ec._File_mime_type(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "size":
+			out.Values[i] = ec._File_size(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "created_at":
+			out.Values[i] = ec._File_created_at(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updated_at":
+			out.Values[i] = ec._File_updated_at(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "thumbnailId":
+			out.Values[i] = ec._File_thumbnailId(ctx, field, obj)
+		case "embeddingStatus":
+			out.Values[i] = ec._File_embeddingStatus(ctx, field, obj)
+		case "captureDate":
+			out.Values[i] = ec._File_captureDate(ctx, field, obj)
+		case "location":
+			out.Values[i] = ec._File_location(ctx, field, obj)
+		case "exif":
+			out.Values[i] = ec._File_exif(ctx, field, obj)
+		case "favorite":
+			out.Values[i] = ec._File_favorite(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var genderImplementors = []string{"Gender"}
 
 func (ec *executionContext) _Gender(ctx context.Context, sel ast.SelectionSet, obj *gql_model.Gender) graphql.Marshaler {
@@ -27850,85 +27929,6 @@ func (ec *executionContext) _InvitePolicy(ctx context.Context, sel ast.Selection
 	return out
 }
 
-var mediaImplementors = []string{"Media"}
-
-func (ec *executionContext) _Media(ctx context.Context, sel ast.SelectionSet, obj *gql_model.Media) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, mediaImplementors)
-
-	out := graphql.NewFieldSet(fields)
-	deferred := make(map[string]*graphql.FieldSet)
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("Media")
-		case "id":
-			out.Values[i] = ec._Media_id(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "filename":
-			out.Values[i] = ec._Media_filename(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "mime_type":
-			out.Values[i] = ec._Media_mime_type(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "size":
-			out.Values[i] = ec._Media_size(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "created_at":
-			out.Values[i] = ec._Media_created_at(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "updated_at":
-			out.Values[i] = ec._Media_updated_at(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "thumbnailId":
-			out.Values[i] = ec._Media_thumbnailId(ctx, field, obj)
-		case "embeddingStatus":
-			out.Values[i] = ec._Media_embeddingStatus(ctx, field, obj)
-		case "captureDate":
-			out.Values[i] = ec._Media_captureDate(ctx, field, obj)
-		case "location":
-			out.Values[i] = ec._Media_location(ctx, field, obj)
-		case "exif":
-			out.Values[i] = ec._Media_exif(ctx, field, obj)
-		case "favorite":
-			out.Values[i] = ec._Media_favorite(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch(ctx)
-	if out.Invalids > 0 {
-		return graphql.Null
-	}
-
-	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
-
-	for label, dfs := range deferred {
-		ec.ProcessDeferredGroup(graphql.DeferredGroup{
-			Label:    label,
-			Path:     graphql.GetPath(ctx),
-			FieldSet: dfs,
-			Context:  ctx,
-		})
-	}
-
-	return out
-}
-
 var memoryImplementors = []string{"Memory"}
 
 func (ec *executionContext) _Memory(ctx context.Context, sel ast.SelectionSet, obj *gql_model.Memory) graphql.Marshaler {
@@ -27956,8 +27956,8 @@ func (ec *executionContext) _Memory(ctx context.Context, sel ast.SelectionSet, o
 			out.Values[i] = ec._Memory_title(ctx, field, obj)
 		case "source_text":
 			out.Values[i] = ec._Memory_source_text(ctx, field, obj)
-		case "media":
-			out.Values[i] = ec._Memory_media(ctx, field, obj)
+		case "file":
+			out.Values[i] = ec._Memory_file(ctx, field, obj)
 		case "searchable":
 			out.Values[i] = ec._Memory_searchable(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -28482,23 +28482,23 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "addMediaToAlbum":
+		case "addFileToAlbum":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_addMediaToAlbum(ctx, field)
+				return ec._Mutation_addFileToAlbum(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "removeMediaFromAlbum":
+		case "removeFileFromAlbum":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_removeMediaFromAlbum(ctx, field)
+				return ec._Mutation_removeFileFromAlbum(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "setMediaFavorite":
+		case "setFileFavorite":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_setMediaFavorite(ctx, field)
+				return ec._Mutation_setFileFavorite(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -29673,7 +29673,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
-		case "media":
+		case "file":
 			field := field
 
 			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
@@ -29682,7 +29682,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Query_media(ctx, field)
+				res = ec._Query_file(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -29695,7 +29695,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
-		case "mediaCount":
+		case "fileCount":
 			field := field
 
 			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
@@ -29704,7 +29704,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Query_mediaCount(ctx, field)
+				res = ec._Query_fileCount(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -29717,7 +29717,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
-		case "sharedMedia":
+		case "sharedFile":
 			field := field
 
 			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
@@ -29726,7 +29726,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Query_sharedMedia(ctx, field)
+				res = ec._Query_sharedFile(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -29739,7 +29739,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
-		case "sharedMediaCount":
+		case "sharedFileCount":
 			field := field
 
 			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
@@ -29748,7 +29748,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Query_sharedMediaCount(ctx, field)
+				res = ec._Query_sharedFileCount(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -29761,7 +29761,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
-		case "mediaSearch":
+		case "fileSearch":
 			field := field
 
 			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
@@ -29770,7 +29770,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Query_mediaSearch(ctx, field)
+				res = ec._Query_fileSearch(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -29824,7 +29824,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
-		case "albumMedia":
+		case "albumFile":
 			field := field
 
 			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
@@ -29833,7 +29833,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Query_albumMedia(ctx, field)
+				res = ec._Query_albumFile(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -29846,7 +29846,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
-		case "favoriteMedia":
+		case "favoriteFile":
 			field := field
 
 			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
@@ -29855,7 +29855,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Query_favoriteMedia(ctx, field)
+				res = ec._Query_favoriteFile(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -31406,6 +31406,56 @@ func (ec *executionContext) unmarshalNFieldDefInput2ᚖgithubᚗcomᚋneoworks�
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) marshalNFile2githubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFile(ctx context.Context, sel ast.SelectionSet, v gql_model.File) graphql.Marshaler {
+	return ec._File(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNFile2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileᚄ(ctx context.Context, sel ast.SelectionSet, v []*gql_model.File) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNFile2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFile(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNFile2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFile(ctx context.Context, sel ast.SelectionSet, v *gql_model.File) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._File(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNFileFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileFilter(ctx context.Context, v any) (*gql_model.FileFilter, error) {
+	res, err := ec.unmarshalInputFileFilter(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNFileSort2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileSort(ctx context.Context, v any) (*gql_model.FileSort, error) {
+	res, err := ec.unmarshalInputFileSort(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNFileSortField2githubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileSortField(ctx context.Context, v any) (gql_model.FileSortField, error) {
+	var res gql_model.FileSortField
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNFileSortField2githubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileSortField(ctx context.Context, sel ast.SelectionSet, v gql_model.FileSortField) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) unmarshalNFloat2float64(ctx context.Context, v any) (float64, error) {
 	res, err := graphql.UnmarshalFloatContext(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -31543,56 +31593,6 @@ func (ec *executionContext) marshalNInvitePolicy2ᚖgithubᚗcomᚋneoworksᚋau
 		return graphql.Null
 	}
 	return ec._InvitePolicy(ctx, sel, v)
-}
-
-func (ec *executionContext) marshalNMedia2githubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMedia(ctx context.Context, sel ast.SelectionSet, v gql_model.Media) graphql.Marshaler {
-	return ec._Media(ctx, sel, &v)
-}
-
-func (ec *executionContext) marshalNMedia2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaᚄ(ctx context.Context, sel ast.SelectionSet, v []*gql_model.Media) graphql.Marshaler {
-	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
-		fc := graphql.GetFieldContext(ctx)
-		fc.Result = &v[i]
-		return ec.marshalNMedia2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMedia(ctx, sel, v[i])
-	})
-
-	for _, e := range ret {
-		if e == graphql.Null {
-			return graphql.Null
-		}
-	}
-
-	return ret
-}
-
-func (ec *executionContext) marshalNMedia2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMedia(ctx context.Context, sel ast.SelectionSet, v *gql_model.Media) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
-		}
-		return graphql.Null
-	}
-	return ec._Media(ctx, sel, v)
-}
-
-func (ec *executionContext) unmarshalNMediaFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaFilter(ctx context.Context, v any) (*gql_model.MediaFilter, error) {
-	res, err := ec.unmarshalInputMediaFilter(ctx, v)
-	return &res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) unmarshalNMediaSort2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaSort(ctx context.Context, v any) (*gql_model.MediaSort, error) {
-	res, err := ec.unmarshalInputMediaSort(ctx, v)
-	return &res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) unmarshalNMediaSortField2githubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaSortField(ctx context.Context, v any) (gql_model.MediaSortField, error) {
-	var res gql_model.MediaSortField
-	err := res.UnmarshalGQL(v)
-	return res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) marshalNMediaSortField2githubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaSortField(ctx context.Context, sel ast.SelectionSet, v gql_model.MediaSortField) graphql.Marshaler {
-	return v
 }
 
 func (ec *executionContext) marshalNMemory2githubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMemory(ctx context.Context, sel ast.SelectionSet, v gql_model.Memory) graphql.Marshaler {
@@ -32853,6 +32853,50 @@ func (ec *executionContext) unmarshalOFieldListFilter2ᚖgithubᚗcomᚋneoworks
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalOFileFilter2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileFilterᚄ(ctx context.Context, v any) ([]*gql_model.FileFilter, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]*gql_model.FileFilter, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNFileFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileFilter(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalOFileFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileFilter(ctx context.Context, v any) (*gql_model.FileFilter, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputFileFilter(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalOFileSort2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileSortᚄ(ctx context.Context, v any) ([]*gql_model.FileSort, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]*gql_model.FileSort, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNFileSort2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐFileSort(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
 func (ec *executionContext) unmarshalOFloat2ᚕfloat64ᚄ(ctx context.Context, v any) ([]float64, error) {
 	if v == nil {
 		return nil, nil
@@ -33084,50 +33128,6 @@ func (ec *executionContext) marshalOMap2map(ctx context.Context, sel ast.Selecti
 	_ = ctx
 	res := graphql.MarshalMap(v)
 	return res
-}
-
-func (ec *executionContext) unmarshalOMediaFilter2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaFilterᚄ(ctx context.Context, v any) ([]*gql_model.MediaFilter, error) {
-	if v == nil {
-		return nil, nil
-	}
-	var vSlice []any
-	vSlice = graphql.CoerceList(v)
-	var err error
-	res := make([]*gql_model.MediaFilter, len(vSlice))
-	for i := range vSlice {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
-		res[i], err = ec.unmarshalNMediaFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaFilter(ctx, vSlice[i])
-		if err != nil {
-			return nil, err
-		}
-	}
-	return res, nil
-}
-
-func (ec *executionContext) unmarshalOMediaFilter2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaFilter(ctx context.Context, v any) (*gql_model.MediaFilter, error) {
-	if v == nil {
-		return nil, nil
-	}
-	res, err := ec.unmarshalInputMediaFilter(ctx, v)
-	return &res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) unmarshalOMediaSort2ᚕᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaSortᚄ(ctx context.Context, v any) ([]*gql_model.MediaSort, error) {
-	if v == nil {
-		return nil, nil
-	}
-	var vSlice []any
-	vSlice = graphql.CoerceList(v)
-	var err error
-	res := make([]*gql_model.MediaSort, len(vSlice))
-	for i := range vSlice {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
-		res[i], err = ec.unmarshalNMediaSort2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMediaSort(ctx, vSlice[i])
-		if err != nil {
-			return nil, err
-		}
-	}
-	return res, nil
 }
 
 func (ec *executionContext) marshalOMemory2ᚖgithubᚗcomᚋneoworksᚋauthᚋgqlᚋmodelᚐMemory(ctx context.Context, sel ast.SelectionSet, v *gql_model.Memory) graphql.Marshaler {

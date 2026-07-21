@@ -1,10 +1,10 @@
 # Memories: free-form text stored as searchable embeddings for contextual recall,
 # complementing the structured data in the database. User-scoped with an optional
-# organization. A memory may reference encrypted media but never inlines bytes.
+# organization. A memory may reference encrypted file but never inlines bytes.
 #
 # `searchable` is the single privacy switch: when true the server holds plaintext
 # `source_text` + chunk embeddings and indexes them; when false the content lives
-# only in the encrypted media reference (client-side encryption) and the memory is
+# only in the encrypted file reference (client-side encryption) and the memory is
 # not contextually searchable. On self-hosted deployments the flag is forced true.
 
 type Memory {
@@ -16,8 +16,8 @@ type Memory {
   title: String
   """Plaintext source — present only when searchable; null otherwise."""
   source_text: String
-  """Media handler id for encrypted bytes (null = none)."""
-  media: ID
+  """File handler id for encrypted bytes (null = none)."""
+  file: ID
   searchable: Boolean!
   deleted: Boolean!
   created_at: String!
@@ -35,13 +35,13 @@ type MemorySearchHit {
 # ── Inputs ────────────────────────────────────────────────────────────────────
 
 """Create a memory. `sourceText` is required for searchable text memories; binary
-kinds reference encrypted bytes via `media`. `searchable` defaults to false on
+kinds reference encrypted bytes via `file`. `searchable` defaults to false on
 multi-tenant deployments (forced true on self-host)."""
 input CreateMemoryInput {
   kind: String
   title: String
   sourceText: String
-  media: ID
+  file: ID
   searchable: Boolean
   organizationId: ID
 }

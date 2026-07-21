@@ -1,5 +1,5 @@
 -- Standardize the memory embedding space on Nomic (nomic-embed-text-v1.5, 768-dim)
--- so memories and media share one vector space. The HNSW index is fixed at its
+-- so memories and file share one vector space. The HNSW index is fixed at its
 -- creation dimension, so it must be recreated at 768 (done in 027).
 --
 -- Step 1 (this migration): drop the 1024-dim index and clear the stale vectors,

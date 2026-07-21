@@ -40,31 +40,31 @@ func (r *mutationResolver) DeleteAlbum(ctx context.Context, id string) (bool, er
 	return r.store.Albums.DeleteAlbum(ctx, models.NewRecordID("album", id), models.NewRecordID("user", claim.Subject))
 }
 
-// AddMediaToAlbum is the resolver for the addMediaToAlbum field.
-func (r *mutationResolver) AddMediaToAlbum(ctx context.Context, albumID string, mediaIds []string) (*gql_model.Album, error) {
+// AddFileToAlbum is the resolver for the addFileToAlbum field.
+func (r *mutationResolver) AddFileToAlbum(ctx context.Context, albumID string, fileIds []string) (*gql_model.Album, error) {
 	claim := middleware.ClaimFromContext(ctx)
 	if claim == nil {
 		return nil, errUnauthenticated
 	}
-	return r.store.Albums.AddMediaToAlbum(ctx, models.NewRecordID("album", albumID), models.NewRecordID("user", claim.Subject), mediaRecordIDs(mediaIds))
+	return r.store.Albums.AddFileToAlbum(ctx, models.NewRecordID("album", albumID), models.NewRecordID("user", claim.Subject), fileRecordIDs(fileIds))
 }
 
-// RemoveMediaFromAlbum is the resolver for the removeMediaFromAlbum field.
-func (r *mutationResolver) RemoveMediaFromAlbum(ctx context.Context, albumID string, mediaIds []string) (*gql_model.Album, error) {
+// RemoveFileFromAlbum is the resolver for the removeFileFromAlbum field.
+func (r *mutationResolver) RemoveFileFromAlbum(ctx context.Context, albumID string, fileIds []string) (*gql_model.Album, error) {
 	claim := middleware.ClaimFromContext(ctx)
 	if claim == nil {
 		return nil, errUnauthenticated
 	}
-	return r.store.Albums.RemoveMediaFromAlbum(ctx, models.NewRecordID("album", albumID), models.NewRecordID("user", claim.Subject), mediaRecordIDs(mediaIds))
+	return r.store.Albums.RemoveFileFromAlbum(ctx, models.NewRecordID("album", albumID), models.NewRecordID("user", claim.Subject), fileRecordIDs(fileIds))
 }
 
-// SetMediaFavorite is the resolver for the setMediaFavorite field.
-func (r *mutationResolver) SetMediaFavorite(ctx context.Context, id string, favorite bool) (*gql_model.Media, error) {
+// SetFileFavorite is the resolver for the setFileFavorite field.
+func (r *mutationResolver) SetFileFavorite(ctx context.Context, id string, favorite bool) (*gql_model.File, error) {
 	claim := middleware.ClaimFromContext(ctx)
 	if claim == nil {
 		return nil, errUnauthenticated
 	}
-	return r.store.SetMediaFavorite(ctx, models.NewRecordID("media", id), models.NewRecordID("user", claim.Subject), favorite)
+	return r.store.SetFileFavorite(ctx, models.NewRecordID("file", id), models.NewRecordID("user", claim.Subject), favorite)
 }
 
 // Albums is the resolver for the albums field.
@@ -85,22 +85,22 @@ func (r *queryResolver) Album(ctx context.Context, id string) (*gql_model.Album,
 	return r.store.Albums.GetAlbum(ctx, models.NewRecordID("album", id), models.NewRecordID("user", claim.Subject))
 }
 
-// AlbumMedia is the resolver for the albumMedia field.
-func (r *queryResolver) AlbumMedia(ctx context.Context, id string, sort []*gql_model.MediaSort, limit *int, offset *int) ([]*gql_model.Media, error) {
+// AlbumFile is the resolver for the albumFile field.
+func (r *queryResolver) AlbumFile(ctx context.Context, id string, sort []*gql_model.FileSort, limit *int, offset *int) ([]*gql_model.File, error) {
 	claim := middleware.ClaimFromContext(ctx)
 	if claim == nil {
 		return nil, errUnauthenticated
 	}
-	l, o := mediaPaging(limit, offset)
-	return r.store.ListAlbumMedia(ctx, models.NewRecordID("album", id), models.NewRecordID("user", claim.Subject), sort, l, o)
+	l, o := filePaging(limit, offset)
+	return r.store.ListAlbumFile(ctx, models.NewRecordID("album", id), models.NewRecordID("user", claim.Subject), sort, l, o)
 }
 
-// FavoriteMedia is the resolver for the favoriteMedia field.
-func (r *queryResolver) FavoriteMedia(ctx context.Context, sort []*gql_model.MediaSort, limit *int, offset *int) ([]*gql_model.Media, error) {
+// FavoriteFile is the resolver for the favoriteFile field.
+func (r *queryResolver) FavoriteFile(ctx context.Context, sort []*gql_model.FileSort, limit *int, offset *int) ([]*gql_model.File, error) {
 	claim := middleware.ClaimFromContext(ctx)
 	if claim == nil {
 		return nil, errUnauthenticated
 	}
-	l, o := mediaPaging(limit, offset)
-	return r.store.ListFavoriteMedia(ctx, models.NewRecordID("user", claim.Subject), sort, l, o)
+	l, o := filePaging(limit, offset)
+	return r.store.ListFavoriteFile(ctx, models.NewRecordID("user", claim.Subject), sort, l, o)
 }

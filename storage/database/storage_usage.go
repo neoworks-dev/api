@@ -150,7 +150,7 @@ func (s *SurrealStore) storageTotalBytes(ctx context.Context, user models.Record
 	return 0, nil
 }
 
-// storageCategories sums logical media size grouped by mime type, then buckets
+// storageCategories sums logical file size grouped by mime type, then buckets
 // the mime types into coarse display categories.
 func (s *SurrealStore) storageCategories(ctx context.Context, user models.RecordID) ([]StorageCategory, error) {
 	results, err := surrealdb.Query[[]struct {
@@ -158,7 +158,7 @@ func (s *SurrealStore) storageCategories(ctx context.Context, user models.Record
 		Bytes    int64  `json:"bytes"`
 	}](
 		ctx, s.DB,
-		"SELECT mime_type, math::sum(size) AS bytes FROM media WHERE user = $user GROUP BY mime_type",
+		"SELECT mime_type, math::sum(size) AS bytes FROM file WHERE user = $user GROUP BY mime_type",
 		map[string]any{"user": user},
 	)
 	if err != nil {

@@ -6,7 +6,7 @@
 --   currency             — ISO 4217 code locked in at event time (e.g. "USD", "EUR")
 --   status               — pending: not yet invoiced; invoiced: included in an invoice; void: cancelled
 --   invoice_id           — set when the row is included in an invoice
---   ref                  — causal record (e.g. the media_version that triggered the event)
+--   ref                  — causal record (e.g. the file_version that triggered the event)
 --   occurred_at          — when the billable activity happened
 --   created_at           — when the row was inserted
 --

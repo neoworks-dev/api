@@ -8,10 +8,10 @@ import (
 	"github.com/surrealdb/surrealdb.go/pkg/models"
 )
 
-func TestMediaListConditionsScope(t *testing.T) {
+func TestFileListConditionsScope(t *testing.T) {
 	user := models.NewRecordID("user", "u1")
 
-	owned, ownedParams, err := mediaListConditions(user, false, nil)
+	owned, ownedParams, err := fileListConditions(user, false, nil)
 	if err != nil {
 		t.Fatalf("owned: %v", err)
 	}
@@ -23,22 +23,22 @@ func TestMediaListConditionsScope(t *testing.T) {
 		t.Fatalf("owned params missing $user")
 	}
 
-	shared, _, err := mediaListConditions(user, true, nil)
+	shared, _, err := fileListConditions(user, true, nil)
 	if err != nil {
 		t.Fatalf("shared: %v", err)
 	}
-	if len(shared) != 2 || !strings.Contains(shared[0], "media_grant WHERE recipient = $user") {
-		t.Fatalf("shared scope = %v, want a media_grant subquery + thumbnail exclusion", shared)
+	if len(shared) != 2 || !strings.Contains(shared[0], "file_grant WHERE recipient = $user") {
+		t.Fatalf("shared scope = %v, want a file_grant subquery + thumbnail exclusion", shared)
 	}
 }
 
-func TestMediaListConditionsFilter(t *testing.T) {
+func TestFileListConditionsFilter(t *testing.T) {
 	user := models.NewRecordID("user", "u1")
-	filter := &gql_model.MediaFilter{
+	filter := &gql_model.FileFilter{
 		MimeType: &gql_model.StringFilter{StartsWith: strptr("image/")},
 	}
 
-	conditions, params, err := mediaListConditions(user, false, filter)
+	conditions, params, err := fileListConditions(user, false, filter)
 	if err != nil {
 		t.Fatalf("filter compile: %v", err)
 	}
@@ -54,16 +54,16 @@ func TestMediaListConditionsFilter(t *testing.T) {
 	}
 }
 
-func TestMediaOrderByClause(t *testing.T) {
-	def, err := mediaOrderByClause(nil)
+func TestFileOrderByClause(t *testing.T) {
+	def, err := fileOrderByClause(nil)
 	if err != nil || def != "ORDER BY created_at DESC" {
 		t.Fatalf("default order = %q (err %v)", def, err)
 	}
 
 	desc := gql_model.SortDirectionDesc
-	clause, err := mediaOrderByClause([]*gql_model.MediaSort{
-		{Field: gql_model.MediaSortFieldFilename},
-		{Field: gql_model.MediaSortFieldSize, Direction: &desc},
+	clause, err := fileOrderByClause([]*gql_model.FileSort{
+		{Field: gql_model.FileSortFieldFilename},
+		{Field: gql_model.FileSortFieldSize, Direction: &desc},
 	})
 	if err != nil {
 		t.Fatalf("sort: %v", err)
@@ -72,7 +72,7 @@ func TestMediaOrderByClause(t *testing.T) {
 		t.Fatalf("order = %q", clause)
 	}
 
-	if _, err := mediaOrderByClause([]*gql_model.MediaSort{{Field: gql_model.MediaSortField("BOGUS")}}); err == nil {
+	if _, err := fileOrderByClause([]*gql_model.FileSort{{Field: gql_model.FileSortField("BOGUS")}}); err == nil {
 		t.Fatalf("expected error for unsortable field")
 	}
 }

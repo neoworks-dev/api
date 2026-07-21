@@ -10,11 +10,11 @@ import (
 	"github.com/surrealdb/surrealdb.go/pkg/models"
 )
 
-// TestGetMediaManifests covers the batch manifest resolver: the owner gets every
+// TestGetFileManifests covers the batch manifest resolver: the owner gets every
 // requested manifest with its own wrapper, a grant holder gets only what they're
 // granted, and unreadable / unknown ids are omitted rather than erroring.
 // Requires the dev SurrealDB; skipped if unreachable.
-func TestGetMediaManifests(t *testing.T) {
+func TestGetFileManifests(t *testing.T) {
 	url, user, pass, ns := testEnv()
 	ctx := context.Background()
 
@@ -36,43 +36,43 @@ func TestGetMediaManifests(t *testing.T) {
 		for _, id := range []string{ownerID, recipientID} {
 			u := models.NewRecordID("user", id)
 			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE billing_storage_period WHERE billed_to = $u", map[string]any{"u": u})
-			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE media_grant WHERE owner = $u OR recipient = $u", map[string]any{"u": u})
-			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE media_version WHERE user = $u", map[string]any{"u": u})
-			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE media WHERE user = $u", map[string]any{"u": u})
+			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE file_grant WHERE owner = $u OR recipient = $u", map[string]any{"u": u})
+			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE file_version WHERE user = $u", map[string]any{"u": u})
+			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE file WHERE user = $u", map[string]any{"u": u})
 			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE chunk WHERE user = $u", map[string]any{"u": u})
 			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE $u", map[string]any{"u": u})
 		}
 	})
 
-	// Two owned media objects, each backed by one chunk.
-	makeMedia := func(n int) string {
+	// Two owned file objects, each backed by one chunk.
+	makeFile := func(n int) string {
 		hash := fmt.Sprintf("%064x", n)
 		chunk, err := store.CreateChunk(ctx, ownerID, hash, 16, fmt.Sprintf("mm/key/%s/%d", suffix, n))
 		if err != nil {
 			t.Fatalf("create chunk %d: %v", n, err)
 		}
-		m, err := store.CreateMedia(ctx, &CreateMediaParams{
+		m, err := store.CreateFile(ctx, &CreateFileParams{
 			UserID:     ownerID,
 			Filename:   fmt.Sprintf("photo%d.jpg", n),
 			MimeType:   "image/jpeg",
 			Size:       16,
 			ChunkIDs:   []models.RecordID{*chunk.ID},
-			Recipients: []oauth.MediaRecipient{{KeyID: ownerID, WrappedDEK: "owner-wrap"}},
+			Recipients: []oauth.FileRecipient{{KeyID: ownerID, WrappedDEK: "owner-wrap"}},
 		})
 		if err != nil {
-			t.Fatalf("create media %d: %v", n, err)
+			t.Fatalf("create file %d: %v", n, err)
 		}
 		return fmt.Sprintf("%v", m.ID.ID)
 	}
 
-	idA := makeMedia(1)
-	idB := makeMedia(2)
+	idA := makeFile(1)
+	idB := makeFile(2)
 	unknownID := "mm_missing_" + suffix
 
 	// Owner sees both, plus the unknown id is silently dropped.
-	owned, err := store.GetMediaManifests(ctx, []string{idA, idB, unknownID}, ownerID)
+	owned, err := store.GetFileManifests(ctx, []string{idA, idB, unknownID}, ownerID)
 	if err != nil {
-		t.Fatalf("owner GetMediaManifests: %v", err)
+		t.Fatalf("owner GetFileManifests: %v", err)
 	}
 	if len(owned) != 2 {
 		t.Fatalf("owner: want 2 manifests, got %d", len(owned))
@@ -87,12 +87,12 @@ func TestGetMediaManifests(t *testing.T) {
 	}
 
 	// Recipient granted only on A: gets A with their own wrapper, never B.
-	if err := store.CreateMediaShare(ctx, idA, ownerID, recipientID, "rcpt-wrap"); err != nil {
-		t.Fatalf("create media share: %v", err)
+	if err := store.CreateFileShare(ctx, idA, ownerID, recipientID, "rcpt-wrap"); err != nil {
+		t.Fatalf("create file share: %v", err)
 	}
-	got, err := store.GetMediaManifests(ctx, []string{idA, idB}, recipientID)
+	got, err := store.GetFileManifests(ctx, []string{idA, idB}, recipientID)
 	if err != nil {
-		t.Fatalf("recipient GetMediaManifests: %v", err)
+		t.Fatalf("recipient GetFileManifests: %v", err)
 	}
 	if len(got) != 1 {
 		t.Fatalf("recipient: want 1 manifest, got %d", len(got))
@@ -102,9 +102,9 @@ func TestGetMediaManifests(t *testing.T) {
 	}
 
 	// Empty input is a no-op, not an error.
-	empty, err := store.GetMediaManifests(ctx, nil, ownerID)
+	empty, err := store.GetFileManifests(ctx, nil, ownerID)
 	if err != nil {
-		t.Fatalf("empty GetMediaManifests: %v", err)
+		t.Fatalf("empty GetFileManifests: %v", err)
 	}
 	if len(empty) != 0 {
 		t.Fatalf("empty: want 0 manifests, got %d", len(empty))

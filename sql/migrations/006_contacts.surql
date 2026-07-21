@@ -7,7 +7,7 @@
 -- whole-field FLEXIBLE arrays of objects, with each element object also marked
 -- FLEXIBLE (FLEXIBLE on an array field does not propagate to its elements;
 -- SurrealDB otherwise auto-defines a strict `[*] TYPE object` rule that rejects
--- nested keys). PHOTO/LOGO/SOUND/KEY are references into the encrypted media
+-- nested keys). PHOTO/LOGO/SOUND/KEY are references into the encrypted file
 -- handler, never inlined base64. Absent optional fields are omitted from SET by
 -- the Go layer so they default to NONE (see apps/api/CLAUDE.md).
 
@@ -58,11 +58,11 @@ DEFINE FIELD fburl     ON contact TYPE option<string>;                   -- FBUR
 DEFINE FIELD caluri    ON contact TYPE option<string>;                   -- CALURI
 DEFINE FIELD caladruri ON contact TYPE option<string>;                   -- CALADRURI
 
--- Media & security — encrypted media references, never inline base64.
-DEFINE FIELD photo ON contact TYPE option<record<media>>;                -- PHOTO
-DEFINE FIELD logo  ON contact TYPE option<record<media>>;                -- LOGO
-DEFINE FIELD sound ON contact TYPE option<record<media>>;                -- SOUND
-DEFINE FIELD key   ON contact TYPE option<record<media>>;                -- KEY
+-- File & security — encrypted file references, never inline base64.
+DEFINE FIELD photo ON contact TYPE option<record<file>>;                -- PHOTO
+DEFINE FIELD logo  ON contact TYPE option<record<file>>;                -- LOGO
+DEFINE FIELD sound ON contact TYPE option<record<file>>;                -- SOUND
+DEFINE FIELD key   ON contact TYPE option<record<file>>;                -- KEY
 
 -- Beyond vCard: arbitrary labelled fields (the X- gap), flags.
 DEFINE FIELD custom_fields ON contact TYPE option<array<object>> FLEXIBLE; -- {label, value}
@@ -110,10 +110,10 @@ DEFINE FIELD prodid         ON contact_version TYPE option<string>         READO
 DEFINE FIELD fburl          ON contact_version TYPE option<string>         READONLY;
 DEFINE FIELD caluri         ON contact_version TYPE option<string>         READONLY;
 DEFINE FIELD caladruri      ON contact_version TYPE option<string>         READONLY;
-DEFINE FIELD photo          ON contact_version TYPE option<record<media>>  READONLY;
-DEFINE FIELD logo           ON contact_version TYPE option<record<media>>  READONLY;
-DEFINE FIELD sound          ON contact_version TYPE option<record<media>>  READONLY;
-DEFINE FIELD key            ON contact_version TYPE option<record<media>>  READONLY;
+DEFINE FIELD photo          ON contact_version TYPE option<record<file>>  READONLY;
+DEFINE FIELD logo           ON contact_version TYPE option<record<file>>  READONLY;
+DEFINE FIELD sound          ON contact_version TYPE option<record<file>>  READONLY;
+DEFINE FIELD key            ON contact_version TYPE option<record<file>>  READONLY;
 DEFINE FIELD custom_fields  ON contact_version TYPE option<array<object>> FLEXIBLE READONLY;
 DEFINE FIELD favorite       ON contact_version TYPE bool DEFAULT false     READONLY;
 DEFINE FIELD archived       ON contact_version TYPE bool DEFAULT false     READONLY;

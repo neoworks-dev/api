@@ -18,11 +18,11 @@ func newContactUID() string {
 	return hex.EncodeToString(buf)
 }
 
-func mediaRef(id *string) *models.RecordID {
+func fileRef(id *string) *models.RecordID {
 	if id == nil {
 		return nil
 	}
-	r := models.NewRecordID("media", *id)
+	r := models.NewRecordID("file", *id)
 	return &r
 }
 

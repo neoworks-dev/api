@@ -11,8 +11,8 @@ import (
 	"github.com/surrealdb/surrealdb.go/pkg/models"
 )
 
-// AlbumStore owns the album + album_media tables: flat, user-owned, non-versioned
-// collections of media. Cover and count are derived per query (no denormalized
+// AlbumStore owns the album + album_file tables: flat, user-owned, non-versioned
+// collections of file. Cover and count are derived per query (no denormalized
 // fields to keep in sync).
 type AlbumStore struct {
 	DB *surrealdb.DB
@@ -43,13 +43,13 @@ func (r *dbAlbumRow) toGQL() *gql_model.Album {
 }
 
 // albumSelectFields derives count + cover via correlated subqueries on $parent.id
-// (mirrors mediaSelectFields' embedding_status). Cover is the most-recently-added
+// (mirrors fileSelectFields' embedding_status). Cover is the most-recently-added
 // member's thumbnail (NONE → null cover).
 // The cover subquery selects created_at alongside the thumbnail because SurrealDB
 // requires the ORDER BY idiom to appear in the projection; we then pluck `.cover`.
 const albumSelectFields = `id, name, created_at, updated_at,
-	array::len((SELECT VALUE id FROM album_media WHERE album = $parent.id)) AS count,
-	(SELECT media.thumbnail AS cover, created_at FROM album_media WHERE album = $parent.id ORDER BY created_at DESC LIMIT 1)[0].cover AS cover`
+	array::len((SELECT VALUE id FROM album_file WHERE album = $parent.id)) AS count,
+	(SELECT file.thumbnail AS cover, created_at FROM album_file WHERE album = $parent.id ORDER BY created_at DESC LIMIT 1)[0].cover AS cover`
 
 func firstAlbum(results *[]surrealdb.QueryResult[[]dbAlbumRow]) *gql_model.Album {
 	for _, qr := range *results {
@@ -121,11 +121,11 @@ func (s *AlbumStore) RenameAlbum(ctx context.Context, id, user models.RecordID, 
 	return album, nil
 }
 
-// DeleteAlbum drops the album and all its membership edges (the media stay).
+// DeleteAlbum drops the album and all its membership edges (the file stay).
 func (s *AlbumStore) DeleteAlbum(ctx context.Context, id, user models.RecordID) (bool, error) {
 	_, err := surrealdb.Query[[]any](ctx, s.DB, `
 		BEGIN TRANSACTION;
-		DELETE album_media WHERE album = $id AND user = $user;
+		DELETE album_file WHERE album = $id AND user = $user;
 		DELETE album WHERE id = $id AND user = $user;
 		COMMIT TRANSACTION;`,
 		map[string]any{"id": id, "user": user})
@@ -135,26 +135,26 @@ func (s *AlbumStore) DeleteAlbum(ctx context.Context, id, user models.RecordID) 
 	return true, nil
 }
 
-// AddMediaToAlbum idempotently links the caller's media into an album the caller
-// owns (foreign media is skipped). Returns the updated album.
-func (s *AlbumStore) AddMediaToAlbum(ctx context.Context, albumID, user models.RecordID, mediaIDs []models.RecordID) (*gql_model.Album, error) {
+// AddFileToAlbum idempotently links the caller's file into an album the caller
+// owns (foreign file is skipped). Returns the updated album.
+func (s *AlbumStore) AddFileToAlbum(ctx context.Context, albumID, user models.RecordID, fileIDs []models.RecordID) (*gql_model.Album, error) {
 	_, err := surrealdb.Query[[]any](ctx, s.DB, `
 		BEGIN TRANSACTION;
 		LET $owns_album = (SELECT VALUE id FROM album WHERE id = $album AND user = $user);
 		IF array::len($owns_album) > 0 {
-			FOR $m IN $media {
-				LET $owned = (SELECT VALUE id FROM media WHERE id = $m AND user = $user);
+			FOR $m IN $file {
+				LET $owned = (SELECT VALUE id FROM file WHERE id = $m AND user = $user);
 				IF array::len($owned) > 0 {
-					DELETE album_media WHERE album = $album AND media = $m;
-					CREATE album_media SET album = $album, media = $m, user = $user;
+					DELETE album_file WHERE album = $album AND file = $m;
+					CREATE album_file SET album = $album, file = $m, user = $user;
 				};
 			};
 			UPDATE $album SET updated_at = time::now();
 		};
 		COMMIT TRANSACTION;`,
-		map[string]any{"album": albumID, "user": user, "media": mediaIDs})
+		map[string]any{"album": albumID, "user": user, "file": fileIDs})
 	if err != nil {
-		return nil, fmt.Errorf("add media to album: %w", err)
+		return nil, fmt.Errorf("add file to album: %w", err)
 	}
 	album, err := s.GetAlbum(ctx, albumID, user)
 	if err != nil {
@@ -166,17 +166,17 @@ func (s *AlbumStore) AddMediaToAlbum(ctx context.Context, albumID, user models.R
 	return album, nil
 }
 
-// RemoveMediaFromAlbum drops the given media from an album the caller owns.
+// RemoveFileFromAlbum drops the given file from an album the caller owns.
 // Returns the updated album.
-func (s *AlbumStore) RemoveMediaFromAlbum(ctx context.Context, albumID, user models.RecordID, mediaIDs []models.RecordID) (*gql_model.Album, error) {
+func (s *AlbumStore) RemoveFileFromAlbum(ctx context.Context, albumID, user models.RecordID, fileIDs []models.RecordID) (*gql_model.Album, error) {
 	_, err := surrealdb.Query[[]any](ctx, s.DB, `
 		BEGIN TRANSACTION;
-		DELETE album_media WHERE album = $album AND media IN $media AND user = $user;
+		DELETE album_file WHERE album = $album AND file IN $file AND user = $user;
 		UPDATE album SET updated_at = time::now() WHERE id = $album AND user = $user;
 		COMMIT TRANSACTION;`,
-		map[string]any{"album": albumID, "user": user, "media": mediaIDs})
+		map[string]any{"album": albumID, "user": user, "file": fileIDs})
 	if err != nil {
-		return nil, fmt.Errorf("remove media from album: %w", err)
+		return nil, fmt.Errorf("remove file from album: %w", err)
 	}
 	album, err := s.GetAlbum(ctx, albumID, user)
 	if err != nil {

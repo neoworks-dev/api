@@ -22,7 +22,7 @@ type dbMemory struct {
 	Kind         string           `json:"kind"`
 	Title        *string          `json:"title,omitempty"`
 	SourceText   *string          `json:"source_text,omitempty"`
-	Media        *models.RecordID `json:"media,omitempty"`
+	File        *models.RecordID `json:"file,omitempty"`
 	Searchable   bool             `json:"searchable"`
 	Deleted      bool             `json:"deleted"`
 	CreatedAt    time.Time        `json:"created_at"`
@@ -35,7 +35,7 @@ type MemoryFields struct {
 	Kind       *string
 	Title      *string
 	SourceText *string
-	Media      *models.RecordID
+	File      *models.RecordID
 	Searchable *bool
 }
 
@@ -70,7 +70,7 @@ func memoryToGQL(m *dbMemory) *gql_model.Memory {
 		Kind:           m.Kind,
 		Title:          m.Title,
 		SourceText:     m.SourceText,
-		Media:          recordIDPtr(m.Media),
+		File:          recordIDPtr(m.File),
 		Searchable:     m.Searchable,
 		Deleted:        m.Deleted,
 		CreatedAt:      m.CreatedAt.Format(time.RFC3339),
@@ -102,8 +102,8 @@ func memoryAssignments(f *MemoryFields, assignments *[]string, params map[string
 	if f.SourceText != nil {
 		set("source_text = $source_text", "source_text", *f.SourceText)
 	}
-	if f.Media != nil {
-		set("media = $media", "media", *f.Media)
+	if f.File != nil {
+		set("file = $file", "file", *f.File)
 	}
 	if f.Searchable != nil {
 		set("searchable = $searchable", "searchable", *f.Searchable)
