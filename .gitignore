@@ -1,8 +1,9 @@
 # Local environment & secrets
 .env
 
-# Signing keys — never commit
-keys/
+# Signing keys — never commit. Anchored to the root dir so it does not also
+# swallow the Go source packages named `keys` (handlers/keys, tests/.../keys).
+/keys/
 *.pem
 *.key
 
