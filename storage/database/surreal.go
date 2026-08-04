@@ -43,7 +43,7 @@ type SurrealStore struct {
 	// SurrealDB does not expose, as the store brokers each client-database query.
 	queryMetrics *queryMetrics
 
-	Contacts    *ContactStore
+	Spaces      *SpaceStore
 	Events      *EventStore
 	Calendars   *CalendarStore
 	Connections *ConnectionStore
@@ -91,7 +91,7 @@ func NewSurrealStore(url, user, pass, ns, dbName string) (*SurrealStore, error) 
 		// at a separate instance in production.
 		sharedTenant: surrealTarget{Endpoint: url, User: user, Pass: pass},
 	}
-	store.Contacts = &ContactStore{DB: db}
+	store.Spaces = &SpaceStore{DB: db}
 	store.Events = &EventStore{DB: db}
 	store.Calendars = &CalendarStore{DB: db}
 	store.Connections = &ConnectionStore{DB: db}

@@ -1,6 +1,5 @@
 schema:
   - schema/_shared.graphql
-  - schema/Contacts.graphql
   - schema/Calendar.graphql
   - schema/Connections.graphql
   - schema/RefreshTokens.graphql

@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
 	gql_model "github.com/neoworks/auth/gql/model"
+	"github.com/neoworks/auth/publicerr"
 )
 
 // This is the entity-agnostic filter compiler. It turns the shared per-field
@@ -31,10 +33,27 @@ type filterCompiler struct {
 	n      int
 	depth  int
 	err    error
+	// ftsColumns names the columns backed by a FULLTEXT index, so StringFilter.search
+	// (the @@ operator) can be rejected up front on any other column instead of
+	// failing opaquely inside SurrealDB. Empty for entities with no FTS index.
+	ftsColumns map[string]bool
 }
 
 func newFilterCompiler() *filterCompiler {
 	return &filterCompiler{params: map[string]any{}}
+}
+
+// ftsHint lists the searchable columns for the current entity, for error messages.
+func (c *filterCompiler) ftsHint() string {
+	if len(c.ftsColumns) == 0 {
+		return "no fields on this entity support search"
+	}
+	cols := make([]string, 0, len(c.ftsColumns))
+	for col := range c.ftsColumns {
+		cols = append(cols, col)
+	}
+	sort.Strings(cols)
+	return "searchable fields: " + strings.Join(cols, ", ")
 }
 
 // bind registers a value under a fresh param name and returns the "$name" ref.
@@ -65,7 +84,7 @@ func (b boolFilter[F]) compile(c *filterCompiler, f *F) string {
 	c.depth++
 	defer func() { c.depth-- }()
 	if c.depth > maxFilterDepth {
-		c.err = fmt.Errorf("filter nested too deeply (max %d)", maxFilterDepth)
+		c.err = publicerr.New(fmt.Sprintf("filter nested too deeply (max %d)", maxFilterDepth))
 		return ""
 	}
 
@@ -140,7 +159,13 @@ func (c *filterCompiler) stringExpr(col string, f *gql_model.StringFilter) strin
 		parts = append(parts, "string::matches("+col+", "+c.bind(*f.Matches)+")")
 	}
 	if f.Search != nil {
-		// Full-text @@ match; requires a FULLTEXT index on the column.
+		// Full-text @@ match requires a FULLTEXT index on the column. Reject up front
+		// on unindexed columns so the caller gets a precise reason rather than an
+		// opaque SurrealDB failure.
+		if !c.ftsColumns[col] {
+			c.err = publicerr.New(fmt.Sprintf("search requires a FULLTEXT index on %q; %s", col, c.ftsHint()))
+			return ""
+		}
 		parts = append(parts, col+" @@ "+c.bind(*f.Search))
 	}
 	if f.Fuzzy != nil {
@@ -208,7 +233,7 @@ func (c *filterCompiler) dateExpr(col string, f *gql_model.DateFilter) string {
 	}
 	if f.WithinLast != nil {
 		if !durationPattern.MatchString(*f.WithinLast) {
-			c.err = fmt.Errorf("invalid duration %q for withinLast", *f.WithinLast)
+			c.err = publicerr.New(fmt.Sprintf("invalid duration %q for withinLast (e.g. 30d, 12h, 1w2d)", *f.WithinLast))
 			return ""
 		}
 		parts = append(parts, col+" > time::now() - "+*f.WithinLast)
@@ -254,55 +279,6 @@ func (c *filterCompiler) stringListExpr(col string, f *gql_model.StringListFilte
 	return strings.Join(parts, " AND ")
 }
 
-// fieldListExpr filters a repeatable typed field (emails/phones): any-element
-// match, emptiness, or size.
-func (c *filterCompiler) fieldListExpr(col string, f *gql_model.FieldListFilter) string {
-	if f == nil {
-		return ""
-	}
-	// Absent repeatable fields are stored as NONE, not []; coalesce so the array
-	// functions never receive NONE.
-	list := "(" + col + " ?? [])"
-	var parts []string
-	if f.IsEmpty != nil {
-		if *f.IsEmpty {
-			parts = append(parts, "array::len("+list+") = 0")
-		} else {
-			parts = append(parts, "array::len("+list+") > 0")
-		}
-	}
-	if f.Size != nil {
-		parts = append(parts, c.intExpr("array::len("+list+")", f.Size))
-	}
-	if f.Any != nil {
-		if inner := c.elementExpr(f.Any); inner != "" {
-			// An element matches when the filtered sub-array is non-empty.
-			parts = append(parts, "array::len("+list+"[WHERE "+inner+"]) > 0")
-		}
-	}
-	parts = nonEmpty(parts)
-	if len(parts) == 0 {
-		return ""
-	}
-	return strings.Join(parts, " AND ")
-}
-
-// elementExpr builds the predicate evaluated against a single field element,
-// where `value` and `types` are the element's own columns.
-func (c *filterCompiler) elementExpr(f *gql_model.ContactFieldFilter) string {
-	var parts []string
-	if expr := c.stringExpr("value", f.Value); expr != "" {
-		parts = append(parts, expr)
-	}
-	if f.Type != nil {
-		parts = append(parts, c.bind(*f.Type)+" IN types")
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return strings.Join(parts, " AND ")
-}
-
 // geoExpr filters a GEO point stored as {lat, lng}. The point is constructed
 // inline with type::point([lng, lat]) — GeoJSON order is (lng, lat). A guard on
 // <col>.lat excludes rows without a point from near/within.
@@ -325,7 +301,7 @@ func (c *filterCompiler) geoExpr(col string, f *gql_model.GeoFilter) string {
 		// number, so nothing untrusted reaches the query.
 		geojson, err := renderGeoJSON(f.Within, 0)
 		if err != nil {
-			c.err = err
+			c.err = publicerr.New("invalid geo within: " + err.Error())
 			return ""
 		}
 		parts = append(parts, "("+present+" AND "+point+" INSIDE "+geojson+")")

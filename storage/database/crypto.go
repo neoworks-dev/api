@@ -164,6 +164,44 @@ type PublicKeyEntry struct {
 	PublicKey string `json:"public_key"`
 }
 
+// SetUserSignPublicKey stores the account-level Ed25519 signing public key
+// (derived from the AMK in the Vault). Peers verify space item envelopes and
+// wrapped space keys against it. Idempotent.
+func (s *SurrealStore) SetUserSignPublicKey(ctx context.Context, userID, signPublicKey string) error {
+	_, err := surrealdb.Query[[]any](ctx, s.DB,
+		"UPDATE user_key SET sign_public_key = $sign_public_key WHERE user = $user",
+		map[string]any{
+			"user":            models.NewRecordID("user", userID),
+			"sign_public_key": signPublicKey,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("set user sign public key: %w", err)
+	}
+	return nil
+}
+
+// GetUserSignPublicKey returns a user's published Ed25519 signing key, or ""
+// when none is published yet.
+func (s *SurrealStore) GetUserSignPublicKey(ctx context.Context, userID string) (string, error) {
+	type row struct {
+		SignPublicKey *string `json:"sign_public_key"`
+	}
+	results, err := surrealdb.Query[[]row](ctx, s.DB,
+		"SELECT sign_public_key FROM user_key WHERE user = $user LIMIT 1",
+		map[string]any{"user": models.NewRecordID("user", userID)},
+	)
+	if err != nil {
+		return "", fmt.Errorf("get user sign public key: %w", err)
+	}
+	for _, qr := range *results {
+		if len(qr.Result) > 0 && qr.Result[0].SignPublicKey != nil {
+			return *qr.Result[0].SignPublicKey, nil
+		}
+	}
+	return "", nil
+}
+
 // GetUserPublicKey looks up a single account public key by bare user id.
 func (s *SurrealStore) GetUserPublicKey(ctx context.Context, userID string) (*PublicKeyEntry, error) {
 	return s.lookupPublicKey(ctx,

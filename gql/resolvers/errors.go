@@ -1,24 +1,15 @@
 package gql
 
-import "errors"
+import "github.com/neoworks/auth/publicerr"
 
-// PublicError wraps a message that is safe to expose to API clients. Errors that
-// are not PublicError are scrubbed to a generic message by the GraphQL error
-// presenter, so internal details (DB schema, record ids, driver text) never
-// leak to callers.
-type PublicError struct{ msg string }
-
-func (e PublicError) Error() string { return e.msg }
+// PublicError is retained as an alias so existing references keep working; the
+// canonical definition now lives in the shared publicerr package (importable by
+// the storage layer without an import cycle).
+type PublicError = publicerr.Error
 
 // Public marks a message as safe to return to the client.
-func Public(msg string) error { return PublicError{msg: msg} }
+func Public(msg string) error { return publicerr.New(msg) }
 
 // AsPublic returns the public message if err (or anything in its chain) is a
 // PublicError.
-func AsPublic(err error) (string, bool) {
-	var pub PublicError
-	if errors.As(err, &pub) {
-		return pub.msg, true
-	}
-	return "", false
-}
+func AsPublic(err error) (string, bool) { return publicerr.Message(err) }

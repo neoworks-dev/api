@@ -9,33 +9,6 @@ import (
 	"strconv"
 )
 
-// vCard ADR.
-type Address struct {
-	Types      []string `json:"types,omitempty"`
-	Pref       *int     `json:"pref,omitempty"`
-	Label      *string  `json:"label,omitempty"`
-	PoBox      *string  `json:"po_box,omitempty"`
-	Ext        *string  `json:"ext,omitempty"`
-	Street     *string  `json:"street,omitempty"`
-	Locality   *string  `json:"locality,omitempty"`
-	Region     *string  `json:"region,omitempty"`
-	PostalCode *string  `json:"postal_code,omitempty"`
-	Country    *string  `json:"country,omitempty"`
-}
-
-type AddressInput struct {
-	Types      []string `json:"types,omitempty"`
-	Pref       *int     `json:"pref,omitempty"`
-	Label      *string  `json:"label,omitempty"`
-	PoBox      *string  `json:"po_box,omitempty"`
-	Ext        *string  `json:"ext,omitempty"`
-	Street     *string  `json:"street,omitempty"`
-	Locality   *string  `json:"locality,omitempty"`
-	Region     *string  `json:"region,omitempty"`
-	PostalCode *string  `json:"postal_code,omitempty"`
-	Country    *string  `json:"country,omitempty"`
-}
-
 type Album struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
@@ -93,176 +66,6 @@ type ConnectionProfile struct {
 	AvatarURL *string `json:"avatar_url,omitempty"`
 }
 
-type Contact struct {
-	ID string `json:"id"`
-	// vCard UID — stable across imports/sync.
-	UID string `json:"uid"`
-	// vCard KIND: individual | group | org | location.
-	Kind string `json:"kind"`
-	// vCard FN — the display name (required).
-	FormattedName string                 `json:"formatted_name"`
-	Name          *Name                  `json:"name,omitempty"`
-	Nicknames     []string               `json:"nicknames,omitempty"`
-	Birthday      *string                `json:"birthday,omitempty"`
-	Anniversary   *string                `json:"anniversary,omitempty"`
-	Gender        *Gender                `json:"gender,omitempty"`
-	Emails        []*ContactField        `json:"emails,omitempty"`
-	Phones        []*ContactField        `json:"phones,omitempty"`
-	Impps         []*ContactField        `json:"impps,omitempty"`
-	Languages     []*ContactField        `json:"languages,omitempty"`
-	Addresses     []*Address             `json:"addresses,omitempty"`
-	Organizations []*ContactOrganization `json:"organizations,omitempty"`
-	Title         *string                `json:"title,omitempty"`
-	Role          *string                `json:"role,omitempty"`
-	Timezone      *string                `json:"timezone,omitempty"`
-	Geo           *Geo                   `json:"geo,omitempty"`
-	Categories    []string               `json:"categories,omitempty"`
-	Notes         []string               `json:"notes,omitempty"`
-	Urls          []*ContactField        `json:"urls,omitempty"`
-	Source        *string                `json:"source,omitempty"`
-	Prodid        *string                `json:"prodid,omitempty"`
-	Fburl         *string                `json:"fburl,omitempty"`
-	Caluri        *string                `json:"caluri,omitempty"`
-	Caladruri     *string                `json:"caladruri,omitempty"`
-	// File handler id for the encrypted PHOTO/LOGO/SOUND/KEY (null = none).
-	Photo        *string        `json:"photo,omitempty"`
-	Logo         *string        `json:"logo,omitempty"`
-	Sound        *string        `json:"sound,omitempty"`
-	Key          *string        `json:"key,omitempty"`
-	CustomFields []*CustomField `json:"custom_fields,omitempty"`
-	Favorite     bool           `json:"favorite"`
-	Archived     bool           `json:"archived"`
-	Deleted      bool           `json:"deleted"`
-	// vCard RELATED edges and KIND=group MEMBER ids, from the graph.
-	Related   []*ContactRelation `json:"related,omitempty"`
-	MemberIds []string           `json:"member_ids,omitempty"`
-	CreatedAt string             `json:"created_at"`
-	UpdatedAt string             `json:"updated_at"`
-}
-
-// A typed, repeatable value (EMAIL, TEL, IMPP, URL, LANG). `types` carries the
-// vCard TYPE parameter (home, work, cell, …); `pref` the PREF (1 = most preferred).
-type ContactField struct {
-	Value string   `json:"value"`
-	Types []string `json:"types,omitempty"`
-	Pref  *int     `json:"pref,omitempty"`
-	Label *string  `json:"label,omitempty"`
-}
-
-// Match a single element of a repeatable field (email/phone): value substring/eq
-// and an optional membership test on its types.
-type ContactFieldFilter struct {
-	Value *StringFilter `json:"value,omitempty"`
-	Type  *string       `json:"type,omitempty"`
-}
-
-type ContactFieldInput struct {
-	Value string   `json:"value"`
-	Types []string `json:"types,omitempty"`
-	Pref  *int     `json:"pref,omitempty"`
-	Label *string  `json:"label,omitempty"`
-}
-
-type ContactFilter struct {
-	FormattedName *StringFilter     `json:"formatted_name,omitempty"`
-	Kind          *StringFilter     `json:"kind,omitempty"`
-	Birthday      *StringFilter     `json:"birthday,omitempty"`
-	Anniversary   *StringFilter     `json:"anniversary,omitempty"`
-	Title         *StringFilter     `json:"title,omitempty"`
-	Role          *StringFilter     `json:"role,omitempty"`
-	Timezone      *StringFilter     `json:"timezone,omitempty"`
-	Geo           *GeoFilter        `json:"geo,omitempty"`
-	Emails        *FieldListFilter  `json:"emails,omitempty"`
-	Phones        *FieldListFilter  `json:"phones,omitempty"`
-	Impps         *FieldListFilter  `json:"impps,omitempty"`
-	Languages     *FieldListFilter  `json:"languages,omitempty"`
-	Urls          *FieldListFilter  `json:"urls,omitempty"`
-	Categories    *StringListFilter `json:"categories,omitempty"`
-	Nicknames     *StringListFilter `json:"nicknames,omitempty"`
-	Notes         *StringListFilter `json:"notes,omitempty"`
-	Favorite      *BoolFilter       `json:"favorite,omitempty"`
-	Archived      *BoolFilter       `json:"archived,omitempty"`
-	Deleted       *BoolFilter       `json:"deleted,omitempty"`
-	CreatedAt     *DateFilter       `json:"created_at,omitempty"`
-	UpdatedAt     *DateFilter       `json:"updated_at,omitempty"`
-	And           []*ContactFilter  `json:"and,omitempty"`
-	Or            []*ContactFilter  `json:"or,omitempty"`
-	Not           *ContactFilter    `json:"not,omitempty"`
-}
-
-// vCard ORG (name plus organisational units).
-type ContactOrganization struct {
-	Name  string   `json:"name"`
-	Units []string `json:"units,omitempty"`
-}
-
-type ContactOrganizationInput struct {
-	Name  string   `json:"name"`
-	Units []string `json:"units,omitempty"`
-}
-
-// A vCard RELATED edge to another contact.
-type ContactRelation struct {
-	ContactID string   `json:"contact_id"`
-	Types     []string `json:"types,omitempty"`
-	Pref      *int     `json:"pref,omitempty"`
-}
-
-// One sort key. Pass a list to sort by several columns in order.
-type ContactSort struct {
-	Field     ContactSortField `json:"field"`
-	Direction *SortDirection   `json:"direction,omitempty"`
-}
-
-// A point-in-time snapshot from the append-only history. Mirrors Contact's data
-// fields (graph relations are not versioned).
-type ContactVersion struct {
-	ID            string                 `json:"id"`
-	ContactID     string                 `json:"contact_id"`
-	UID           string                 `json:"uid"`
-	Kind          string                 `json:"kind"`
-	FormattedName string                 `json:"formatted_name"`
-	Name          *Name                  `json:"name,omitempty"`
-	Nicknames     []string               `json:"nicknames,omitempty"`
-	Birthday      *string                `json:"birthday,omitempty"`
-	Anniversary   *string                `json:"anniversary,omitempty"`
-	Gender        *Gender                `json:"gender,omitempty"`
-	Emails        []*ContactField        `json:"emails,omitempty"`
-	Phones        []*ContactField        `json:"phones,omitempty"`
-	Impps         []*ContactField        `json:"impps,omitempty"`
-	Languages     []*ContactField        `json:"languages,omitempty"`
-	Addresses     []*Address             `json:"addresses,omitempty"`
-	Organizations []*ContactOrganization `json:"organizations,omitempty"`
-	Title         *string                `json:"title,omitempty"`
-	Role          *string                `json:"role,omitempty"`
-	Timezone      *string                `json:"timezone,omitempty"`
-	Geo           *Geo                   `json:"geo,omitempty"`
-	Categories    []string               `json:"categories,omitempty"`
-	Notes         []string               `json:"notes,omitempty"`
-	Urls          []*ContactField        `json:"urls,omitempty"`
-	Source        *string                `json:"source,omitempty"`
-	Prodid        *string                `json:"prodid,omitempty"`
-	Fburl         *string                `json:"fburl,omitempty"`
-	Caluri        *string                `json:"caluri,omitempty"`
-	Caladruri     *string                `json:"caladruri,omitempty"`
-	Photo         *string                `json:"photo,omitempty"`
-	Logo          *string                `json:"logo,omitempty"`
-	Sound         *string                `json:"sound,omitempty"`
-	Key           *string                `json:"key,omitempty"`
-	CustomFields  []*CustomField         `json:"custom_fields,omitempty"`
-	Favorite      bool                   `json:"favorite"`
-	Archived      bool                   `json:"archived"`
-	Deleted       bool                   `json:"deleted"`
-	CreatedAt     string                 `json:"created_at"`
-	// Version ids this one derives from (edit lineage; 2 entries on a merge).
-	ParentIds []string `json:"parent_ids,omitempty"`
-}
-
-type ContactVersionFilter struct {
-	FormattedName *string `json:"formatted_name,omitempty"`
-	Before        *string `json:"before,omitempty"`
-}
-
 type CreateCalendarInput struct {
 	Name      string `json:"name"`
 	Color     string `json:"color"`
@@ -299,43 +102,6 @@ type CreateClientResult struct {
 	Client *OAuthClient `json:"client"`
 	// null for public clients
 	Secret *string `json:"secret,omitempty"`
-}
-
-// Create a contact. Only formatted_name is required; kind defaults to individual.
-// A uid is generated when omitted.
-type CreateContactInput struct {
-	UID           *string                     `json:"uid,omitempty"`
-	Kind          *string                     `json:"kind,omitempty"`
-	FormattedName string                      `json:"formatted_name"`
-	Name          *NameInput                  `json:"name,omitempty"`
-	Nicknames     []string                    `json:"nicknames,omitempty"`
-	Birthday      *string                     `json:"birthday,omitempty"`
-	Anniversary   *string                     `json:"anniversary,omitempty"`
-	Gender        *GenderInput                `json:"gender,omitempty"`
-	Emails        []*ContactFieldInput        `json:"emails,omitempty"`
-	Phones        []*ContactFieldInput        `json:"phones,omitempty"`
-	Impps         []*ContactFieldInput        `json:"impps,omitempty"`
-	Languages     []*ContactFieldInput        `json:"languages,omitempty"`
-	Addresses     []*AddressInput             `json:"addresses,omitempty"`
-	Organizations []*ContactOrganizationInput `json:"organizations,omitempty"`
-	Title         *string                     `json:"title,omitempty"`
-	Role          *string                     `json:"role,omitempty"`
-	Timezone      *string                     `json:"timezone,omitempty"`
-	Geo           *GeoInput                   `json:"geo,omitempty"`
-	Categories    []string                    `json:"categories,omitempty"`
-	Notes         []string                    `json:"notes,omitempty"`
-	Urls          []*ContactFieldInput        `json:"urls,omitempty"`
-	Source        *string                     `json:"source,omitempty"`
-	Prodid        *string                     `json:"prodid,omitempty"`
-	Fburl         *string                     `json:"fburl,omitempty"`
-	Caluri        *string                     `json:"caluri,omitempty"`
-	Caladruri     *string                     `json:"caladruri,omitempty"`
-	Photo         *string                     `json:"photo,omitempty"`
-	Logo          *string                     `json:"logo,omitempty"`
-	Sound         *string                     `json:"sound,omitempty"`
-	Key           *string                     `json:"key,omitempty"`
-	CustomFields  []*CustomFieldInput         `json:"custom_fields,omitempty"`
-	Favorite      *bool                       `json:"favorite,omitempty"`
 }
 
 type CreateEventInput struct {
@@ -382,17 +148,6 @@ type CreateOrganizationInput struct {
 	Slug         string  `json:"slug"`
 	Description  *string `json:"description,omitempty"`
 	BillingEmail *string `json:"billing_email,omitempty"`
-}
-
-// A labelled key/value pair beyond the vCard surface (replaces X- extensions).
-type CustomField struct {
-	Label string `json:"label"`
-	Value string `json:"value"`
-}
-
-type CustomFieldInput struct {
-	Label string `json:"label"`
-	Value string `json:"value"`
 }
 
 // Internal compiled representation of a client schema. Clients no longer submit this
@@ -497,13 +252,6 @@ type FieldDefInput struct {
 	Type string `json:"type"`
 }
 
-// Filter a repeatable field list (emails/phones) by any-element match or size.
-type FieldListFilter struct {
-	Any     *ContactFieldFilter `json:"any,omitempty"`
-	IsEmpty *bool               `json:"isEmpty,omitempty"`
-	Size    *IntFilter          `json:"size,omitempty"`
-}
-
 type File struct {
 	ID        string `json:"id"`
 	Filename  string `json:"filename"`
@@ -547,25 +295,6 @@ type FileSort struct {
 	Direction *SortDirection `json:"direction,omitempty"`
 }
 
-// vCard GENDER.
-type Gender struct {
-	// vCard sex component: M F O N U.
-	Sex *string `json:"sex,omitempty"`
-	// Free-text gender identity.
-	Identity *string `json:"identity,omitempty"`
-}
-
-type GenderInput struct {
-	Sex      *string `json:"sex,omitempty"`
-	Identity *string `json:"identity,omitempty"`
-}
-
-// vCard GEO.
-type Geo struct {
-	Lat float64 `json:"lat"`
-	Lng float64 `json:"lng"`
-}
-
 // Geo predicates against a GEO point (lat/lng).
 type GeoFilter struct {
 	// Within radiusMeters of the given point (haversine, metres).
@@ -573,11 +302,6 @@ type GeoFilter struct {
 	// GeoJSON geometry (e.g. a Polygon). The point must fall inside it.
 	Within map[string]any `json:"within,omitempty"`
 	IsNull *bool          `json:"isNull,omitempty"`
-}
-
-type GeoInput struct {
-	Lat float64 `json:"lat"`
-	Lng float64 `json:"lng"`
 }
 
 // A GPS coordinate (decimal degrees).
@@ -687,23 +411,6 @@ type NDay struct {
 type NDayInput struct {
 	Day         string `json:"day"`
 	NthOfPeriod *int   `json:"nthOfPeriod,omitempty"`
-}
-
-// vCard N — the structured name.
-type Name struct {
-	Family     *string  `json:"family,omitempty"`
-	Given      *string  `json:"given,omitempty"`
-	Additional []string `json:"additional,omitempty"`
-	Prefixes   []string `json:"prefixes,omitempty"`
-	Suffixes   []string `json:"suffixes,omitempty"`
-}
-
-type NameInput struct {
-	Family     *string  `json:"family,omitempty"`
-	Given      *string  `json:"given,omitempty"`
-	Additional []string `json:"additional,omitempty"`
-	Prefixes   []string `json:"prefixes,omitempty"`
-	Suffixes   []string `json:"suffixes,omitempty"`
 }
 
 // A centre point plus radius for proximity search.
@@ -971,43 +678,6 @@ type UpdateCalendarInput struct {
 	IsDefault *bool   `json:"is_default,omitempty"`
 }
 
-// Partial update — omitted fields are left unchanged. Collection fields replace
-// the whole list when present (send the full array, or [] to clear).
-type UpdateContactInput struct {
-	Kind          *string                     `json:"kind,omitempty"`
-	FormattedName *string                     `json:"formatted_name,omitempty"`
-	Name          *NameInput                  `json:"name,omitempty"`
-	Nicknames     []string                    `json:"nicknames,omitempty"`
-	Birthday      *string                     `json:"birthday,omitempty"`
-	Anniversary   *string                     `json:"anniversary,omitempty"`
-	Gender        *GenderInput                `json:"gender,omitempty"`
-	Emails        []*ContactFieldInput        `json:"emails,omitempty"`
-	Phones        []*ContactFieldInput        `json:"phones,omitempty"`
-	Impps         []*ContactFieldInput        `json:"impps,omitempty"`
-	Languages     []*ContactFieldInput        `json:"languages,omitempty"`
-	Addresses     []*AddressInput             `json:"addresses,omitempty"`
-	Organizations []*ContactOrganizationInput `json:"organizations,omitempty"`
-	Title         *string                     `json:"title,omitempty"`
-	Role          *string                     `json:"role,omitempty"`
-	Timezone      *string                     `json:"timezone,omitempty"`
-	Geo           *GeoInput                   `json:"geo,omitempty"`
-	Categories    []string                    `json:"categories,omitempty"`
-	Notes         []string                    `json:"notes,omitempty"`
-	Urls          []*ContactFieldInput        `json:"urls,omitempty"`
-	Source        *string                     `json:"source,omitempty"`
-	Prodid        *string                     `json:"prodid,omitempty"`
-	Fburl         *string                     `json:"fburl,omitempty"`
-	Caluri        *string                     `json:"caluri,omitempty"`
-	Caladruri     *string                     `json:"caladruri,omitempty"`
-	Photo         *string                     `json:"photo,omitempty"`
-	Logo          *string                     `json:"logo,omitempty"`
-	Sound         *string                     `json:"sound,omitempty"`
-	Key           *string                     `json:"key,omitempty"`
-	CustomFields  []*CustomFieldInput         `json:"custom_fields,omitempty"`
-	Favorite      *bool                       `json:"favorite,omitempty"`
-	Archived      *bool                       `json:"archived,omitempty"`
-}
-
 type UpdateEventInput struct {
 	CalendarID              *string                `json:"calendarId,omitempty"`
 	Title                   *string                `json:"title,omitempty"`
@@ -1064,126 +734,6 @@ type UserSearchResult struct {
 	LastName  string `json:"last_name"`
 	// null = no connection, else pending | accepted | blocked.
 	ConnectionStatus *string `json:"connection_status,omitempty"`
-}
-
-// Which set of contacts to return. ACTIVE excludes archived and trashed.
-type ContactScope string
-
-const (
-	ContactScopeActive   ContactScope = "ACTIVE"
-	ContactScopeArchived ContactScope = "ARCHIVED"
-	ContactScopeTrashed  ContactScope = "TRASHED"
-	ContactScopeAll      ContactScope = "ALL"
-)
-
-var AllContactScope = []ContactScope{
-	ContactScopeActive,
-	ContactScopeArchived,
-	ContactScopeTrashed,
-	ContactScopeAll,
-}
-
-func (e ContactScope) IsValid() bool {
-	switch e {
-	case ContactScopeActive, ContactScopeArchived, ContactScopeTrashed, ContactScopeAll:
-		return true
-	}
-	return false
-}
-
-func (e ContactScope) String() string {
-	return string(e)
-}
-
-func (e *ContactScope) UnmarshalGQL(v any) error {
-	str, ok := v.(string)
-	if !ok {
-		return fmt.Errorf("enums must be strings")
-	}
-
-	*e = ContactScope(str)
-	if !e.IsValid() {
-		return fmt.Errorf("%s is not a valid ContactScope", str)
-	}
-	return nil
-}
-
-func (e ContactScope) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
-}
-
-func (e *ContactScope) UnmarshalJSON(b []byte) error {
-	s, err := strconv.Unquote(string(b))
-	if err != nil {
-		return err
-	}
-	return e.UnmarshalGQL(s)
-}
-
-func (e ContactScope) MarshalJSON() ([]byte, error) {
-	var buf bytes.Buffer
-	e.MarshalGQL(&buf)
-	return buf.Bytes(), nil
-}
-
-// Sortable contact columns (whitelisted; arbitrary fields aren't allowed).
-type ContactSortField string
-
-const (
-	ContactSortFieldFormattedName ContactSortField = "FORMATTED_NAME"
-	ContactSortFieldCreatedAt     ContactSortField = "CREATED_AT"
-	ContactSortFieldUpdatedAt     ContactSortField = "UPDATED_AT"
-	ContactSortFieldBirthday      ContactSortField = "BIRTHDAY"
-)
-
-var AllContactSortField = []ContactSortField{
-	ContactSortFieldFormattedName,
-	ContactSortFieldCreatedAt,
-	ContactSortFieldUpdatedAt,
-	ContactSortFieldBirthday,
-}
-
-func (e ContactSortField) IsValid() bool {
-	switch e {
-	case ContactSortFieldFormattedName, ContactSortFieldCreatedAt, ContactSortFieldUpdatedAt, ContactSortFieldBirthday:
-		return true
-	}
-	return false
-}
-
-func (e ContactSortField) String() string {
-	return string(e)
-}
-
-func (e *ContactSortField) UnmarshalGQL(v any) error {
-	str, ok := v.(string)
-	if !ok {
-		return fmt.Errorf("enums must be strings")
-	}
-
-	*e = ContactSortField(str)
-	if !e.IsValid() {
-		return fmt.Errorf("%s is not a valid ContactSortField", str)
-	}
-	return nil
-}
-
-func (e ContactSortField) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
-}
-
-func (e *ContactSortField) UnmarshalJSON(b []byte) error {
-	s, err := strconv.Unquote(string(b))
-	if err != nil {
-		return err
-	}
-	return e.UnmarshalGQL(s)
-}
-
-func (e ContactSortField) MarshalJSON() ([]byte, error) {
-	var buf bytes.Buffer
-	e.MarshalGQL(&buf)
-	return buf.Bytes(), nil
 }
 
 // Sortable file columns (whitelisted).

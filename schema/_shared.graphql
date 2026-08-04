@@ -71,3 +71,8 @@ enum SortDirection {
   ASC
   DESC
 }
+
+# Root operation types. Every entity file extends these; the bare definitions
+# live here so no single entity owns the roots.
+type Query
+type Mutation

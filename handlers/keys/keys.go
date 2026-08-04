@@ -52,8 +52,9 @@ func (h *Handler) publishPublicKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		PublicKey   string `json:"public_key"`
-		Fingerprint string `json:"fingerprint"`
+		PublicKey     string `json:"public_key"`
+		Fingerprint   string `json:"fingerprint"`
+		SignPublicKey string `json:"sign_public_key"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.PublicKey == "" {
 		jsonError(w, "public_key required", http.StatusBadRequest)
@@ -63,6 +64,12 @@ func (h *Handler) publishPublicKey(w http.ResponseWriter, r *http.Request) {
 	if err := h.store.SetUserPublicKey(r.Context(), claims.Subject, body.PublicKey, body.Fingerprint); err != nil {
 		jsonError(w, "server error", http.StatusInternalServerError)
 		return
+	}
+	if body.SignPublicKey != "" {
+		if err := h.store.SetUserSignPublicKey(r.Context(), claims.Subject, body.SignPublicKey); err != nil {
+			jsonError(w, "server error", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -139,9 +146,18 @@ func (h *Handler) lookupPublicKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The signing key rides along so a sharer can verify wrapped-key and envelope
+	// signatures without a second directory call. Empty when not yet published.
+	signKey, err := h.store.GetUserSignPublicKey(r.Context(), entry.UserID)
+	if err != nil {
+		jsonError(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
 	writeJSON(w, map[string]string{
-		"user_id":    entry.UserID,
-		"public_key": entry.PublicKey,
+		"user_id":         entry.UserID,
+		"public_key":      entry.PublicKey,
+		"sign_public_key": signKey,
 	})
 }
 

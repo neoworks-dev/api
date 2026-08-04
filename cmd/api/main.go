@@ -24,13 +24,15 @@ import (
 	"github.com/neoworks/auth/gql"
 	resolvers "github.com/neoworks/auth/gql/resolvers"
 	approvalhandlers "github.com/neoworks/auth/handlers/approvals"
+	filehandlers "github.com/neoworks/auth/handlers/file"
+	spacehandlers "github.com/neoworks/auth/handlers/spaces"
 	keyhandlers "github.com/neoworks/auth/handlers/keys"
 	linkpreviewhandlers "github.com/neoworks/auth/handlers/linkpreview"
-	filehandlers "github.com/neoworks/auth/handlers/file"
 	molliehandlers "github.com/neoworks/auth/handlers/mollie"
 	"github.com/neoworks/auth/middleware"
 	"github.com/neoworks/auth/mollie"
 	"github.com/neoworks/auth/oauth"
+	"github.com/neoworks/auth/publicerr"
 	"github.com/neoworks/auth/push"
 	"github.com/neoworks/auth/scheduler"
 	"github.com/neoworks/auth/storage/cache"
@@ -114,6 +116,9 @@ func main() {
 	// Background jobs: fire calendar reminders as notifications.
 	scheduler.NewReminderScheduler(surreal, pushSender).Start(context.Background())
 
+	// Background job: purge expired space-item tombstones and advance purge horizons.
+	scheduler.NewSpacePurgeScheduler(surreal).Start(context.Background())
+
 	// ── Middleware ────────────────────────────────────────────────────────────
 	clientAuth := middleware.NewJWTMiddleware(issuer, redis)
 
@@ -166,6 +171,13 @@ func main() {
 			gqlErr.Message = msg
 			return gqlErr
 		}
+		// Surface a sanitized reason for known query-shape DB failures; the full
+		// error is still logged server-side and unrecognized errors stay generic.
+		if msg, ok := publicerr.ClassifyDBError(e); ok {
+			slog.Error("graphql error", "error", e, "path", gqlErr.Path)
+			gqlErr.Message = msg
+			return gqlErr
+		}
 		slog.Error("graphql error", "error", e, "path", gqlErr.Path)
 		gqlErr.Message = "Internal server error"
 		return gqlErr
@@ -198,6 +210,7 @@ func main() {
 		keysHandler.RegisterAuthenticated(r)
 		approvalhandlers.NewHandler(surreal, redis, pushSender).RegisterAuthenticated(r)
 		filehandlers.NewHandler(surreal, objects).Register(r)
+		spacehandlers.NewHandler(surreal).Register(r)
 		linkpreviewhandlers.NewHandler().Register(r)
 	})
 
