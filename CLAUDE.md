@@ -97,7 +97,7 @@ Implemented so far:
   wiring file mapping its filter fields to columns: `contact_filter.go`,
   `event_filter.go`. To filter a new entity, define its `XFilter` reusing the
   shared inputs and add a `boolFilter[XFilter]` value.
-- **Shared GraphQL primitives** live in `schema/_shared.graphql` (StringFilter,
+- **Shared GraphQL primitives** live in `schema/shared.graphql` (StringFilter,
   BoolFilter, IntFilter, DateFilter, StringListFilter, GeoFilter, NearInput,
   SortDirection). Per-entity `XFilter`/sort inputs reference them.
 - **Contacts** have the full Queryable surface: `contacts(filter, sort, …)` +

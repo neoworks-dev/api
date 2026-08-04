@@ -2714,7 +2714,7 @@ func newExecutionContext(
 }
 
 var sources = []*ast.Source{
-	{Name: "../schema/_shared.graphql", Input: `# Shared, entity-agnostic primitives for the canonical entity surface. Per-field
+	{Name: "../schema/shared.graphql", Input: `# Shared, entity-agnostic primitives for the canonical entity surface. Per-field
 # operator inputs compile to a server-side WHERE clause (each operator present on
 # a filter is ANDed; entities combine fields with their own and/or/not). Any
 # entity's Filter input reuses these — see ContactFilter, EventFilter.

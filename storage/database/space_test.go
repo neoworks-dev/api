@@ -23,8 +23,8 @@ func cleanupSpaces(t *testing.T, root *surrealdb.DB, userIDs ...models.RecordID)
 	ctx := context.Background()
 	t.Cleanup(func() {
 		for _, u := range userIDs {
-			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE contact_item_version WHERE space.owner = $u", map[string]any{"u": u})
-			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE contact_item WHERE space.owner = $u", map[string]any{"u": u})
+			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE contact_version WHERE space.owner = $u", map[string]any{"u": u})
+			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE contact WHERE space.owner = $u", map[string]any{"u": u})
 			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE space_member WHERE space.owner = $u", map[string]any{"u": u})
 			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE space WHERE owner = $u", map[string]any{"u": u})
 			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE $u", map[string]any{"u": u})
@@ -99,13 +99,13 @@ func TestSpaceLifecycle(t *testing.T) {
 	}
 
 	// Invited member cannot pull until accepting.
-	if _, err := spaces.PullItems(ctx, sharedID, partner, 0, 10, false); !errors.Is(err, ErrSpaceForbidden) {
+	if _, err := spaces.PullContacts(ctx, sharedID, partner, 0, 10, false); !errors.Is(err, ErrSpaceForbidden) {
 		t.Fatalf("invited member pull: want forbidden, got %v", err)
 	}
 	if err := spaces.Accept(ctx, sharedID, partner, "acceptSig"); err != nil {
 		t.Fatalf("accept: %v", err)
 	}
-	if _, err := spaces.PullItems(ctx, sharedID, partner, 0, 10, false); err != nil {
+	if _, err := spaces.PullContacts(ctx, sharedID, partner, 0, 10, false); err != nil {
 		t.Fatalf("active member pull: %v", err)
 	}
 
@@ -184,7 +184,7 @@ func TestSpaceLifecycle(t *testing.T) {
 	if epoch != 2 {
 		t.Fatalf("remove should report current epoch 2, got %d", epoch)
 	}
-	if _, err := spaces.PullItems(ctx, sharedID, partner, 0, 10, false); !errors.Is(err, ErrSpaceForbidden) {
+	if _, err := spaces.PullContacts(ctx, sharedID, partner, 0, 10, false); !errors.Is(err, ErrSpaceForbidden) {
 		t.Fatalf("removed member pull: want forbidden, got %v", err)
 	}
 

@@ -14,6 +14,7 @@ const (
 	defaultPullLimit = 200
 	maxPullLimit     = 500
 	maxBatchItems    = 500
+	maxItemVersions  = 2
 )
 
 func (h *Handler) registerItems(r chi.Router) {
@@ -39,7 +40,7 @@ func (h *Handler) pullItems(w http.ResponseWriter, r *http.Request) {
 	}
 	staleOnly := r.URL.Query().Get("stale_epoch") == "true"
 
-	page, err := h.store.Spaces.PullItems(r.Context(), spaceID(r), userID, since, limit, staleOnly)
+	page, err := h.store.Spaces.PullContacts(r.Context(), spaceID(r), userID, since, limit, staleOnly)
 	if err != nil {
 		writeStoreError(w, "pullItems", err)
 		return
@@ -47,13 +48,20 @@ func (h *Handler) pullItems(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, page)
 }
 
-type pushItemBody struct {
-	BaseSeq   int    `json:"base_seq"`
-	KeyEpoch  int    `json:"key_epoch"`
-	SchemaVer int    `json:"schema_ver"`
-	Deleted   bool   `json:"deleted"`
+type pushVersionBody struct {
+	VersionID string `json:"version_id"`
 	Blob      string `json:"blob"`
 	Sig       string `json:"sig"`
+}
+
+type pushItemBody struct {
+	BaseSeq   int               `json:"base_seq"`
+	KeyEpoch  int               `json:"key_epoch"`
+	SchemaVer int               `json:"schema_ver"`
+	Deleted   bool              `json:"deleted"`
+	Blob      string            `json:"blob"`
+	Sig       string            `json:"sig"`
+	Versions  []pushVersionBody `json:"versions"`
 }
 
 func (b pushItemBody) validate() string {
@@ -69,18 +77,50 @@ func (b pushItemBody) validate() string {
 	if !b.Deleted && b.Blob == "" {
 		return "blob required"
 	}
+	return b.validateVersions()
+}
+
+// A content write appends its history entry in the same request: one version for
+// an edit, two for a conflict merge. A tombstone carries none — its versions are
+// purged with the row.
+func (b pushItemBody) validateVersions() string {
+	if b.Deleted && len(b.Versions) > 0 {
+		return "a tombstone carries no versions"
+	}
+	if !b.Deleted && len(b.Versions) == 0 {
+		return "versions required"
+	}
+	if len(b.Versions) > maxItemVersions {
+		return "at most 2 versions per write"
+	}
+	for _, version := range b.Versions {
+		if version.VersionID == "" {
+			return "version_id required on every version"
+		}
+		if version.Blob == "" {
+			return "blob required on every version"
+		}
+		if version.Sig == "" {
+			return "sig required on every version"
+		}
+	}
 	return ""
 }
 
-func (b pushItemBody) toParams(itemID string) database.PushItemParams {
-	return database.PushItemParams{
-		ItemID:    itemID,
+func (b pushItemBody) toParams(contactID string) database.PushContactParams {
+	versions := make([]database.PushVersionParams, 0, len(b.Versions))
+	for _, version := range b.Versions {
+		versions = append(versions, database.PushVersionParams(version))
+	}
+	return database.PushContactParams{
+		ContactID: contactID,
 		BaseSeq:   b.BaseSeq,
 		KeyEpoch:  b.KeyEpoch,
 		SchemaVer: b.SchemaVer,
 		Deleted:   b.Deleted,
 		Blob:      b.Blob,
 		Sig:       b.Sig,
+		Versions:  versions,
 	}
 }
 
@@ -102,7 +142,7 @@ func (h *Handler) pushItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	outcome, err := h.store.Spaces.PushItem(r.Context(), spaceID(r), userID,
+	outcome, err := h.store.Spaces.PushContact(r.Context(), spaceID(r), userID,
 		body.toParams(chi.URLParam(r, "item")))
 	if err != nil && outcome == nil {
 		writeStoreError(w, "pushItem", err)
@@ -126,7 +166,7 @@ func (h *Handler) pushItem(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, "pushItem", err)
 	default:
 		writeJSON(w, map[string]any{
-			"item_id":   outcome.ItemID,
+			"item_id":   outcome.ContactID,
 			"seq":       outcome.Seq,
 			"key_epoch": body.KeyEpoch,
 		})
@@ -156,7 +196,7 @@ func (h *Handler) pushItemBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	params := make([]database.PushItemParams, 0, len(body.Items))
+	params := make([]database.PushContactParams, 0, len(body.Items))
 	for _, item := range body.Items {
 		if item.ItemID == "" {
 			jsonErr(w, "item_id required on every item", http.StatusBadRequest)
@@ -169,7 +209,7 @@ func (h *Handler) pushItemBatch(w http.ResponseWriter, r *http.Request) {
 		params = append(params, item.toParams(item.ItemID))
 	}
 
-	outcomes, err := h.store.Spaces.PushItems(r.Context(), spaceID(r), userID, params)
+	outcomes, err := h.store.Spaces.PushContacts(r.Context(), spaceID(r), userID, params)
 	if err != nil {
 		writeStoreError(w, "pushItemBatch", err)
 		return
@@ -183,7 +223,7 @@ func (h *Handler) listItemVersions(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	versions, err := h.store.Spaces.ListItemVersions(r.Context(), spaceID(r), userID,
+	versions, err := h.store.Spaces.ListContactVersions(r.Context(), spaceID(r), userID,
 		chi.URLParam(r, "item"))
 	if err != nil {
 		writeStoreError(w, "listItemVersions", err)

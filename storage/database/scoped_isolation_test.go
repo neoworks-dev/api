@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	surrealdb "github.com/surrealdb/surrealdb.go"
 )
@@ -349,13 +350,20 @@ func databaseExists(t *testing.T, root *surrealdb.DB, name string) bool {
 
 func oneLine(s string) string { return strings.ReplaceAll(s, "\n", " ") }
 
-var randCounter int
+var (
+	randCounter int
+	// Per-process prefix: ids must not collide with rows a previous run left
+	// behind when it failed before its cleanup ran.
+	randRun = letters(time.Now().UnixNano())
+)
 
 func randSuffix() string {
 	randCounter++
-	// Deterministic-enough unique suffix for a single test run.
-	b := make([]byte, 0, 8)
-	n := randCounter
+	return randRun + letters(int64(randCounter))
+}
+
+func letters(n int64) string {
+	b := make([]byte, 0, 6)
 	for i := 0; i < 6; i++ {
 		b = append(b, byte('a'+(n%26)))
 		n /= 26
