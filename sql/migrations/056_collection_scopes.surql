@@ -9,13 +9,16 @@ UPDATE client SET scopes += ["contacts:read", "contacts:write"]
 UPDATE client SET scopes += ["calendar:read", "calendar:write"]
     WHERE id = client:⟨neoworks-calendar⟩;
 
--- muse holds memories; its AI features already carry the ai:* scopes.
-UPDATE client SET scopes += ["memories:read", "memories:write"]
+-- muse holds memories. ai:embed lets the Vault turn their text into search
+-- vectors on the user's own machine; without it recall falls back to substring
+-- matching, which is a degraded search rather than a broken one.
+UPDATE client SET scopes += ["memories:read", "memories:write", "ai:embed"]
     WHERE id = client:⟨muse⟩;
 
 -- neoworks.dev is also the integration-test client, so it carries all three.
 UPDATE client SET scopes += [
     "contacts:read", "contacts:write",
     "calendar:read", "calendar:write",
-    "memories:read", "memories:write"
+    "memories:read", "memories:write",
+    "ai:embed"
 ] WHERE id = client:⟨neoworks.dev⟩;
