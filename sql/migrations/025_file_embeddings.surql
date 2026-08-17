@@ -1,8 +1,12 @@
 -- File search: full-text over filenames + a per-file embedding table for
 -- vector (visual/text) search. Embeddings are computed client-side (the server
 -- never sees decrypted file) and stored as queryable plaintext vectors so the
--- HNSW/BM25 arms can run server-side. Mirrors the memory_chunk conventions
--- (017_memories.surql); reuses the contact_text analyzer (007).
+-- HNSW/BM25 arms can run server-side. Reuses the contact_text analyzer (007).
+--
+-- Files are the one collection that stays server-visible metadata: you fetch
+-- specific files on demand, you do not sync every byte of every file down on
+-- reconnect, so a searchable index earns its keep here in a way it cannot for
+-- the E2EE collections in `item` (054).
 
 -- BM25 over filenames, backing FileFilter.filename.search (@@) and the lexical
 -- arm of fileSearch.
@@ -26,7 +30,7 @@ DEFINE FIELD content ON file_embedding TYPE option<string>;
 -- the same space as nomic-embed-text query embeddings.
 DEFINE FIELD embedding ON file_embedding TYPE option<array<float>>;
 
--- Provenance + lifecycle (mirrors memory_chunk).
+-- Provenance + lifecycle.
 DEFINE FIELD model       ON file_embedding TYPE option<string>;
 DEFINE FIELD dim         ON file_embedding TYPE option<int>;
 DEFINE FIELD embed_ver   ON file_embedding TYPE int DEFAULT 1;

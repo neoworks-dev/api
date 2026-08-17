@@ -1,4 +1,4 @@
--- Shared full-text analyzer, used by the memory and file indexes (017, 025).
+-- Shared full-text analyzer, used by the file indexes (025).
 -- An analyzer is not visible to an index created in the same transaction (the
 -- migrate runner wraps each file in one), so any index using it must live in a
 -- later migration than this one.

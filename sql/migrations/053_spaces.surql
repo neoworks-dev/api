@@ -1,15 +1,22 @@
 -- ── Spaces ────────────────────────────────────────────────────────────────────
 -- A space is the unit of sharing and sync for end-to-end encrypted entities.
 -- Every encrypted row belongs to exactly one space; a space holds exactly one
--- collection ('contacts' first). Members hold the symmetric space key sealed to
--- their per-collection scope public key (crypto_box_seal); the server only ever
--- stores wrapped copies. `seq` is the per-space sync counter: every accepted item
--- write increments it inside the push transaction, so the space row is the
+-- collection. Members hold the symmetric space key sealed to their
+-- per-collection scope public key (crypto_box_seal); the server only ever stores
+-- wrapped copies. `seq` is the per-space sync counter: every accepted item write
+-- increments it inside the push transaction, so the space row is the
 -- serialization point and (space, seq) is the pull cursor.
+--
+-- Space ids are uuid-typed, because an item's id embeds its space's
+-- (`item:[space_uuid, item_uuid]`, see 054) and a string there would defeat the
+-- key ordering that shape exists for.
 DEFINE TABLE space SCHEMAFULL;
 DEFINE FIELD owner         ON space TYPE record<user> READONLY;
+-- One collection per space: a space holding two would hand out both with one
+-- key. This list is the full set of end-to-end encrypted collections; anything
+-- the server must read (files) keeps its own table.
 DEFINE FIELD collection    ON space TYPE string READONLY
-    ASSERT $value IN ['contacts'];
+    ASSERT $value IN ['contacts', 'calendar', 'memories'];
 DEFINE FIELD kind          ON space TYPE string READONLY
     ASSERT $value IN ['personal', 'shared', 'adhoc'];
 -- Client-encrypted display label; the server cannot read space names.
