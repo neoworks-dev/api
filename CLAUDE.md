@@ -76,8 +76,13 @@ COMMIT TRANSACTION;
 ```
 
 ## Current entities using this pattern
-- `contact` / `contact_version`
-- `media` / `media_version`
+- `file` / `file_version`
+
+End-to-end encrypted collections (contacts, calendar, memories) do NOT use it.
+They version through `item` / `item_version` (`sql/migrations/054_items.surql`),
+where the client authors each version and the lineage lives inside the encrypted
+blob — the server cannot build a `derived_from` graph over ciphertext it cannot
+read. See `storage/database/item.go`.
 
 # Canonical Entity Surface
 
@@ -94,19 +99,22 @@ Implemented so far:
 - **Filter compiler is entity-generic** — `storage/database/filter_compiler.go`
   holds the operator logic (string/bool/int/date/stringList/fieldList/geo) plus a
   generic `boolFilter[F]` engine for the and/or/not tree. Each entity adds a tiny
-  wiring file mapping its filter fields to columns: `contact_filter.go`,
-  `event_filter.go`. To filter a new entity, define its `XFilter` reusing the
-  shared inputs and add a `boolFilter[XFilter]` value.
+  wiring file mapping its filter fields to columns: `file_filter.go`. To filter a
+  new entity, define its `XFilter` reusing the shared inputs and add a
+  `boolFilter[XFilter]` value.
 - **Shared GraphQL primitives** live in `schema/shared.graphql` (StringFilter,
   BoolFilter, IntFilter, DateFilter, StringListFilter, GeoFilter, NearInput,
   SortDirection). Per-entity `XFilter`/sort inputs reference them.
-- **Contacts** have the full Queryable surface: `contacts(filter, sort, …)` +
-  `contactCount`. FTS lives behind a FULLTEXT index (migrations 039/040);
+- **Files** have the full Queryable surface: `FileFilter` + `FileSort` on the
+  file queries. FTS lives behind a FULLTEXT index (migration 025);
   `StringFilter.search` is `@@`, `fuzzy` is `string::similarity::fuzzy`.
-- **Events** have a structured `EventFilter` on the `events` query (reuses the
-  compiler; `start` maps to the `start_time` column).
 
-Not yet done: a generic `VersionedStore[Row]` (contact is still the only
-versioned store of this shape; deferred until a second one needs it), and the
-remaining capabilities (diff/merge/lineage nav, relation edit/traverse, bulk,
-real-time).
+The surface applies only to what the server can read. Files are now the only
+such entity: contacts, calendar and memories are encrypted envelopes, and their
+filter/search/sort engine runs on the client inside the Vault
+(`packages/sdk/src/vault/query.ts`). A new entity belongs here only if the server
+is meant to read its content.
+
+Not yet done: a generic `VersionedStore[Row]` (file is the only versioned store
+of this shape; deferred until a second one needs it), and the remaining
+capabilities (diff/merge/lineage nav, relation edit/traverse, bulk, real-time).
