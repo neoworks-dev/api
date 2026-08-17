@@ -9,7 +9,7 @@ DEFINE FIELD organization  ON org_instance TYPE record<organization> READONLY;
 DEFINE FIELD endpoint      ON org_instance TYPE string;
 DEFINE FIELD status        ON org_instance TYPE string DEFAULT "provisioning"
     ASSERT $value IN ["provisioning", "active", "suspended", "failed"];
--- Opaque provisioner handle (docker container id/name for the docker driver).
+-- Opaque provisioner handle addressing the instance's workload on its substrate.
 DEFINE FIELD handle        ON org_instance TYPE string;
 DEFINE FIELD root_user     ON org_instance TYPE string;
 -- AES-GCM sealed root password. Never stored in plaintext when INSTANCE_SECRET_KEY

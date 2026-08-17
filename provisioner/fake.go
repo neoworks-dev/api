@@ -7,8 +7,8 @@ import (
 )
 
 // FakeProvisioner is an in-memory InstanceProvisioner for tests. It records
-// provisioned handles without touching docker so store logic (routing, lazy
-// provisioning, idempotency) can be exercised in unit tests.
+// provisioned handles without touching a real substrate so store logic (routing,
+// lazy provisioning, idempotency) can be exercised in unit tests.
 type FakeProvisioner struct {
 	mu         sync.Mutex
 	byOrg      map[string]InstanceHandle

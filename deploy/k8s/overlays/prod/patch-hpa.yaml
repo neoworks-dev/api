@@ -1,9 +1,0 @@
-# Higher autoscale ceiling in production.
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: neoworks-api
-  namespace: neoworks-control
-spec:
-  minReplicas: 3
-  maxReplicas: 50

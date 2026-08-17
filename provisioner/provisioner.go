@@ -3,9 +3,9 @@
 // compute + security boundary (namespaces alone share a runtime) and a clean unit
 // to meter and bill.
 //
-// The InstanceProvisioner interface hides the substrate. The docker driver runs
-// instances as containers on the host; a future kubernetes driver can implement
-// the same interface without touching callers.
+// The InstanceProvisioner interface hides the substrate. No production driver
+// ships today: FakeProvisioner is the only implementation, and `cmd/api` installs
+// no provisioner, so every org resolves to the shared instance.
 package provisioner
 
 import "context"
@@ -15,7 +15,7 @@ import "context"
 // persisting the handle.
 type InstanceHandle struct {
 	Endpoint string // ws:// admin endpoint the API dials
-	Handle   string // opaque driver handle (docker container id/name)
+	Handle   string // opaque driver handle for addressing the instance's workload
 	RootUser string
 	RootPass string
 	Host     string // best-effort host the instance runs on, for diagnostics
