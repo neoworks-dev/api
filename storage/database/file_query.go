@@ -261,6 +261,10 @@ func (s *SurrealStore) runFileSearch(ctx context.Context, query string, params m
 	return nil, nil
 }
 
+// rrfK is the Reciprocal Rank Fusion constant; 60 is the value from the original
+// RRF paper and a common default. Higher values flatten the contribution of rank.
+const rrfK = 60
+
 // fuseFileRRF merges the ranked arms by sum(1/(rrfK + rank)); each file scores
 // once per arm (rows are pre-sorted by score). Returns file ids in fused order.
 func fuseFileRRF(vectorRows, lexicalRows []dbFileSearchRow, limit int) []string {

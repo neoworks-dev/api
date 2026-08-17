@@ -25,16 +25,6 @@ type BoolFilter struct {
 	Eq *bool `json:"eq,omitempty"`
 }
 
-type Calendar struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	// One of: green red amber blue violet pink neutral.
-	Color     string `json:"color"`
-	IsDefault bool   `json:"is_default"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
-}
-
 type ClientDatabase struct {
 	ID        string `json:"id"`
 	ClientID  string `json:"client_id"`
@@ -64,12 +54,6 @@ type ConnectionProfile struct {
 	LastName  string  `json:"last_name"`
 	Email     *string `json:"email,omitempty"`
 	AvatarURL *string `json:"avatar_url,omitempty"`
-}
-
-type CreateCalendarInput struct {
-	Name      string `json:"name"`
-	Color     string `json:"color"`
-	IsDefault *bool  `json:"is_default,omitempty"`
 }
 
 // Returned once on creation. db_password is shown only once — store it securely.
@@ -102,44 +86,6 @@ type CreateClientResult struct {
 	Client *OAuthClient `json:"client"`
 	// null for public clients
 	Secret *string `json:"secret,omitempty"`
-}
-
-type CreateEventInput struct {
-	CalendarID              *string                `json:"calendarId,omitempty"`
-	Title                   string                 `json:"title"`
-	Description             *string                `json:"description,omitempty"`
-	Start                   string                 `json:"start"`
-	Duration                *string                `json:"duration,omitempty"`
-	TimeZone                *string                `json:"time_zone,omitempty"`
-	ShowWithoutTime         *bool                  `json:"show_without_time,omitempty"`
-	Status                  *string                `json:"status,omitempty"`
-	FreeBusyStatus          *string                `json:"free_busy_status,omitempty"`
-	Privacy                 *string                `json:"privacy,omitempty"`
-	Priority                *int                   `json:"priority,omitempty"`
-	Color                   *string                `json:"color,omitempty"`
-	Keywords                []string               `json:"keywords,omitempty"`
-	Participants            map[string]any         `json:"participants,omitempty"`
-	Locations               map[string]any         `json:"locations,omitempty"`
-	VirtualLocations        map[string]any         `json:"virtual_locations,omitempty"`
-	Alerts                  map[string]any         `json:"alerts,omitempty"`
-	Links                   map[string]any         `json:"links,omitempty"`
-	RelatedTo               map[string]any         `json:"related_to,omitempty"`
-	Localizations           map[string]any         `json:"localizations,omitempty"`
-	RecurrenceOverrides     map[string]any         `json:"recurrence_overrides,omitempty"`
-	RecurrenceRules         []*RecurrenceRuleInput `json:"recurrence_rules,omitempty"`
-	ExcludedRecurrenceRules []*RecurrenceRuleInput `json:"excluded_recurrence_rules,omitempty"`
-}
-
-// Create a memory. `sourceText` is required for searchable text memories; binary
-// kinds reference encrypted bytes via `file`. `searchable` defaults to false on
-// multi-tenant deployments (forced true on self-host).
-type CreateMemoryInput struct {
-	Kind           *string `json:"kind,omitempty"`
-	Title          *string `json:"title,omitempty"`
-	SourceText     *string `json:"sourceText,omitempty"`
-	File           *string `json:"file,omitempty"`
-	Searchable     *bool   `json:"searchable,omitempty"`
-	OrganizationID *string `json:"organizationId,omitempty"`
 }
 
 type CreateOrganizationInput struct {
@@ -181,68 +127,6 @@ type DateFilter struct {
 	Before     *string `json:"before,omitempty"`
 	After      *string `json:"after,omitempty"`
 	WithinLast *string `json:"withinLast,omitempty"`
-}
-
-type Event struct {
-	ID string `json:"id"`
-	// The user who owns this event (its creator).
-	OwnerID string `json:"owner_id"`
-	// The caller's relationship to this event: "owner", or — for an invited
-	//   participant — "accepted" | "pending" | "declined". Null if neither.
-	MyAttendance *string `json:"my_attendance,omitempty"`
-	// Globally-unique jsCalendar identifier (stable across instances).
-	UID string `json:"uid"`
-	// The calendar this event belongs to; drives its colour. Null = none.
-	CalendarID  *string `json:"calendar_id,omitempty"`
-	Title       string  `json:"title"`
-	Description *string `json:"description,omitempty"`
-	// jsCalendar LocalDateTime (no offset), e.g. 2026-06-14T09:00:00.
-	Start string `json:"start"`
-	// ISO-8601 duration, e.g. PT1H. Absent = instant.
-	Duration *string `json:"duration,omitempty"`
-	// IANA time zone; null = floating.
-	TimeZone                *string           `json:"time_zone,omitempty"`
-	ShowWithoutTime         bool              `json:"show_without_time"`
-	Status                  *string           `json:"status,omitempty"`
-	FreeBusyStatus          *string           `json:"free_busy_status,omitempty"`
-	Privacy                 *string           `json:"privacy,omitempty"`
-	Priority                *int              `json:"priority,omitempty"`
-	Color                   *string           `json:"color,omitempty"`
-	Sequence                *int              `json:"sequence,omitempty"`
-	Keywords                []string          `json:"keywords,omitempty"`
-	Participants            map[string]any    `json:"participants,omitempty"`
-	Locations               map[string]any    `json:"locations,omitempty"`
-	VirtualLocations        map[string]any    `json:"virtual_locations,omitempty"`
-	Alerts                  map[string]any    `json:"alerts,omitempty"`
-	Links                   map[string]any    `json:"links,omitempty"`
-	RelatedTo               map[string]any    `json:"related_to,omitempty"`
-	Localizations           map[string]any    `json:"localizations,omitempty"`
-	RecurrenceOverrides     map[string]any    `json:"recurrence_overrides,omitempty"`
-	RecurrenceRules         []*RecurrenceRule `json:"recurrence_rules,omitempty"`
-	ExcludedRecurrenceRules []*RecurrenceRule `json:"excluded_recurrence_rules,omitempty"`
-	CreatedAt               string            `json:"created_at"`
-	UpdatedAt               string            `json:"updated_at"`
-}
-
-// Structured per-field filter for events, built on the shared operator inputs
-// (see _shared.graphql). The `start` operators apply to the resolved start_time.
-type EventFilter struct {
-	Title          *StringFilter     `json:"title,omitempty"`
-	Description    *StringFilter     `json:"description,omitempty"`
-	Status         *StringFilter     `json:"status,omitempty"`
-	FreeBusyStatus *StringFilter     `json:"free_busy_status,omitempty"`
-	Privacy        *StringFilter     `json:"privacy,omitempty"`
-	TimeZone       *StringFilter     `json:"time_zone,omitempty"`
-	Color          *StringFilter     `json:"color,omitempty"`
-	Priority       *IntFilter        `json:"priority,omitempty"`
-	Sequence       *IntFilter        `json:"sequence,omitempty"`
-	Keywords       *StringListFilter `json:"keywords,omitempty"`
-	Start          *DateFilter       `json:"start,omitempty"`
-	CreatedAt      *DateFilter       `json:"created_at,omitempty"`
-	UpdatedAt      *DateFilter       `json:"updated_at,omitempty"`
-	And            []*EventFilter    `json:"and,omitempty"`
-	Or             []*EventFilter    `json:"or,omitempty"`
-	Not            *EventFilter      `json:"not,omitempty"`
 }
 
 type FieldDefInput struct {
@@ -336,48 +220,6 @@ type InvitePolicy struct {
 	Policy string `json:"policy"`
 }
 
-type Memory struct {
-	ID string `json:"id"`
-	// Owning organization id, when the memory is shared in an org (null = personal).
-	OrganizationID *string `json:"organization_id,omitempty"`
-	// text | image | audio | video | document.
-	Kind  string  `json:"kind"`
-	Title *string `json:"title,omitempty"`
-	// Plaintext source — present only when searchable; null otherwise.
-	SourceText *string `json:"source_text,omitempty"`
-	// File handler id for encrypted bytes (null = none).
-	File       *string `json:"file,omitempty"`
-	Searchable bool    `json:"searchable"`
-	Deleted    bool    `json:"deleted"`
-	CreatedAt  string  `json:"created_at"`
-	UpdatedAt  string  `json:"updated_at"`
-}
-
-type MemoryFilter struct {
-	Kind       *StringFilter   `json:"kind,omitempty"`
-	Title      *StringFilter   `json:"title,omitempty"`
-	Searchable *BoolFilter     `json:"searchable,omitempty"`
-	Deleted    *BoolFilter     `json:"deleted,omitempty"`
-	CreatedAt  *DateFilter     `json:"created_at,omitempty"`
-	UpdatedAt  *DateFilter     `json:"updated_at,omitempty"`
-	And        []*MemoryFilter `json:"and,omitempty"`
-	Or         []*MemoryFilter `json:"or,omitempty"`
-	Not        *MemoryFilter   `json:"not,omitempty"`
-}
-
-// A memory matched by searchMemories, with its fused relevance score and the
-// best-matching chunk text as a snippet.
-type MemorySearchHit struct {
-	Memory  *Memory `json:"memory"`
-	Score   float64 `json:"score"`
-	Snippet *string `json:"snippet,omitempty"`
-}
-
-type MemorySort struct {
-	Field     MemorySortField `json:"field"`
-	Direction *SortDirection  `json:"direction,omitempty"`
-}
-
 // One ordered migration step for a client database. Apply `schema` (declarative
 // DDL, idempotent) and/or `statements` (imperative SurrealQL, e.g. data backfills).
 // Each version runs at most once; the server records applied versions per database.
@@ -399,18 +241,6 @@ type MigrationResult struct {
 }
 
 type Mutation struct {
-}
-
-// A jsCalendar NDay: a weekday, optionally restricted to the Nth in the period.
-type NDay struct {
-	// Weekday code: mo tu we th fr sa su.
-	Day         string `json:"day"`
-	NthOfPeriod *int   `json:"nthOfPeriod,omitempty"`
-}
-
-type NDayInput struct {
-	Day         string `json:"day"`
-	NthOfPeriod *int   `json:"nthOfPeriod,omitempty"`
 }
 
 // A centre point plus radius for proximity search.
@@ -494,33 +324,6 @@ type QueryUsagePoint struct {
 	QueryCount        int     `json:"query_count"`
 	AvgLatencyMs      float64 `json:"avg_latency_ms"`
 	ActiveConnections int     `json:"active_connections"`
-}
-
-// A jsCalendar RecurrenceRule (subset).
-type RecurrenceRule struct {
-	// yearly | monthly | weekly | daily | hourly | minutely | secondly.
-	Frequency string `json:"frequency"`
-	Interval  *int   `json:"interval,omitempty"`
-	// Inclusive end, jsCalendar LocalDateTime.
-	Until          *string  `json:"until,omitempty"`
-	Count          *int     `json:"count,omitempty"`
-	FirstDayOfWeek *string  `json:"firstDayOfWeek,omitempty"`
-	ByDay          []*NDay  `json:"byDay,omitempty"`
-	ByMonthDay     []int    `json:"byMonthDay,omitempty"`
-	ByMonth        []string `json:"byMonth,omitempty"`
-	BySetPosition  []int    `json:"bySetPosition,omitempty"`
-}
-
-type RecurrenceRuleInput struct {
-	Frequency      string       `json:"frequency"`
-	Interval       *int         `json:"interval,omitempty"`
-	Until          *string      `json:"until,omitempty"`
-	Count          *int         `json:"count,omitempty"`
-	FirstDayOfWeek *string      `json:"firstDayOfWeek,omitempty"`
-	ByDay          []*NDayInput `json:"byDay,omitempty"`
-	ByMonthDay     []int        `json:"byMonthDay,omitempty"`
-	ByMonth        []string     `json:"byMonth,omitempty"`
-	BySetPosition  []int        `json:"bySetPosition,omitempty"`
 }
 
 type RefreshToken struct {
@@ -672,44 +475,6 @@ type TableDefInput struct {
 	SubjectPath *string `json:"subjectPath,omitempty"`
 }
 
-type UpdateCalendarInput struct {
-	Name      *string `json:"name,omitempty"`
-	Color     *string `json:"color,omitempty"`
-	IsDefault *bool   `json:"is_default,omitempty"`
-}
-
-type UpdateEventInput struct {
-	CalendarID              *string                `json:"calendarId,omitempty"`
-	Title                   *string                `json:"title,omitempty"`
-	Description             *string                `json:"description,omitempty"`
-	Start                   *string                `json:"start,omitempty"`
-	Duration                *string                `json:"duration,omitempty"`
-	TimeZone                *string                `json:"time_zone,omitempty"`
-	ShowWithoutTime         *bool                  `json:"show_without_time,omitempty"`
-	Status                  *string                `json:"status,omitempty"`
-	FreeBusyStatus          *string                `json:"free_busy_status,omitempty"`
-	Privacy                 *string                `json:"privacy,omitempty"`
-	Priority                *int                   `json:"priority,omitempty"`
-	Color                   *string                `json:"color,omitempty"`
-	Keywords                []string               `json:"keywords,omitempty"`
-	Participants            map[string]any         `json:"participants,omitempty"`
-	Locations               map[string]any         `json:"locations,omitempty"`
-	VirtualLocations        map[string]any         `json:"virtual_locations,omitempty"`
-	Alerts                  map[string]any         `json:"alerts,omitempty"`
-	Links                   map[string]any         `json:"links,omitempty"`
-	RelatedTo               map[string]any         `json:"related_to,omitempty"`
-	Localizations           map[string]any         `json:"localizations,omitempty"`
-	RecurrenceOverrides     map[string]any         `json:"recurrence_overrides,omitempty"`
-	RecurrenceRules         []*RecurrenceRuleInput `json:"recurrence_rules,omitempty"`
-	ExcludedRecurrenceRules []*RecurrenceRuleInput `json:"excluded_recurrence_rules,omitempty"`
-}
-
-// Partial update — omitted fields are left unchanged.
-type UpdateMemoryInput struct {
-	Title      *string `json:"title,omitempty"`
-	SourceText *string `json:"sourceText,omitempty"`
-}
-
 type UpdateOrganizationInput struct {
 	Name         *string `json:"name,omitempty"`
 	Description  *string `json:"description,omitempty"`
@@ -793,63 +558,6 @@ func (e *FileSortField) UnmarshalJSON(b []byte) error {
 }
 
 func (e FileSortField) MarshalJSON() ([]byte, error) {
-	var buf bytes.Buffer
-	e.MarshalGQL(&buf)
-	return buf.Bytes(), nil
-}
-
-type MemorySortField string
-
-const (
-	MemorySortFieldCreatedAt MemorySortField = "CREATED_AT"
-	MemorySortFieldUpdatedAt MemorySortField = "UPDATED_AT"
-	MemorySortFieldTitle     MemorySortField = "TITLE"
-)
-
-var AllMemorySortField = []MemorySortField{
-	MemorySortFieldCreatedAt,
-	MemorySortFieldUpdatedAt,
-	MemorySortFieldTitle,
-}
-
-func (e MemorySortField) IsValid() bool {
-	switch e {
-	case MemorySortFieldCreatedAt, MemorySortFieldUpdatedAt, MemorySortFieldTitle:
-		return true
-	}
-	return false
-}
-
-func (e MemorySortField) String() string {
-	return string(e)
-}
-
-func (e *MemorySortField) UnmarshalGQL(v any) error {
-	str, ok := v.(string)
-	if !ok {
-		return fmt.Errorf("enums must be strings")
-	}
-
-	*e = MemorySortField(str)
-	if !e.IsValid() {
-		return fmt.Errorf("%s is not a valid MemorySortField", str)
-	}
-	return nil
-}
-
-func (e MemorySortField) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
-}
-
-func (e *MemorySortField) UnmarshalJSON(b []byte) error {
-	s, err := strconv.Unquote(string(b))
-	if err != nil {
-		return err
-	}
-	return e.UnmarshalGQL(s)
-}
-
-func (e MemorySortField) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

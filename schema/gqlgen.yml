@@ -1,6 +1,5 @@
 schema:
   - schema/shared.graphql
-  - schema/Calendar.graphql
   - schema/Connections.graphql
   - schema/RefreshTokens.graphql
   - schema/Clients.graphql
@@ -10,7 +9,6 @@ schema:
   - schema/Scopes.graphql
   - schema/Email.graphql
   - schema/Notifications.graphql
-  - schema/Memories.graphql
   - schema/Settings.graphql
   - schema/File.graphql
   - schema/Albums.graphql

@@ -8,36 +8,37 @@ import (
 	"github.com/neoworks/auth/publicerr"
 )
 
-// compileEvent runs the event filter engine against a fresh compiler with one
-// FTS column declared, exercising the shared operator logic the same way the
-// stores do. (Contacts moved to E2EE envelopes and no longer server-filter.)
-func compileEvent(f *gql_model.EventFilter) (string, error) {
+// compileFile runs the file filter engine against a fresh compiler with one FTS
+// column declared, exercising the shared operator logic the same way the stores
+// do. Files are the vehicle because they are the last server-filtered entity —
+// contacts, calendar and memories are E2EE envelopes the server cannot read.
+func compileFile(f *gql_model.FileFilter) (string, error) {
 	c := newFilterCompiler()
-	c.ftsColumns = map[string]bool{"title": true}
-	expr := eventFilterEngine.compile(c, f)
+	c.ftsColumns = map[string]bool{"filename": true}
+	expr := fileFilterEngine.compile(c, f)
 	return expr, c.err
 }
 
 func TestFilterCompilerSearchRequiresFTSIndex(t *testing.T) {
-	// description has no FULLTEXT index → search must be rejected publicly.
-	_, err := compileEvent(&gql_model.EventFilter{
-		Description: &gql_model.StringFilter{Search: strptr("standup")},
+	// mime_type has no FULLTEXT index → search must be rejected publicly.
+	_, err := compileFile(&gql_model.FileFilter{
+		MimeType: &gql_model.StringFilter{Search: strptr("image")},
 	})
 	msg, ok := publicerr.Message(err)
 	if !ok {
 		t.Fatalf("want public error, got %v", err)
 	}
-	if !strings.Contains(msg, "FULLTEXT") || !strings.Contains(msg, "description") {
+	if !strings.Contains(msg, "FULLTEXT") || !strings.Contains(msg, "mime_type") {
 		t.Fatalf("message should name the field and FULLTEXT: %q", msg)
 	}
 }
 
 func TestFilterCompilerSearchOnIndexedColumnCompiles(t *testing.T) {
-	expr, err := compileEvent(&gql_model.EventFilter{
-		Title: &gql_model.StringFilter{Search: strptr("standup")},
+	expr, err := compileFile(&gql_model.FileFilter{
+		Filename: &gql_model.StringFilter{Search: strptr("invoice")},
 	})
 	if err != nil {
-		t.Fatalf("search on title should compile: %v", err)
+		t.Fatalf("search on filename should compile: %v", err)
 	}
 	if !strings.Contains(expr, "@@") {
 		t.Fatalf("expected an @@ match expression, got %q", expr)
@@ -45,7 +46,7 @@ func TestFilterCompilerSearchOnIndexedColumnCompiles(t *testing.T) {
 }
 
 func TestFilterCompilerInvalidDurationIsPublic(t *testing.T) {
-	_, err := compileEvent(&gql_model.EventFilter{
+	_, err := compileFile(&gql_model.FileFilter{
 		CreatedAt: &gql_model.DateFilter{WithinLast: strptr("30x")},
 	})
 	msg, ok := publicerr.Message(err)
@@ -59,24 +60,24 @@ func TestFilterCompilerInvalidDurationIsPublic(t *testing.T) {
 
 func TestFilterCompilerDepthCapIsPublic(t *testing.T) {
 	// Nest Not deeper than maxFilterDepth.
-	root := &gql_model.EventFilter{}
+	root := &gql_model.FileFilter{}
 	node := root
 	for i := 0; i <= maxFilterDepth+1; i++ {
-		child := &gql_model.EventFilter{}
+		child := &gql_model.FileFilter{}
 		node.Not = child
 		node = child
 	}
-	node.Priority = &gql_model.IntFilter{Eq: intptr(1)}
+	node.Size = &gql_model.IntFilter{Eq: intptr(1)}
 
-	_, err := compileEvent(root)
+	_, err := compileFile(root)
 	if _, ok := publicerr.Message(err); !ok {
 		t.Fatalf("want public depth-cap error, got %v", err)
 	}
 }
 
 func TestFilterCompilerValidFilterHasNoError(t *testing.T) {
-	expr, err := compileEvent(&gql_model.EventFilter{
-		Priority:  &gql_model.IntFilter{Eq: intptr(5)},
+	expr, err := compileFile(&gql_model.FileFilter{
+		Size:      &gql_model.IntFilter{Eq: intptr(5)},
 		CreatedAt: &gql_model.DateFilter{WithinLast: strptr("30d")},
 	})
 	if err != nil {

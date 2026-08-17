@@ -113,9 +113,6 @@ func main() {
 	issuer := oauth.NewTokenIssuer(keys.PrivateKey(), issuerURL)
 	pushSender := push.NewSender(push.ConfigFromEnv())
 
-	// Background jobs: fire calendar reminders as notifications.
-	scheduler.NewReminderScheduler(surreal, pushSender).Start(context.Background())
-
 	// Background job: purge expired space-item tombstones and advance purge horizons.
 	scheduler.NewSpacePurgeScheduler(surreal).Start(context.Background())
 
@@ -155,9 +152,6 @@ func main() {
 		slog.Error("seed openschema registry", "error", err)
 	}
 
-	// Background job: embed memory chunks the synchronous path could not, retry
-	// failures, and re-embed chunks stale after a model-tier change.
-	scheduler.NewEmbedBackfillScheduler(surreal, embedder).Start(context.Background())
 	srv := handler.NewDefaultServer(
 		gql.NewExecutableSchema(gql.Config{Resolvers: resolver}),
 	)

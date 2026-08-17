@@ -44,10 +44,7 @@ type SurrealStore struct {
 	queryMetrics *queryMetrics
 
 	Spaces      *SpaceStore
-	Events      *EventStore
-	Calendars   *CalendarStore
 	Connections *ConnectionStore
-	Memories    *MemoryStore
 	Settings    *SettingStore
 	Albums      *AlbumStore
 }
@@ -92,10 +89,7 @@ func NewSurrealStore(url, user, pass, ns, dbName string) (*SurrealStore, error) 
 		sharedTenant: surrealTarget{Endpoint: url, User: user, Pass: pass},
 	}
 	store.Spaces = &SpaceStore{DB: db}
-	store.Events = &EventStore{DB: db}
-	store.Calendars = &CalendarStore{DB: db}
 	store.Connections = &ConnectionStore{DB: db}
-	store.Memories = &MemoryStore{DB: db}
 	store.Settings = &SettingStore{DB: db}
 	store.Albums = &AlbumStore{DB: db}
 	return store, nil
