@@ -30,9 +30,11 @@ describe("authentication", () => {
   });
 
   test("a valid token authenticates (positive control) → 200, no errors", async () => {
-    const r = await gql(`{ contactCount }`, { token });
+    // A query the server can still answer: contacts, calendar and memories are
+    // encrypted envelopes now and have no GraphQL surface at all.
+    const r = await gql(`{ myNotifications { id } }`, { token });
     expect(r.status).toBe(200);
     expect(r.errors).toBeUndefined();
-    expect(typeof (r.data as { contactCount: number }).contactCount).toBe("number");
+    expect(Array.isArray((r.data as { myNotifications: unknown[] }).myNotifications)).toBe(true);
   });
 });

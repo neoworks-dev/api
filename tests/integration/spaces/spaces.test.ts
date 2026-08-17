@@ -43,6 +43,8 @@ interface TestUser {
 	userId: string
 	scopeKp: { publicKey: Uint8Array; privateKey: Uint8Array }
 	signKp: { publicKey: Uint8Array; privateKey: Uint8Array }
+	/** Kept so a test can derive another collection's scope keypair. */
+	scopeMaster: Uint8Array
 }
 
 function jwtSub(token: string): string {
@@ -59,6 +61,7 @@ async function makeUser(): Promise<TestUser> {
 		userId: jwtSub(token),
 		scopeKp: scopeApi.scopeKeypair(scopeMaster, COLLECTION),
 		signKp: spaceApi.deriveSigningKeypair(amk),
+		scopeMaster,
 	}
 	// Publish directory keys the way the Vault does on unlock.
 	await api(user, 'PUT', '/api/v1/keys/public', {
@@ -83,15 +86,16 @@ async function api(user: TestUser, method: string, path: string, body?: unknown)
 	})
 }
 
-/** Encrypts one contact row exactly like the Vault does. */
+/** Encrypts one row exactly like the Vault does. */
 async function sealRow(
 	user: TestUser,
 	spaceKey: Uint8Array,
 	spaceId: string,
 	header: { itemId: string; keyEpoch: number; schemaVer: number; baseSeq: number; deleted: boolean },
 	plaintext: Uint8Array,
+	collection: string = COLLECTION,
 ): Promise<{ blob: string; sig: string }> {
-	const aad = spaceApi.buildRowAad({ ...header, spaceId, collection: COLLECTION })
+	const aad = spaceApi.buildRowAad({ ...header, spaceId, collection })
 	const rowKey = spaceApi.deriveRowKey(spaceKey, header.itemId)
 	const key = await crypto.subtle.importKey('raw', rowKey, 'AES-GCM', false, ['encrypt', 'decrypt'])
 	const iv = crypto.getRandomValues(new Uint8Array(12))
@@ -100,6 +104,41 @@ async function sealRow(
 	blob.set(iv, 0)
 	blob.set(ct, 12)
 	return {
+		blob: b64(blob),
+		sig: spaceApi.signEnvelope(aad, blob, user.signKp.privateKey),
+	}
+}
+
+/**
+ * The history entry a content write appends. Every accepted push carries at
+ * least one: the server rejects a content write without versions, because a row
+ * with no recoverable history is a row whose past the client silently dropped.
+ */
+async function sealVersion(
+	user: TestUser,
+	spaceKey: Uint8Array,
+	spaceId: string,
+	header: {
+		itemId: string
+		versionId: string
+		keyEpoch: number
+		schemaVer: number
+		baseSeq: number
+		deleted: boolean
+	},
+	plaintext: Uint8Array,
+	collection: string = COLLECTION,
+): Promise<{ version_id: string; blob: string; sig: string }> {
+	const aad = spaceApi.buildVersionAad({ ...header, spaceId, collection })
+	const versionKey = spaceApi.deriveVersionKey(spaceKey, header.versionId)
+	const key = await crypto.subtle.importKey('raw', versionKey, 'AES-GCM', false, ['encrypt', 'decrypt'])
+	const iv = crypto.getRandomValues(new Uint8Array(12))
+	const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: aad }, key, plaintext))
+	const blob = new Uint8Array(12 + ct.length)
+	blob.set(iv, 0)
+	blob.set(ct, 12)
+	return {
+		version_id: header.versionId,
 		blob: b64(blob),
 		sig: spaceApi.signEnvelope(aad, blob, user.signKp.privateKey),
 	}
@@ -118,11 +157,12 @@ async function openRow(
 		sig: string
 	},
 	signerPub: string,
+	collection: string = COLLECTION,
 ): Promise<Uint8Array> {
 	const aad = spaceApi.buildRowAad({
 		itemId: envelope.item_id,
 		spaceId,
-		collection: COLLECTION,
+		collection,
 		keyEpoch: envelope.key_epoch,
 		schemaVer: envelope.schema_ver,
 		baseSeq: envelope.base_seq,
@@ -189,6 +229,13 @@ describe('spaces E2E', () => {
 			{ itemId, keyEpoch: 1, schemaVer: 1, baseSeq: 0, deleted: false },
 			secret,
 		)
+		const firstVersion = await sealVersion(
+			alice,
+			spaceKey,
+			spaceId,
+			{ itemId, versionId: crypto.randomUUID(), keyEpoch: 1, schemaVer: 1, baseSeq: 0, deleted: false },
+			secret,
+		)
 		const pushRes = await api(alice, 'PUT', `/api/v1/spaces/${spaceId}/items/${itemId}`, {
 			base_seq: 0,
 			key_epoch: 1,
@@ -196,6 +243,7 @@ describe('spaces E2E', () => {
 			deleted: false,
 			blob: sealed.blob,
 			sig: sealed.sig,
+			versions: [firstVersion],
 		})
 		expect(pushRes.ok).toBe(true)
 		expect((await pushRes.json()).seq).toBe(1)
@@ -249,6 +297,13 @@ describe('spaces E2E', () => {
 			{ itemId, keyEpoch: 1, schemaVer: 1, baseSeq: 1, deleted: false },
 			bobEdit,
 		)
+		const bobVersion = await sealVersion(
+			bob,
+			bobSpaceKey,
+			spaceId,
+			{ itemId, versionId: crypto.randomUUID(), keyEpoch: 1, schemaVer: 1, baseSeq: 1, deleted: false },
+			bobEdit,
+		)
 		const bobPush = await api(bob, 'PUT', `/api/v1/spaces/${spaceId}/items/${itemId}`, {
 			base_seq: 1,
 			key_epoch: 1,
@@ -256,6 +311,7 @@ describe('spaces E2E', () => {
 			deleted: false,
 			blob: bobSealed.blob,
 			sig: bobSealed.sig,
+			versions: [bobVersion],
 		})
 		expect(bobPush.ok).toBe(true)
 
@@ -267,6 +323,13 @@ describe('spaces E2E', () => {
 			{ itemId, keyEpoch: 1, schemaVer: 1, baseSeq: 1, deleted: false },
 			secret,
 		)
+		const staleVersion = await sealVersion(
+			alice,
+			spaceKey,
+			spaceId,
+			{ itemId, versionId: crypto.randomUUID(), keyEpoch: 1, schemaVer: 1, baseSeq: 1, deleted: false },
+			secret,
+		)
 		const conflictRes = await api(alice, 'PUT', `/api/v1/spaces/${spaceId}/items/${itemId}`, {
 			base_seq: 1,
 			key_epoch: 1,
@@ -274,6 +337,7 @@ describe('spaces E2E', () => {
 			deleted: false,
 			blob: staleSealed.blob,
 			sig: staleSealed.sig,
+			versions: [staleVersion],
 		})
 		expect(conflictRes.status).toBe(409)
 		const conflictBody = await conflictRes.json()
@@ -306,9 +370,81 @@ describe('spaces E2E', () => {
 			deleted: false,
 			blob: staleSealed.blob,
 			sig: staleSealed.sig,
+			versions: [staleVersion],
 		})
 		expect(oldEpochPush.status).toBe(409)
 		expect((await oldEpochPush.json()).error).toBe('stale_epoch')
+	}, 60_000)
+
+	test('one table serves every collection, keyed by its space', async () => {
+		if (!serverUp) return
+		const user = await makeUser()
+
+		// The same item uuid in a calendar space and a memories space. Under the
+		// old flat ids these would have been one row fighting over one key; the
+		// composite key makes them two rows that cannot see each other.
+		const itemId = crypto.randomUUID()
+		const written: Record<string, { spaceId: string; key: Uint8Array; text: string }> = {}
+
+		for (const collection of ['calendar', 'memories'] as const) {
+			const scopeKp = scopeApi.scopeKeypair(user.scopeMaster, collection)
+			await api(user, 'PUT', '/api/v1/keys/scope-public', {
+				scope: collection,
+				public_key: b64(scopeKp.publicKey),
+			})
+
+			const spaceId = crypto.randomUUID()
+			const key = spaceApi.mintSpaceKey()
+			const createRes = await api(user, 'POST', '/api/v1/spaces', {
+				space_id: spaceId,
+				collection,
+				kind: 'shared',
+				wrapped_key: spaceApi.wrapSpaceKey(key, b64(scopeKp.publicKey)),
+				signature: spaceApi.signWrap(spaceId, user.userId, 1, key, user.signKp.privateKey),
+			})
+			expect(createRes.ok).toBe(true)
+
+			const text = collection === 'calendar' ? '{"title":"Standup"}' : '{"source_text":"a ramble"}'
+			const plaintext = new TextEncoder().encode(text)
+			const header = { itemId, keyEpoch: 1, schemaVer: 1, baseSeq: 0, deleted: false }
+			const sealed = await sealRow(user, key, spaceId, header, plaintext, collection)
+			const version = await sealVersion(
+				user,
+				key,
+				spaceId,
+				{ ...header, versionId: crypto.randomUUID() },
+				plaintext,
+				collection,
+			)
+
+			const pushRes = await api(user, 'PUT', `/api/v1/spaces/${spaceId}/items/${itemId}`, {
+				base_seq: 0,
+				key_epoch: 1,
+				schema_ver: 1,
+				deleted: false,
+				blob: sealed.blob,
+				sig: sealed.sig,
+				versions: [version],
+			})
+			expect(pushRes.ok).toBe(true)
+			// Each space counts its own sequence from 1, sharing a table or not.
+			expect((await pushRes.json()).seq).toBe(1)
+			written[collection] = { spaceId, key, text }
+		}
+
+		// Each space pulls back exactly its own row, decrypting under its own key.
+		for (const collection of ['calendar', 'memories'] as const) {
+			const { spaceId, key, text } = written[collection]!
+			const page = await (await api(user, 'GET', `/api/v1/spaces/${spaceId}/items?since=0`)).json()
+			expect(page.items.length).toBe(1)
+			expect(page.items[0].item_id).toBe(itemId)
+
+			const directory = await (
+				await api(user, 'GET', `/api/v1/keys/public?user=${user.userId}&scope=${collection}`)
+			).json()
+			const plain = await openRow(key, spaceId, page.items[0], directory.sign_public_key, collection)
+			expect(new TextDecoder().decode(plain)).toBe(text)
+		}
 	}, 60_000)
 
 	test('personal space create is idempotent across devices', async () => {
