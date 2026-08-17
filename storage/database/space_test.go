@@ -23,8 +23,8 @@ func cleanupSpaces(t *testing.T, root *surrealdb.DB, userIDs ...models.RecordID)
 	ctx := context.Background()
 	t.Cleanup(func() {
 		for _, u := range userIDs {
-			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE contact_version WHERE space.owner = $u", map[string]any{"u": u})
-			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE contact WHERE space.owner = $u", map[string]any{"u": u})
+			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE item_version WHERE space.owner = $u", map[string]any{"u": u})
+			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE item WHERE space.owner = $u", map[string]any{"u": u})
 			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE space_member WHERE space.owner = $u", map[string]any{"u": u})
 			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE space WHERE owner = $u", map[string]any{"u": u})
 			_, _ = surrealdb.Query[[]any](ctx, root, "DELETE $u", map[string]any{"u": u})
@@ -54,14 +54,14 @@ func TestSpaceLifecycle(t *testing.T) {
 
 	// Personal space create is idempotent per (owner, collection).
 	first, err := spaces.Create(ctx, owner, CreateSpaceParams{
-		SpaceID:    "sp1_" + suffix,
+		SpaceID:    newTestUUID(),
 		Collection: "contacts", Kind: "personal", WrappedKey: "wrap1", Signature: "sig1",
 	})
 	if err != nil {
 		t.Fatalf("create personal: %v", err)
 	}
 	second, err := spaces.Create(ctx, owner, CreateSpaceParams{
-		SpaceID:    "sp2_" + suffix,
+		SpaceID:    newTestUUID(),
 		Collection: "contacts", Kind: "personal", WrappedKey: "other", Signature: "other",
 	})
 	if err != nil {
@@ -76,13 +76,13 @@ func TestSpaceLifecycle(t *testing.T) {
 
 	// Shared space + invite flow.
 	shared, err := spaces.Create(ctx, owner, CreateSpaceParams{
-		SpaceID:    "spS_" + suffix,
+		SpaceID:    newTestUUID(),
 		Collection: "contacts", Kind: "shared", WrappedKey: "wrapS", Signature: "sigS",
 	})
 	if err != nil {
 		t.Fatalf("create shared: %v", err)
 	}
-	sharedID := models.NewRecordID("space", shared.Space.ID)
+	sharedID := spaceRecord(t, shared.Space.ID)
 
 	// Invite must cover all live epochs (currently just epoch 1).
 	if _, err := spaces.InviteMember(ctx, sharedID, owner, InviteParams{
@@ -99,13 +99,13 @@ func TestSpaceLifecycle(t *testing.T) {
 	}
 
 	// Invited member cannot pull until accepting.
-	if _, err := spaces.PullContacts(ctx, sharedID, partner, 0, 10, false); !errors.Is(err, ErrSpaceForbidden) {
+	if _, err := spaces.PullItems(ctx, sharedID, partner, 0, 10, false); !errors.Is(err, ErrSpaceForbidden) {
 		t.Fatalf("invited member pull: want forbidden, got %v", err)
 	}
 	if err := spaces.Accept(ctx, sharedID, partner, "acceptSig"); err != nil {
 		t.Fatalf("accept: %v", err)
 	}
-	if _, err := spaces.PullContacts(ctx, sharedID, partner, 0, 10, false); err != nil {
+	if _, err := spaces.PullItems(ctx, sharedID, partner, 0, 10, false); err != nil {
 		t.Fatalf("active member pull: %v", err)
 	}
 
@@ -184,12 +184,12 @@ func TestSpaceLifecycle(t *testing.T) {
 	if epoch != 2 {
 		t.Fatalf("remove should report current epoch 2, got %d", epoch)
 	}
-	if _, err := spaces.PullContacts(ctx, sharedID, partner, 0, 10, false); !errors.Is(err, ErrSpaceForbidden) {
+	if _, err := spaces.PullItems(ctx, sharedID, partner, 0, 10, false); !errors.Is(err, ErrSpaceForbidden) {
 		t.Fatalf("removed member pull: want forbidden, got %v", err)
 	}
 
 	// Personal spaces cannot be deleted; shared ones can.
-	personalID := models.NewRecordID("space", first.Space.ID)
+	personalID := spaceRecord(t, first.Space.ID)
 	if err := spaces.Delete(ctx, personalID, owner); err == nil {
 		t.Fatal("deleting personal space must fail")
 	}

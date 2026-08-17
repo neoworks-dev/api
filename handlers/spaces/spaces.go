@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/gofrs/uuid"
 	"github.com/neoworks/auth/middleware"
 	"github.com/neoworks/auth/publicerr"
 	"github.com/neoworks/auth/storage/database"
@@ -108,7 +109,11 @@ func (h *Handler) getSpace(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	detail, err := h.store.Spaces.Get(r.Context(), spaceID(r), userID)
+	space, ok := spaceID(w, r)
+	if !ok {
+		return
+	}
+	detail, err := h.store.Spaces.Get(r.Context(), space, userID)
 	if err != nil {
 		writeStoreError(w, "getSpace", err)
 		return
@@ -121,7 +126,11 @@ func (h *Handler) deleteSpace(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.store.Spaces.Delete(r.Context(), spaceID(r), userID); err != nil {
+	space, ok := spaceID(w, r)
+	if !ok {
+		return
+	}
+	if err := h.store.Spaces.Delete(r.Context(), space, userID); err != nil {
 		writeStoreError(w, "deleteSpace", err)
 		return
 	}
@@ -165,7 +174,11 @@ func (h *Handler) inviteMember(w http.ResponseWriter, r *http.Request) {
 		wraps = append(wraps, database.WrappedKey(wk))
 	}
 
-	member, err := h.store.Spaces.InviteMember(r.Context(), spaceID(r), userID, database.InviteParams{
+	space, ok := spaceID(w, r)
+	if !ok {
+		return
+	}
+	member, err := h.store.Spaces.InviteMember(r.Context(), space, userID, database.InviteParams{
 		MemberID:    memberID,
 		Role:        body.Role,
 		WrappedKeys: wraps,
@@ -193,7 +206,11 @@ func (h *Handler) acceptMembership(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.store.Spaces.Accept(r.Context(), spaceID(r), userID, body.AcceptSignature); err != nil {
+	space, ok := spaceID(w, r)
+	if !ok {
+		return
+	}
+	if err := h.store.Spaces.Accept(r.Context(), space, userID, body.AcceptSignature); err != nil {
 		writeStoreError(w, "acceptMembership", err)
 		return
 	}
@@ -207,9 +224,13 @@ func (h *Handler) removeMember(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	space, ok := spaceID(w, r)
+	if !ok {
+		return
+	}
 	memberID := models.NewRecordID("user", chi.URLParam(r, "user"))
 
-	keyEpoch, err := h.store.Spaces.RemoveMember(r.Context(), spaceID(r), userID, memberID)
+	keyEpoch, err := h.store.Spaces.RemoveMember(r.Context(), space, userID, memberID)
 	if err != nil {
 		writeStoreError(w, "removeMember", err)
 		return
@@ -255,7 +276,11 @@ func (h *Handler) rotateKey(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	newEpoch, err := h.store.Spaces.Rotate(r.Context(), spaceID(r), userID, database.RotateParams{
+	space, ok := spaceID(w, r)
+	if !ok {
+		return
+	}
+	newEpoch, err := h.store.Spaces.Rotate(r.Context(), space, userID, database.RotateParams{
 		ExpectedEpoch: body.ExpectedEpoch,
 		Rewrapped:     rewraps,
 	})
@@ -295,8 +320,16 @@ func (h *Handler) resolveMemberID(w http.ResponseWriter, r *http.Request, userID
 	return *user.ID, true
 }
 
-func spaceID(r *http.Request) models.RecordID {
-	return models.NewRecordID("space", chi.URLParam(r, "id"))
+// spaceID parses the {id} path parameter. Space ids are uuids — every item id in
+// the space embeds one — so a malformed id is a client error rather than a
+// lookup that quietly misses.
+func spaceID(w http.ResponseWriter, r *http.Request) (models.RecordID, bool) {
+	parsed, err := uuid.FromString(chi.URLParam(r, "id"))
+	if err != nil {
+		jsonErr(w, "space id must be a uuid", http.StatusBadRequest)
+		return models.RecordID{}, false
+	}
+	return models.NewRecordID("space", models.UUID{UUID: parsed}), true
 }
 
 func callerID(w http.ResponseWriter, r *http.Request) (models.RecordID, bool) {

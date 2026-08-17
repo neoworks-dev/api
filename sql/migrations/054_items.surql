@@ -70,6 +70,11 @@ DEFINE INDEX idx_item_deleted_at  ON item FIELDS deleted_at;
 -- referential typing; the parent is still reachable as
 -- item:[space_uuid, item_id]. Predicates must bind it first
 -- (`LET $iid = <uuid>$item`) — a cast inside the predicate defeats the index.
+--
+-- The index leads with `space` because item uuids are client-chosen and only
+-- unique *within* a space: two spaces may legitimately hold the same uuid (a
+-- shared copy of a personal row), and those two items must not see each other's
+-- history. Reading history by item_id alone returns both.
 DEFINE TABLE item_version SCHEMAFULL;
 DEFINE FIELD item_id    ON item_version TYPE uuid           READONLY;
 DEFINE FIELD space      ON item_version TYPE record<space>  READONLY;
@@ -83,4 +88,4 @@ DEFINE FIELD sig        ON item_version TYPE option<string> READONLY;
 DEFINE FIELD author     ON item_version TYPE record<user>   READONLY;
 DEFINE FIELD created_at ON item_version TYPE datetime VALUE time::now() READONLY;
 
-DEFINE INDEX idx_item_version_item ON item_version FIELDS item_id, seq;
+DEFINE INDEX idx_item_version_item ON item_version FIELDS space, item_id, seq;

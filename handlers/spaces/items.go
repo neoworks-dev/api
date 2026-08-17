@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/gofrs/uuid"
 	"github.com/neoworks/auth/storage/database"
 )
 
@@ -40,7 +41,11 @@ func (h *Handler) pullItems(w http.ResponseWriter, r *http.Request) {
 	}
 	staleOnly := r.URL.Query().Get("stale_epoch") == "true"
 
-	page, err := h.store.Spaces.PullContacts(r.Context(), spaceID(r), userID, since, limit, staleOnly)
+	space, ok := spaceID(w, r)
+	if !ok {
+		return
+	}
+	page, err := h.store.Spaces.PullItems(r.Context(), space, userID, since, limit, staleOnly)
 	if err != nil {
 		writeStoreError(w, "pullItems", err)
 		return
@@ -107,13 +112,13 @@ func (b pushItemBody) validateVersions() string {
 	return ""
 }
 
-func (b pushItemBody) toParams(contactID string) database.PushContactParams {
+func (b pushItemBody) toParams(itemID string) database.PushItemParams {
 	versions := make([]database.PushVersionParams, 0, len(b.Versions))
 	for _, version := range b.Versions {
 		versions = append(versions, database.PushVersionParams(version))
 	}
-	return database.PushContactParams{
-		ContactID: contactID,
+	return database.PushItemParams{
+		ItemID:    itemID,
 		BaseSeq:   b.BaseSeq,
 		KeyEpoch:  b.KeyEpoch,
 		SchemaVer: b.SchemaVer,
@@ -142,8 +147,16 @@ func (h *Handler) pushItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	outcome, err := h.store.Spaces.PushContact(r.Context(), spaceID(r), userID,
-		body.toParams(chi.URLParam(r, "item")))
+	space, ok := spaceID(w, r)
+	if !ok {
+		return
+	}
+	itemID, ok := itemUUID(w, r)
+	if !ok {
+		return
+	}
+
+	outcome, err := h.store.Spaces.PushItem(r.Context(), space, userID, body.toParams(itemID))
 	if err != nil && outcome == nil {
 		writeStoreError(w, "pushItem", err)
 		return
@@ -166,7 +179,7 @@ func (h *Handler) pushItem(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, "pushItem", err)
 	default:
 		writeJSON(w, map[string]any{
-			"item_id":   outcome.ContactID,
+			"item_id":   outcome.ItemID,
 			"seq":       outcome.Seq,
 			"key_epoch": body.KeyEpoch,
 		})
@@ -196,7 +209,7 @@ func (h *Handler) pushItemBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	params := make([]database.PushContactParams, 0, len(body.Items))
+	params := make([]database.PushItemParams, 0, len(body.Items))
 	for _, item := range body.Items {
 		if item.ItemID == "" {
 			jsonErr(w, "item_id required on every item", http.StatusBadRequest)
@@ -209,7 +222,11 @@ func (h *Handler) pushItemBatch(w http.ResponseWriter, r *http.Request) {
 		params = append(params, item.toParams(item.ItemID))
 	}
 
-	outcomes, err := h.store.Spaces.PushContacts(r.Context(), spaceID(r), userID, params)
+	space, ok := spaceID(w, r)
+	if !ok {
+		return
+	}
+	outcomes, err := h.store.Spaces.PushItems(r.Context(), space, userID, params)
 	if err != nil {
 		writeStoreError(w, "pushItemBatch", err)
 		return
@@ -223,13 +240,33 @@ func (h *Handler) listItemVersions(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	versions, err := h.store.Spaces.ListContactVersions(r.Context(), spaceID(r), userID,
-		chi.URLParam(r, "item"))
+	space, ok := spaceID(w, r)
+	if !ok {
+		return
+	}
+	itemID, ok := itemUUID(w, r)
+	if !ok {
+		return
+	}
+
+	versions, err := h.store.Spaces.ListItemVersions(r.Context(), space, userID, itemID)
 	if err != nil {
 		writeStoreError(w, "listItemVersions", err)
 		return
 	}
 	writeJSON(w, map[string]any{"versions": versions})
+}
+
+// itemUUID parses the {item} path parameter. Item ids are client-chosen uuids —
+// the AAD binds one before upload and the record key embeds it — so anything
+// else is a client error.
+func itemUUID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	raw := chi.URLParam(r, "item")
+	if _, err := uuid.FromString(raw); err != nil {
+		jsonErr(w, "item id must be a uuid", http.StatusBadRequest)
+		return "", false
+	}
+	return raw, true
 }
 
 func queryInt(r *http.Request, name string, fallback int) int {

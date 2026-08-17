@@ -22,13 +22,6 @@ type dbUserProfile struct {
 	Email     *string          `json:"email,omitempty"`
 }
 
-func recordIDString(r *models.RecordID) string {
-	if r == nil {
-		return ""
-	}
-	return fmt.Sprintf("%v", r.ID)
-}
-
 // profileWithGrant builds a ConnectionProfile, populating consented fields only.
 func profileWithGrant(u *dbUserProfile, granted []string) *gql_model.ConnectionProfile {
 	p := &gql_model.ConnectionProfile{

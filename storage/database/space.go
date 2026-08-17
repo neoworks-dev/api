@@ -11,7 +11,7 @@ import (
 	"github.com/surrealdb/surrealdb.go/pkg/models"
 )
 
-// Client-safe errors shared by the space and contact stores. Handlers map
+// Client-safe errors shared by the space and item stores. Handlers map
 // them to HTTP statuses (403 / 409 / 409 / 410).
 var (
 	ErrSpaceForbidden = publicerr.New("forbidden")
@@ -136,7 +136,8 @@ func (r dbSpaceMember) toMember() SpaceMember {
 // ── Create ────────────────────────────────────────────────────────────────────
 
 type CreateSpaceParams struct {
-	// Client-chosen space UUID — the wrap signature binds it before upload.
+	// Client-chosen space UUID — the wrap signature binds it before upload, and
+	// every item id in the space embeds it.
 	SpaceID    string
 	Collection string
 	Kind       string
@@ -150,12 +151,17 @@ type CreateSpaceParams struct {
 // Idempotent for kind == 'personal': a second call returns the existing personal
 // space for (owner, collection) without touching it.
 func (s *SpaceStore) Create(ctx context.Context, userID models.RecordID, p CreateSpaceParams) (*SpaceMembership, error) {
+	spaceUUID, err := parseUUID(p.SpaceID)
+	if err != nil {
+		return nil, publicerr.New("space_id must be a uuid")
+	}
+
 	assignments := []string{
 		"owner = $user", "collection = $collection", "kind = $kind",
 	}
 	params := map[string]any{
 		"user":       userID,
-		"space_uuid": p.SpaceID,
+		"space_uuid": spaceUUID,
 		"collection": p.Collection,
 		"kind":       p.Kind,
 		"wrapped_keys": []WrappedKey{{
@@ -475,8 +481,8 @@ func (s *SpaceStore) Delete(ctx context.Context, spaceID, callerID models.Record
 
 	_, err = surrealdb.Query[[]any](ctx, s.DB, `
 		BEGIN TRANSACTION;
-		DELETE contact_version WHERE space = $space;
-		DELETE contact WHERE space = $space;
+		DELETE item_version WHERE space = $space;
+		DELETE item WHERE space = $space;
 		DELETE space_member WHERE space = $space;
 		DELETE $space;
 		COMMIT TRANSACTION;`,
@@ -495,7 +501,7 @@ func (s *SpaceStore) Delete(ctx context.Context, spaceID, callerID models.Record
 func (s *SpaceStore) MinLiveEpoch(ctx context.Context, spaceID models.RecordID, currentEpoch int) (int, error) {
 	// ORDER BY + LIMIT instead of math::min — aggregates decode as CBOR floats.
 	results, err := surrealdb.Query[[]int](ctx, s.DB, `
-		SELECT VALUE key_epoch FROM contact
+		SELECT VALUE key_epoch FROM item
 		WHERE space = $space AND deleted = false
 		ORDER BY key_epoch ASC LIMIT 1`,
 		map[string]any{"space": spaceID},
