@@ -29,6 +29,7 @@ func (h *Handler) Register(r chi.Router) {
 	r.Post("/api/v1/spaces", h.createSpace)
 	r.Get("/api/v1/spaces", h.listSpaces)
 	r.Get("/api/v1/spaces/{id}", h.getSpace)
+	r.Patch("/api/v1/spaces/{id}", h.renameSpace)
 	r.Delete("/api/v1/spaces/{id}", h.deleteSpace)
 	r.Post("/api/v1/spaces/{id}/members", h.inviteMember)
 	r.Post("/api/v1/spaces/{id}/accept", h.acceptMembership)
@@ -119,6 +120,34 @@ func (h *Handler) getSpace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, detail)
+}
+
+// renameSpace replaces the space's encrypted display label. The body carries
+// ciphertext the client sealed under the space key — the server cannot read the
+// old name or the new one.
+func (h *Handler) renameSpace(w http.ResponseWriter, r *http.Request) {
+	userID, ok := callerID(w, r)
+	if !ok {
+		return
+	}
+	space, ok := spaceID(w, r)
+	if !ok {
+		return
+	}
+
+	var body struct {
+		NameEnc string `json:"name_enc"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.NameEnc == "" {
+		jsonErr(w, "name_enc required", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.store.Spaces.Rename(r.Context(), space, userID, body.NameEnc); err != nil {
+		writeStoreError(w, "renameSpace", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) deleteSpace(w http.ResponseWriter, r *http.Request) {

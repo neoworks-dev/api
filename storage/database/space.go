@@ -206,6 +206,27 @@ func (s *SpaceStore) Create(ctx context.Context, userID models.RecordID, p Creat
 	return nil, fmt.Errorf("create space: empty result")
 }
 
+// Rename sets the space's client-encrypted display label. Owner only — the label
+// is what members see, so changing it is an ownership act, not a per-member
+// preference. The server stores the ciphertext and never learns the name.
+func (s *SpaceStore) Rename(ctx context.Context, spaceID, callerID models.RecordID, nameEnc string) error {
+	space, err := s.space(ctx, spaceID)
+	if err != nil {
+		return err
+	}
+	if recordIDString(space.Owner) != recordIDString(&callerID) {
+		return ErrSpaceForbidden
+	}
+	_, err = surrealdb.Query[[]any](ctx, s.DB,
+		"UPDATE $space SET name_enc = $name_enc",
+		map[string]any{"space": spaceID, "name_enc": nameEnc},
+	)
+	if err != nil {
+		return fmt.Errorf("rename space: %w", err)
+	}
+	return nil
+}
+
 // ── Reads ─────────────────────────────────────────────────────────────────────
 
 // ListForUser returns every space the user is a member of (invited or active)
