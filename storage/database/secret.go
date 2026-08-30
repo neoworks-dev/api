@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"log/slog"
 )
 
 // Encryptor seals secrets (per-instance root passwords) at rest with AES-256-GCM.
@@ -45,6 +46,34 @@ func (e *Encryptor) Seal(plain string) (string, error) {
 	}
 	sealed := e.aead.Seal(nonce, nonce, []byte(plain), nil)
 	return base64.StdEncoding.EncodeToString(sealed), nil
+}
+
+// sealWith is Seal for an optional Encryptor: a nil one stores the plaintext
+// verbatim, and a failure to seal is logged rather than fatal, so a
+// misconfigured key never blocks a write path.
+func sealWith(e *Encryptor, plain string) string {
+	if e == nil {
+		return plain
+	}
+	sealed, err := e.Seal(plain)
+	if err != nil {
+		slog.Error("seal secret", "error", err)
+		return plain
+	}
+	return sealed
+}
+
+// openWith reverses sealWith. A value that does not open is returned as-is —
+// rows written before a key was configured are stored verbatim.
+func openWith(e *Encryptor, stored string) string {
+	if e == nil {
+		return stored
+	}
+	plain, err := e.Open(stored)
+	if err != nil {
+		return stored
+	}
+	return plain
 }
 
 // Open reverses Seal.

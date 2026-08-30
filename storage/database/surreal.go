@@ -47,6 +47,7 @@ type SurrealStore struct {
 	Connections *ConnectionStore
 	Settings    *SettingStore
 	Albums      *AlbumStore
+	Google      *GoogleStore
 }
 
 func NewSurrealStore(url, user, pass, ns, dbName string) (*SurrealStore, error) {
@@ -92,6 +93,7 @@ func NewSurrealStore(url, user, pass, ns, dbName string) (*SurrealStore, error) 
 	store.Connections = &ConnectionStore{DB: db}
 	store.Settings = &SettingStore{DB: db}
 	store.Albums = &AlbumStore{DB: db}
+	store.Google = &GoogleStore{DB: db}
 	return store, nil
 }
 

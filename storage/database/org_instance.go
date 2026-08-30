@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -44,27 +43,11 @@ func (s *SurrealStore) UseThrottler(t Throttler) { s.throttle = t }
 func (s *SurrealStore) InstanceProvisioner() provisioner.InstanceProvisioner { return s.prov }
 
 func (s *SurrealStore) sealSecret(plain string) string {
-	if s.instanceEnc == nil {
-		return plain
-	}
-	sealed, err := s.instanceEnc.Seal(plain)
-	if err != nil {
-		slog.Error("seal instance secret", "error", err)
-		return plain
-	}
-	return sealed
+	return sealWith(s.instanceEnc, plain)
 }
 
 func (s *SurrealStore) openSecret(stored string) string {
-	if s.instanceEnc == nil {
-		return stored
-	}
-	plain, err := s.instanceEnc.Open(stored)
-	if err != nil {
-		// Tolerate rows written before a key was configured (stored verbatim).
-		return stored
-	}
-	return plain
+	return openWith(s.instanceEnc, stored)
 }
 
 // tenantRoute is a resolved decision about where a client's databases live: the
