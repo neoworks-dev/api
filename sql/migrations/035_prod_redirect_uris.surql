@@ -19,11 +19,6 @@ UPDATE client:`neoworks-photos` SET redirect_uris = array::distinct(array::conca
     "https://photos.neoworks.dev/callback"
 ]));
 
-UPDATE client:`neoworks-chat` SET redirect_uris = array::distinct(array::concat(redirect_uris, [
-    "https://chat.neoworks.dev/callback",
-    "https://chat-desktop.neoworks.dev/callback"
-]));
-
 UPDATE client:`neoworks-maps` SET redirect_uris = array::distinct(array::concat(redirect_uris, [
     "https://maps.neoworks.dev/callback"
 ]));

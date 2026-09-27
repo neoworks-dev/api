@@ -4,12 +4,8 @@
 -- surface unreachable: the Vault derives a per-collection keypair for each label
 -- the caller's token carries, so a missing scope is a key it never derives, not
 -- a flag it declines to honour.
---
--- ai:embed rides along because the demo also exercises memory search, which
--- embeds text on the user's own machine.
 UPDATE client SET scopes += [
     "contacts:read", "contacts:write",
     "calendar:read", "calendar:write",
-    "memories:read", "memories:write",
-    "ai:embed"
+    "memories:read", "memories:write"
 ] WHERE id = client:⟨sdk-demo⟩;

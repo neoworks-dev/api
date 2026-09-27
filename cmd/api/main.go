@@ -27,7 +27,6 @@ import (
 	filehandlers "github.com/neoworks/auth/handlers/file"
 	spacehandlers "github.com/neoworks/auth/handlers/spaces"
 	keyhandlers "github.com/neoworks/auth/handlers/keys"
-	linkpreviewhandlers "github.com/neoworks/auth/handlers/linkpreview"
 	molliehandlers "github.com/neoworks/auth/handlers/mollie"
 	"github.com/neoworks/auth/middleware"
 	"github.com/neoworks/auth/mollie"
@@ -205,7 +204,6 @@ func main() {
 		approvalhandlers.NewHandler(surreal, redis, pushSender).RegisterAuthenticated(r)
 		filehandlers.NewHandler(surreal, objects).Register(r)
 		spacehandlers.NewHandler(surreal).Register(r)
-		linkpreviewhandlers.NewHandler().Register(r)
 	})
 
 	router.Handle("/playground", playground.Handler("NeoWorks API", "/graphql"))

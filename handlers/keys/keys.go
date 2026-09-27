@@ -38,7 +38,6 @@ func (h *Handler) RegisterAuthenticated(r chi.Router) {
 	r.Get("/api/v1/keys/recovery", h.getRecovery)
 	r.Put("/api/v1/keys/recovery", h.rotateRecovery)
 	r.Post("/api/v1/keys/device-invite/{token}/approve", h.approveDeviceInvite)
-	h.RegisterChat(r)
 	h.RegisterEmergency(r)
 }
 
