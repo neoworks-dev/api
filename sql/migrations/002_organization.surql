@@ -5,7 +5,7 @@ DEFINE TABLE organization SCHEMAFULL;
 DEFINE FIELD name          ON organization TYPE string;
 DEFINE FIELD slug          ON organization TYPE string;  -- the `organization` token used in scopes (e.g. "org_123")
 DEFINE FIELD logo          ON organization TYPE option<record<blob>>;
-DEFINE FIELD logo_url      ON organization TYPE option<string>;  -- public URL served by the assets service (apps/assets)
+DEFINE FIELD logo_url      ON organization TYPE option<string>;  -- public URL served by the api's asset listener
 DEFINE FIELD description   ON organization TYPE option<string>;  -- free-text shown in the dashboard
 DEFINE FIELD billing_email ON organization TYPE option<string>;
 DEFINE FIELD created_at    ON organization TYPE datetime VALUE time::now() READONLY;

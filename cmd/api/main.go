@@ -24,6 +24,7 @@ import (
 	"github.com/neoworks/auth/gql"
 	resolvers "github.com/neoworks/auth/gql/resolvers"
 	approvalhandlers "github.com/neoworks/auth/handlers/approvals"
+	assethandlers "github.com/neoworks/auth/handlers/assets"
 	filehandlers "github.com/neoworks/auth/handlers/file"
 	spacehandlers "github.com/neoworks/auth/handlers/spaces"
 	keyhandlers "github.com/neoworks/auth/handlers/keys"
@@ -55,6 +56,7 @@ func main() {
 	surrealDB := env("SURREAL_DB", "auth")
 	issuerURL := env("ISSUER_URL", config.ServiceURL("oauth"))
 	port := env("PORT", "8081")
+	assetsPort := env("ASSETS_PORT", "8082")
 	s3Endpoint := stripScheme(env("S3_ENDPOINT", "127.0.0.1:9000"))
 	s3AccessKey := env("S3_ACCESS_KEY_ID", "minioadmin")
 	s3SecretKey := env("S3_SECRET_ACCESS_KEY", "minioadmin")
@@ -208,16 +210,20 @@ func main() {
 
 	router.Handle("/playground", playground.Handler("NeoWorks API", "/graphql"))
 
+	// User uploads get their own origin: a second listener serves only the asset
+	// routes, and the API listener never serves them.
+	assetHandler := assethandlers.NewHandler(surreal, redis, objects, clientAuth)
+	servers := []*http.Server{
+		{Addr: ":" + port, Handler: router},
+		{Addr: ":" + assetsPort, Handler: assetHandler.Router()},
+	}
+	for _, server := range servers {
+		go listen(server)
+	}
+
 	// Graceful shutdown: on SIGTERM (pod eviction, rollout, HPA scale-down) stop
 	// accepting new connections and let in-flight OAuth/GraphQL requests drain
 	// before the process exits, instead of dropping them mid-flight.
-	httpServer := &http.Server{Addr: ":" + port, Handler: router}
-	go func() {
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server: %v", err)
-		}
-	}()
-
 	shutdownSignal, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	<-shutdownSignal.Done()
@@ -225,8 +231,16 @@ func main() {
 	slog.Info("shutdown signal received; draining in-flight requests")
 	drainCtx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
-	if err := httpServer.Shutdown(drainCtx); err != nil {
-		slog.Error("graceful shutdown", "error", err)
+	for _, server := range servers {
+		if err := server.Shutdown(drainCtx); err != nil {
+			slog.Error("graceful shutdown", "addr", server.Addr, "error", err)
+		}
+	}
+}
+
+func listen(server *http.Server) {
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("server %s: %v", server.Addr, err)
 	}
 }
 

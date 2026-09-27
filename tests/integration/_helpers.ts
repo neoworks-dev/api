@@ -10,6 +10,8 @@
 
 export const API_BASE = process.env.SERVER_URL ?? "http://localhost:8081";
 export const OAUTH_BASE = process.env.OAUTH_SERVER_URL ?? "http://localhost:8080";
+// The api serves user uploads on a second listener, its own origin.
+export const ASSETS_BASE = process.env.ASSETS_URL ?? "http://localhost:8082";
 
 // neoworks.dev is a public, auto-granting client that is allowed openid/profile/
 // email plus storage:read + tokens:read — enough to mint both an unscoped token

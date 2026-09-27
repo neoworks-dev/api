@@ -15,8 +15,8 @@ No warranty.
 ## Role in the monorepo
 
 This module is the shared foundation several sibling services depend on via a
-`replace github.com/neoworks/auth => ../api` directive (e.g. `apps/oauth`,
-`apps/assets`). It is consumed as a **git submodule** of the NeoWorks monorepo
+`replace github.com/neoworks/auth => ../api` directive (e.g. `apps/oauth`).
+It is consumed as a **git submodule** of the NeoWorks monorepo
 and expects to sit at `apps/api` next to those siblings.
 
 ## Local development
