@@ -68,6 +68,9 @@ func (h *Handler) createSpace(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, "space_id, collection, kind, wrapped_key, and signature required", http.StatusBadRequest)
 		return
 	}
+	if !requireWriteScope(w, r, body.Collection) {
+		return
+	}
 
 	membership, err := h.store.Spaces.Create(r.Context(), userID, database.CreateSpaceParams{
 		SpaceID:    body.SpaceID,
@@ -134,6 +137,9 @@ func (h *Handler) renameSpace(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !h.requireSpaceWriteScope(w, r, space) {
+		return
+	}
 
 	var body struct {
 		NameEnc string `json:"name_enc"`
@@ -157,6 +163,9 @@ func (h *Handler) deleteSpace(w http.ResponseWriter, r *http.Request) {
 	}
 	space, ok := spaceID(w, r)
 	if !ok {
+		return
+	}
+	if !h.requireSpaceWriteScope(w, r, space) {
 		return
 	}
 	if err := h.store.Spaces.Delete(r.Context(), space, userID); err != nil {
@@ -207,6 +216,9 @@ func (h *Handler) inviteMember(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !h.requireSpaceWriteScope(w, r, space) {
+		return
+	}
 	member, err := h.store.Spaces.InviteMember(r.Context(), space, userID, database.InviteParams{
 		MemberID:    memberID,
 		Role:        body.Role,
@@ -255,6 +267,9 @@ func (h *Handler) removeMember(w http.ResponseWriter, r *http.Request) {
 	}
 	space, ok := spaceID(w, r)
 	if !ok {
+		return
+	}
+	if !h.requireSpaceWriteScope(w, r, space) {
 		return
 	}
 	memberID := models.NewRecordID("user", chi.URLParam(r, "user"))
@@ -309,6 +324,9 @@ func (h *Handler) rotateKey(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !h.requireSpaceWriteScope(w, r, space) {
+		return
+	}
 	newEpoch, err := h.store.Spaces.Rotate(r.Context(), space, userID, database.RotateParams{
 		ExpectedEpoch: body.ExpectedEpoch,
 		Rewrapped:     rewraps,
@@ -359,6 +377,33 @@ func spaceID(w http.ResponseWriter, r *http.Request) (models.RecordID, bool) {
 		return models.RecordID{}, false
 	}
 	return models.NewRecordID("space", models.UUID{UUID: parsed}), true
+}
+
+// requireWriteScope asserts the token carries a write-implying grant for the
+// collection. Membership role decides what the user may do; the scope decides
+// what this client may do on their behalf.
+func requireWriteScope(w http.ResponseWriter, r *http.Request, collection string) bool {
+	claims := middleware.ClaimFromContext(r.Context())
+	if claims == nil || !claims.AllowsScopeWrite(collection) {
+		jsonErr(w, "scope_not_granted", http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
+// requireSpaceWriteScope applies requireWriteScope to the space's collection. An
+// unknown space answers 403, the same as a space the caller is not a member of.
+func (h *Handler) requireSpaceWriteScope(w http.ResponseWriter, r *http.Request, space models.RecordID) bool {
+	collection, err := h.store.Spaces.Collection(r.Context(), space)
+	if errors.Is(err, database.ErrNotFound) {
+		jsonErr(w, "forbidden", http.StatusForbidden)
+		return false
+	}
+	if err != nil {
+		writeStoreError(w, "spaceCollection", err)
+		return false
+	}
+	return requireWriteScope(w, r, collection)
 }
 
 func callerID(w http.ResponseWriter, r *http.Request) (models.RecordID, bool) {

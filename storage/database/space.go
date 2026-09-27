@@ -585,6 +585,16 @@ func (s *SpaceStore) checkRotationCoverage(ctx context.Context, spaceID models.R
 	return nil
 }
 
+// Collection returns the collection a space holds, so a handler can check the
+// caller's OAuth scope before it writes.
+func (s *SpaceStore) Collection(ctx context.Context, spaceID models.RecordID) (string, error) {
+	space, err := s.space(ctx, spaceID)
+	if err != nil {
+		return "", err
+	}
+	return space.Collection, nil
+}
+
 func (s *SpaceStore) space(ctx context.Context, spaceID models.RecordID) (*dbSpace, error) {
 	results, err := surrealdb.Query[[]dbSpace](ctx, s.DB,
 		"SELECT * FROM space WHERE id = $space LIMIT 1",

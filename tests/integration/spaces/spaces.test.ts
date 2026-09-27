@@ -22,7 +22,18 @@ import { createSpaceKeys } from '../../../../oauth/handlers/auth/static/space-ke
 import { createScopeKeys } from '../../../../oauth/handlers/auth/static/scope-keys.js'
 import { API_BASE, signupAndGetToken } from '../_helpers.ts'
 
-const SCOPES = ['openid', 'profile', 'email', 'contacts:read', 'contacts:write']
+const SCOPES = [
+	'openid',
+	'profile',
+	'email',
+	'contacts:read',
+	'contacts:write',
+	'calendar:read',
+	'calendar:write',
+	'memories:read',
+	'memories:write',
+]
+const READ_ONLY_SCOPES = ['openid', 'profile', 'email', 'contacts:read']
 const COLLECTION = 'contacts'
 
 let sodium: typeof _sodium
@@ -52,8 +63,8 @@ function jwtSub(token: string): string {
 	return String(payload.sub)
 }
 
-async function makeUser(): Promise<TestUser> {
-	const token = await signupAndGetToken(SCOPES)
+async function makeUser(scopes: string[] = SCOPES): Promise<TestUser> {
+	const token = await signupAndGetToken(scopes)
 	const amk = crypto.getRandomValues(new Uint8Array(32))
 	const scopeMaster = scopeApi.deriveScopeMaster(amk)
 	const user: TestUser = {
@@ -465,4 +476,87 @@ describe('spaces E2E', () => {
 		const second = await (await makePersonal()).json()
 		expect(first.space.space_id).toBe(second.space.space_id)
 	}, 30_000)
+
+	test('a read-only token cannot write, even as a writer member', async () => {
+		if (!serverUp) return
+		const alice = await makeUser()
+		const reader = await makeUser(READ_ONLY_SCOPES)
+
+		// Creating a space of its own is refused on scope alone.
+		const ownSpaceId = crypto.randomUUID()
+		const ownKey = spaceApi.mintSpaceKey()
+		const ownCreate = await api(reader, 'POST', '/api/v1/spaces', {
+			space_id: ownSpaceId,
+			collection: COLLECTION,
+			kind: 'personal',
+			wrapped_key: spaceApi.wrapSpaceKey(ownKey, b64(reader.scopeKp.publicKey)),
+			signature: spaceApi.signWrap(ownSpaceId, reader.userId, 1, ownKey, reader.signKp.privateKey),
+		})
+		expect(ownCreate.status).toBe(403)
+		expect((await ownCreate.json()).error).toBe('scope_not_granted')
+
+		// Alice shares a space and gives the reader's user the writer role.
+		const spaceId = crypto.randomUUID()
+		const spaceKey = spaceApi.mintSpaceKey()
+		const createRes = await api(alice, 'POST', '/api/v1/spaces', {
+			space_id: spaceId,
+			collection: COLLECTION,
+			kind: 'shared',
+			wrapped_key: spaceApi.wrapSpaceKey(spaceKey, b64(alice.scopeKp.publicKey)),
+			signature: spaceApi.signWrap(spaceId, alice.userId, 1, spaceKey, alice.signKp.privateKey),
+		})
+		expect(createRes.ok).toBe(true)
+		const inviteRes = await api(alice, 'POST', `/api/v1/spaces/${spaceId}/members`, {
+			user_id: reader.userId,
+			role: 'writer',
+			wrapped_keys: [
+				{
+					epoch: 1,
+					wrapped_key: spaceApi.wrapSpaceKey(spaceKey, b64(reader.scopeKp.publicKey)),
+					signature: spaceApi.signWrap(spaceId, reader.userId, 1, spaceKey, alice.signKp.privateKey),
+				},
+			],
+		})
+		expect(inviteRes.ok).toBe(true)
+		const acceptSig = spaceApi.signWrap(spaceId, reader.userId, 1, spaceKey, reader.signKp.privateKey)
+		expect((await api(reader, 'POST', `/api/v1/spaces/${spaceId}/accept`, { accept_signature: acceptSig })).ok).toBe(
+			true,
+		)
+
+		// Reading still works.
+		expect((await api(reader, 'GET', `/api/v1/spaces/${spaceId}/items?since=0`)).ok).toBe(true)
+
+		// The writer role does not make up for the missing contacts:write grant.
+		const itemId = crypto.randomUUID()
+		const plaintext = new TextEncoder().encode('{"formatted_name":"Forged"}')
+		const header = { itemId, keyEpoch: 1, schemaVer: 1, baseSeq: 0, deleted: false }
+		const sealed = await sealRow(reader, spaceKey, spaceId, header, plaintext)
+		const version = await sealVersion(reader, spaceKey, spaceId, { ...header, versionId: crypto.randomUUID() }, plaintext)
+		const envelope = {
+			base_seq: 0,
+			key_epoch: 1,
+			schema_ver: 1,
+			deleted: false,
+			blob: sealed.blob,
+			sig: sealed.sig,
+			versions: [version],
+		}
+
+		const pushRes = await api(reader, 'PUT', `/api/v1/spaces/${spaceId}/items/${itemId}`, envelope)
+		expect(pushRes.status).toBe(403)
+		expect((await pushRes.json()).error).toBe('scope_not_granted')
+
+		const batchRes = await api(reader, 'POST', `/api/v1/spaces/${spaceId}/items/batch`, {
+			items: [{ item_id: itemId, ...envelope }],
+		})
+		expect(batchRes.status).toBe(403)
+
+		const renameRes = await api(reader, 'PATCH', `/api/v1/spaces/${spaceId}`, { name_enc: 'forged' })
+		expect(renameRes.status).toBe(403)
+		expect((await renameRes.json()).error).toBe('scope_not_granted')
+
+		// Nothing landed.
+		const page = await (await api(alice, 'GET', `/api/v1/spaces/${spaceId}/items?since=0`)).json()
+		expect(page.items.length).toBe(0)
+	}, 60_000)
 })

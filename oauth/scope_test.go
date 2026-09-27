@@ -51,3 +51,29 @@ func TestAllowsScopeLabelEmptyClaims(t *testing.T) {
 		t.Error("a token with no scopes must decrypt nothing")
 	}
 }
+
+// AllowsScopeWrite MUST agree with writableLabels in scope-keys.js: the spaces
+// push handler relies on it to refuse writes from read-only clients.
+func TestAllowsScopeWrite(t *testing.T) {
+	claims := &Claims{Scope: []string{
+		"openid",
+		"photos:read",
+		"contacts:write",
+		"calendar:admin",
+		"org_1:documents:*",
+	}}
+
+	allowed := []string{"contacts", "calendar", "org_1:documents"}
+	for _, label := range allowed {
+		if !claims.AllowsScopeWrite(label) {
+			t.Errorf("expected write to label %q to be allowed", label)
+		}
+	}
+
+	denied := []string{"photos", "memories", "openid", "", "legacy"}
+	for _, label := range denied {
+		if claims.AllowsScopeWrite(label) {
+			t.Errorf("expected write to label %q to be denied", label)
+		}
+	}
+}

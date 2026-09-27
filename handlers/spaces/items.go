@@ -151,6 +151,9 @@ func (h *Handler) pushItem(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !h.requireSpaceWriteScope(w, r, space) {
+		return
+	}
 	itemID, ok := itemUUID(w, r)
 	if !ok {
 		return
@@ -224,6 +227,9 @@ func (h *Handler) pushItemBatch(w http.ResponseWriter, r *http.Request) {
 
 	space, ok := spaceID(w, r)
 	if !ok {
+		return
+	}
+	if !h.requireSpaceWriteScope(w, r, space) {
 		return
 	}
 	outcomes, err := h.store.Spaces.PushItems(r.Context(), space, userID, params)
