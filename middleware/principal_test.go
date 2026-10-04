@@ -83,3 +83,27 @@ func TestTokenWithoutUserSubjectIsRefused(t *testing.T) {
 		t.Fatalf("client-credentials token: got %d want 403", code)
 	}
 }
+
+func gateStatus(t *testing.T, claims *oauth.Claims) int {
+	t.Helper()
+	handler := middleware.RequireDataAccess("neoworks.vault")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	request := httptest.NewRequest("GET", "/", nil)
+	request = request.WithContext(middleware.NewContextWithClaim(request.Context(), claims))
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	return recorder.Code
+}
+
+func TestDataAccessNeedsAnInstallOrTheVaultClient(t *testing.T) {
+	if code := gateStatus(t, claimsFor("user-1", "neoworks-calendar", "install-1")); code != http.StatusOK {
+		t.Errorf("install token: got %d want 200", code)
+	}
+	if code := gateStatus(t, claimsFor("user-1", "neoworks.vault", "")); code != http.StatusOK {
+		t.Errorf("vault token: got %d want 200", code)
+	}
+	if code := gateStatus(t, claimsFor("user-1", "neoworks-calendar", "")); code != http.StatusForbidden {
+		t.Errorf("installless app token: got %d want 403", code)
+	}
+}

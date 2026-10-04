@@ -99,3 +99,27 @@ func writeAuthError(w http.ResponseWriter, status int, code string) {
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(`{"error":"` + code + `"}`))
 }
+
+// RequireDataAccess refuses tokens that may not touch encrypted data. An
+// install-bound token acts as its install. A token without an install acts as
+// the user, which only the account vault may do, so it must have been issued to
+// vaultClientID.
+func RequireDataAccess(vaultClientID string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return &dataAccessGate{vaultClientID: vaultClientID, next: next}
+	}
+}
+
+type dataAccessGate struct {
+	vaultClientID string
+	next          http.Handler
+}
+
+func (gate *dataAccessGate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	claims := ClaimFromContext(r.Context())
+	if claims == nil || (claims.InstallID == "" && claims.ClientID != gate.vaultClientID) {
+		writeAuthError(w, http.StatusForbidden, "install_required")
+		return
+	}
+	gate.next.ServeHTTP(w, r)
+}

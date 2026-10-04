@@ -340,3 +340,17 @@ func TestDirectInsertsGetSeqFromTheCounter(t *testing.T) {
 		t.Fatalf("supplied seq must be replaced by the counter: %d and %d", page.Nodes[0].Seq, other.Nodes[0].Seq)
 	}
 }
+
+func TestGoogleNodesAreGatedByTheCalendarScopes(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	root := f.createRoot(owner, "google")
+
+	if page := f.pull(owner, 0, 10); !nodeIDs(page.Nodes)[root.ID] {
+		t.Fatal("a calendar-scoped token should pull the google root")
+	}
+	photosOnly := userPrincipal(owner.UserID, "photos:read", "photos:write")
+	if page := f.pull(photosOnly, 0, 10); len(page.Nodes) != 0 {
+		t.Fatalf("a photos-scoped token pulled %d google nodes", len(page.Nodes))
+	}
+}
