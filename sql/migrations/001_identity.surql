@@ -13,6 +13,16 @@ DEFINE FIELD created_at     ON user TYPE datetime DEFAULT time::now() READONLY;
 
 DEFINE INDEX user_email_unique ON user FIELDS email UNIQUE;
 
+-- ── contact_code: the code a user hands out so apps can find their public keys ─
+-- Canonical form is 12 Crockford base32 characters without separators.
+DEFINE TABLE contact_code SCHEMAFULL;
+DEFINE FIELD user       ON contact_code TYPE record<user> READONLY;
+DEFINE FIELD code       ON contact_code TYPE string;
+DEFINE FIELD created_at ON contact_code TYPE datetime DEFAULT time::now() READONLY;
+
+DEFINE INDEX contact_code_user_unique ON contact_code FIELDS user UNIQUE;
+DEFINE INDEX contact_code_code_unique ON contact_code FIELDS code UNIQUE;
+
 -- ── key_bundle: the account's wrapped key material, one row per user ──────────
 -- Opaque to the server. `version` starts at 1 and increases by one on every
 -- rotation; a rotation swaps the whole row and is rejected unless it carries the

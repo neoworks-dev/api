@@ -19,6 +19,7 @@ import (
 	approvalhandlers "github.com/neoworks/auth/handlers/approvals"
 	assethandlers "github.com/neoworks/auth/handlers/assets"
 	blobhandlers "github.com/neoworks/auth/handlers/blobs"
+	contactcodehandlers "github.com/neoworks/auth/handlers/contactcodes"
 	devicehandlers "github.com/neoworks/auth/handlers/devices"
 	installhandlers "github.com/neoworks/auth/handlers/installs"
 	keyhandlers "github.com/neoworks/auth/handlers/keys"
@@ -146,6 +147,7 @@ func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects 
 		authenticated.Group(func(principals chi.Router) {
 			principals.Use(middleware.PrincipalMiddleware(surreal))
 			keyhandlers.NewHandler(surreal).RegisterAuthenticated(principals)
+			contactcodehandlers.NewHandler(surreal).RegisterAuthenticated(principals)
 			devicehandlers.NewHandler(surreal).RegisterAuthenticated(principals)
 			installhandlers.NewHandler(surreal).RegisterAuthenticated(principals)
 			renewals := renewalhandlers.NewHandler(surreal)
