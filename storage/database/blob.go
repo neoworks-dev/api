@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/neoworks/auth/access"
-	"github.com/surrealdb/surrealdb.go/pkg/models"
 )
 
 // BlobTarget is one stored object of a node that a caller may be given URLs for.
@@ -40,44 +39,36 @@ func (s *SurrealStore) AuthorizeLinkBlob(ctx context.Context, linkID, nodeID, ob
 	if err != nil {
 		return nil, err
 	}
-	if !withinSubtree(node, linked.ID) {
+	if !withinSubtree(node, recordIDString(linked.ID)) {
 		return nil, ErrNotFound
 	}
 	return blobTarget(node, objectID)
 }
 
-func withinSubtree(node *dbNode, subtreeRoot *models.RecordID) bool {
-	if recordIDString(node.ID) == recordIDString(subtreeRoot) {
-		return true
-	}
-	for _, ancestor := range node.Ancestors {
-		if recordIDString(&ancestor) == recordIDString(subtreeRoot) {
-			return true
-		}
-	}
-	return false
+func withinSubtree(node *dbNode, subtreeRootID string) bool {
+	return recordIDString(node.ID) == subtreeRootID || containsString(node.Ancestors, subtreeRootID)
 }
 
 func blobTarget(node *dbNode, objectID string) (*BlobTarget, error) {
-	if node.Blob == nil || node.Deleted {
+	if node.BlobJSON == nil || node.Deleted {
 		return nil, ErrNotFound
 	}
 	var reference BlobReference
-	if err := json.Unmarshal([]byte(*node.Blob), &reference); err != nil {
+	if err := json.Unmarshal([]byte(*node.BlobJSON), &reference); err != nil {
 		return nil, fmt.Errorf("stored blob reference: %w", err)
 	}
 	chunks, found := reference.ChunkCount(objectID)
 	if !found {
 		return nil, ErrNotFound
 	}
-	return &BlobTarget{OwnerID: recordIDString(node.Owner), ObjectID: objectID, Chunks: chunks}, nil
+	return &BlobTarget{OwnerID: node.OwnerID, ObjectID: objectID, Chunks: chunks}, nil
 }
 
 // StorageUsedBytes sums the stored bytes of the owner's live nodes.
 func (s *SurrealStore) StorageUsedBytes(ctx context.Context, ownerID string) (int64, error) {
 	totals, err := queryRows[int64](ctx, s.DB,
-		"SELECT VALUE math::sum(blob_size) FROM node WHERE owner = $owner AND deleted = false GROUP ALL",
-		map[string]any{"owner": models.NewRecordID("user", ownerID)})
+		"SELECT VALUE math::sum(blob_size) FROM node WHERE owner_id = $owner_id AND deleted = false GROUP ALL",
+		map[string]any{"owner_id": ownerID})
 	if err != nil {
 		return 0, fmt.Errorf("storage usage: %w", err)
 	}

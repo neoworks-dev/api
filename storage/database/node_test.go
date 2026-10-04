@@ -1,7 +1,10 @@
 package database_test
 
 import (
+	"context"
 	"testing"
+
+	"github.com/google/uuid"
 
 	"github.com/neoworks/auth/access"
 	"github.com/neoworks/auth/storage/database"
@@ -296,5 +299,44 @@ func TestMovingAContainerMovesItsSubtreeAccess(t *testing.T) {
 	ids := nodeIDs(f.pull(reader, cursor, 50).Nodes)
 	if !ids[private.ID] || !ids[item.ID] {
 		t.Fatalf("moved subtree should reach the reader, got %v", ids)
+	}
+}
+
+// Other services insert roots and grants directly at signup and consent. Whatever
+// seq they supply must not matter: the counter assigns it, so two accounts never
+// collide and the feed order stays global.
+func TestDirectInsertsGetSeqFromTheCounter(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	rootRow := func(owner string) map[string]any {
+		return map[string]any{
+			"id": uuid.NewString(), "owner_id": owner, "collection": "calendar", "kind": "root", "epoch": 1,
+			"content": []map[string]any{{"facet": 0, "ciphertext": "ct"}}, "base_seq": 0, "seq": 1,
+			"author_type": "user", "author_id": owner, "signature": "sig",
+		}
+	}
+	first, second := uuid.NewString(), uuid.NewString()
+	rows := []map[string]any{rootRow(first), rootRow(second)}
+	grantFor := func(row map[string]any, owner string) map[string]any {
+		return map[string]any{
+			"node_id": row["id"], "principal_type": "user", "principal_id": owner, "role": "admin", "epoch": 1,
+			"wrapped_keys": "wk", "granted_by_type": "user", "granted_by_id": owner, "signature": "gs",
+		}
+	}
+	if err := queryAll(ctx, f, "INSERT INTO node $rows", map[string]any{"rows": rows}); err != nil {
+		t.Fatalf("insert nodes: %v", err)
+	}
+	grants := []map[string]any{grantFor(rows[0], first), grantFor(rows[1], second)}
+	if err := queryAll(ctx, f, "INSERT INTO access_grant $rows", map[string]any{"rows": grants}); err != nil {
+		t.Fatalf("insert grants: %v", err)
+	}
+
+	page := f.pull(userPrincipal(first, "calendar:read"), 0, 10)
+	if len(page.Nodes) != 1 || len(page.Grants) != 1 {
+		t.Fatalf("directly inserted root and grant should be pulled: %d nodes %d grants", len(page.Nodes), len(page.Grants))
+	}
+	other := f.pull(userPrincipal(second, "calendar:read"), 0, 10)
+	if page.Nodes[0].Seq == other.Nodes[0].Seq || page.Nodes[0].Seq == 1 && other.Nodes[0].Seq == 1 {
+		t.Fatalf("supplied seq must be replaced by the counter: %d and %d", page.Nodes[0].Seq, other.Nodes[0].Seq)
 	}
 }

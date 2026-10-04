@@ -14,9 +14,8 @@ func (s *SurrealStore) getNodeRow(ctx context.Context, nodeID string) (*dbNode, 
 }
 
 type grantReach struct {
-	Node   *models.RecordID `json:"node"`
-	Role   string           `json:"role"`
-	Facets []int            `json:"facets"`
+	Role   string `json:"role"`
+	Facets []int  `json:"facets"`
 }
 
 // authorizeNode returns the node when the principal holds at least the minimum
@@ -45,14 +44,14 @@ func (s *SurrealStore) authorizeNode(ctx context.Context, principal access.Princ
 // grant on the node itself, and whole-node grants on its ancestors.
 func (s *SurrealStore) grantsReaching(ctx context.Context, principal access.Principal, nodeID string, node *dbNode) ([]grantReach, error) {
 	rows, err := queryRows[grantReach](ctx, s.DB, `
-		SELECT node, role, facets FROM access_grant
+		SELECT role, facets FROM access_grant
 		WHERE principal_type = $principal_type AND principal_id = $principal_id
 		AND revoked_at = NONE
-		AND (node = $node OR (facets = NONE AND node IN $ancestors))`,
+		AND (node_id = $node_id OR (facets = NONE AND node_id IN $ancestors))`,
 		map[string]any{
 			"principal_type": principal.Type(),
 			"principal_id":   principal.ID(),
-			"node":           models.NewRecordID("node", nodeID),
+			"node_id":        nodeID,
 			"ancestors":      node.Ancestors,
 		})
 	if err != nil {
@@ -87,8 +86,8 @@ func (s *SurrealStore) ListNodeVersions(ctx context.Context, principal access.Pr
 		return nil, err
 	}
 	rows, err := queryRows[dbNodeVersion](ctx, s.DB,
-		"SELECT * FROM node_version WHERE node = $node ORDER BY seq ASC, created_at ASC",
-		map[string]any{"node": models.NewRecordID("node", nodeID)})
+		"SELECT * FROM node_version WHERE node_id = $node_id ORDER BY seq ASC, created_at ASC",
+		map[string]any{"node_id": nodeID})
 	if err != nil {
 		return nil, fmt.Errorf("list versions: %w", err)
 	}

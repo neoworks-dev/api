@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/neoworks/auth/access"
 	"github.com/neoworks/auth/storage/database"
+	surrealdb "github.com/surrealdb/surrealdb.go"
 )
 
 func newNode(author access.Principal, ownerID, collection, kind string, parentID *string) database.Node {
@@ -101,4 +102,9 @@ func (f *fixture) nodeSeq(page *database.PullPage, nodeID string) int64 {
 	}
 	f.t.Fatalf("node %s not in page", nodeID)
 	return 0
+}
+
+func queryAll(ctx context.Context, f *fixture, query string, params map[string]any) error {
+	_, err := surrealdb.Query[[]any](ctx, f.store.DB, query, params)
+	return err
 }

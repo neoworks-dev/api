@@ -14,12 +14,16 @@ DEFINE FUNCTION fn::next_seq() {
 -- ── node: one encrypted tree entry ────────────────────────────────────────────
 -- The record id is the client-chosen UUID, so signatures and AAD bind it before
 -- upload. The server stores ciphertext, wrapped keys and signatures verbatim and
--- never decrypts. `ancestors` is the precomputed path of ancestor ids, root
--- first, maintained by the server on write and on re-parenting.
+-- never decrypts. Field names are the contract's, in snake_case; ids are plain
+-- strings. `ancestors` is the precomputed path of ancestor ids, root first,
+-- maintained by the server on write and on re-parenting.
+--
+-- `seq` is always taken from the change counter when a node is created, whoever
+-- creates it: a value supplied on create is ignored. Updates set it explicitly.
 DEFINE TABLE node SCHEMAFULL;
-DEFINE FIELD owner          ON node TYPE record<user> READONLY;
-DEFINE FIELD parent         ON node TYPE option<record<node>>;
-DEFINE FIELD ancestors      ON node TYPE array<record<node>> DEFAULT [];
+DEFINE FIELD owner_id       ON node TYPE string READONLY;
+DEFINE FIELD parent_id      ON node TYPE option<string>;
+DEFINE FIELD ancestors      ON node TYPE array<string> DEFAULT [];
 DEFINE FIELD collection     ON node TYPE string READONLY
     ASSERT $value IN ["calendar", "contacts", "photos", "files", "google"];
 DEFINE FIELD kind           ON node TYPE string READONLY
@@ -30,15 +34,18 @@ DEFINE FIELD wrapped_key    ON node TYPE option<string>;
 DEFINE FIELD content        ON node TYPE array<object> DEFAULT [];
 DEFINE FIELD content[*].facet      ON node TYPE int;
 DEFINE FIELD content[*].ciphertext ON node TYPE string;
--- Blob reference as the compact JSON the author signed; served back verbatim.
-DEFINE FIELD blob           ON node TYPE option<string>;
+-- The blob reference as an object, and as the exact compact JSON the author
+-- signed (an object loses key order, so the string is what is served).
+DEFINE FIELD blob           ON node TYPE option<object> FLEXIBLE;
+DEFINE FIELD blob_json      ON node TYPE option<string>;
 -- Total stored bytes (original plus variants) and every object id, for quota and presign checks.
 DEFINE FIELD blob_size      ON node TYPE int DEFAULT 0;
 DEFINE FIELD blob_objects   ON node TYPE array<string> DEFAULT [];
 DEFINE FIELD deleted        ON node TYPE bool DEFAULT false;
 DEFINE FIELD deleted_at     ON node TYPE option<datetime>;
 DEFINE FIELD base_seq       ON node TYPE int;
-DEFINE FIELD seq            ON node TYPE int;
+DEFINE FIELD seq            ON node TYPE int
+    VALUE IF $before = NONE { fn::next_seq() } ELSE { $value };
 DEFINE FIELD author_type    ON node TYPE string ASSERT $value IN ["user", "install"];
 DEFINE FIELD author_id      ON node TYPE string;
 DEFINE FIELD cert_id        ON node TYPE option<string>;
@@ -50,8 +57,8 @@ DEFINE FIELD created_at     ON node TYPE datetime VALUE $before OR time::now() R
 DEFINE FIELD updated_at     ON node TYPE datetime VALUE time::now();
 
 DEFINE INDEX idx_node_seq        ON node FIELDS seq UNIQUE;
-DEFINE INDEX idx_node_owner      ON node FIELDS owner;
-DEFINE INDEX idx_node_parent     ON node FIELDS parent;
+DEFINE INDEX idx_node_owner      ON node FIELDS owner_id;
+DEFINE INDEX idx_node_parent     ON node FIELDS parent_id;
 DEFINE INDEX idx_node_ancestors  ON node FIELDS ancestors;
 DEFINE INDEX idx_node_deleted_at ON node FIELDS deleted_at;
 DEFINE INDEX idx_node_cert       ON node FIELDS cert_id;
@@ -60,8 +67,8 @@ DEFINE INDEX idx_node_cert       ON node FIELDS cert_id;
 -- A full snapshot of every accepted write, including everything its signature
 -- covers, so any past version can be verified on its own.
 DEFINE TABLE node_version SCHEMAFULL;
-DEFINE FIELD node         ON node_version TYPE record<node> READONLY;
-DEFINE FIELD parent       ON node_version TYPE option<record<node>> READONLY;
+DEFINE FIELD node_id      ON node_version TYPE string READONLY;
+DEFINE FIELD parent_id    ON node_version TYPE option<string> READONLY;
 DEFINE FIELD collection   ON node_version TYPE string READONLY;
 DEFINE FIELD kind         ON node_version TYPE string READONLY;
 DEFINE FIELD epoch        ON node_version TYPE int READONLY;
@@ -69,7 +76,7 @@ DEFINE FIELD wrapped_key  ON node_version TYPE option<string> READONLY;
 DEFINE FIELD content      ON node_version TYPE array<object> READONLY;
 DEFINE FIELD content[*].facet      ON node_version TYPE int;
 DEFINE FIELD content[*].ciphertext ON node_version TYPE string;
-DEFINE FIELD blob         ON node_version TYPE option<string> READONLY;
+DEFINE FIELD blob_json    ON node_version TYPE option<string> READONLY;
 DEFINE FIELD blob_objects ON node_version TYPE array<string> READONLY;
 DEFINE FIELD deleted      ON node_version TYPE bool READONLY;
 DEFINE FIELD base_seq     ON node_version TYPE int READONLY;
@@ -80,15 +87,18 @@ DEFINE FIELD cert_id      ON node_version TYPE option<string> READONLY;
 DEFINE FIELD signature    ON node_version TYPE string READONLY;
 DEFINE FIELD created_at   ON node_version TYPE datetime VALUE time::now() READONLY;
 
-DEFINE INDEX idx_node_version_node ON node_version FIELDS node, seq;
+DEFINE INDEX idx_node_version_node ON node_version FIELDS node_id, seq;
 
 -- ── access_grant: who may use a node, and the key material to do so ──────────
 -- One row per (node, principal); a re-grant or a revoke updates it in place and
 -- takes a new seq so the principal's next pull sees the change. The history of
 -- every change lives in access_log. `facets` NONE grants the whole node and its
--- subtree; a facet list grants those facets of that node only.
+-- subtree; a facet list grants those facets of that node only. `seq` is taken
+-- from the change counter on create; `collection` is copied from the node.
 DEFINE TABLE access_grant SCHEMAFULL;
-DEFINE FIELD node            ON access_grant TYPE record<node> READONLY;
+DEFINE FIELD node_id         ON access_grant TYPE string READONLY;
+DEFINE FIELD collection      ON access_grant TYPE string
+    VALUE (SELECT VALUE collection FROM ONLY type::record('node', $this.node_id));
 DEFINE FIELD principal_type  ON access_grant TYPE string READONLY
     ASSERT $value IN ["user", "install"];
 DEFINE FIELD principal_id    ON access_grant TYPE string READONLY;
@@ -101,19 +111,21 @@ DEFINE FIELD granted_by_type ON access_grant TYPE string ASSERT $value IN ["user
 DEFINE FIELD granted_by_id   ON access_grant TYPE string;
 DEFINE FIELD cert_id         ON access_grant TYPE option<string>;
 DEFINE FIELD signature       ON access_grant TYPE string;
-DEFINE FIELD seq             ON access_grant TYPE int;
+DEFINE FIELD seq             ON access_grant TYPE int
+    VALUE IF $before = NONE { fn::next_seq() } ELSE { $value };
 DEFINE FIELD created_at      ON access_grant TYPE datetime VALUE $before OR time::now() READONLY;
 DEFINE FIELD revoked_at      ON access_grant TYPE option<datetime>;
 
-DEFINE INDEX idx_access_grant_unique    ON access_grant FIELDS node, principal_type, principal_id UNIQUE;
+DEFINE INDEX idx_access_grant_unique    ON access_grant FIELDS node_id, principal_type, principal_id UNIQUE;
 DEFINE INDEX idx_access_grant_principal ON access_grant FIELDS principal_type, principal_id;
 DEFINE INDEX idx_access_grant_seq       ON access_grant FIELDS seq;
 
 -- ── access_log: append-only audit trail of grants and revocations ────────────
 -- Grant entries carry the granter's signature over the grant, so clients can
--- verify that the server did not add a member on its own.
+-- verify that the server did not add a member on its own. For a revocation,
+-- granted_by_* is whoever revoked and there is no signature.
 DEFINE TABLE access_log SCHEMAFULL;
-DEFINE FIELD node            ON access_log TYPE record<node> READONLY;
+DEFINE FIELD node_id         ON access_log TYPE string READONLY;
 DEFINE FIELD action          ON access_log TYPE string READONLY ASSERT $value IN ["grant", "revoke"];
 DEFINE FIELD principal_type  ON access_log TYPE string READONLY;
 DEFINE FIELD principal_id    ON access_log TYPE string READONLY;
@@ -121,46 +133,44 @@ DEFINE FIELD role            ON access_log TYPE option<string> READONLY;
 DEFINE FIELD facets          ON access_log TYPE option<array<int>> READONLY;
 DEFINE FIELD epoch           ON access_log TYPE option<int> READONLY;
 DEFINE FIELD wrapped_keys    ON access_log TYPE option<string> READONLY;
-DEFINE FIELD actor_type      ON access_log TYPE string READONLY;
-DEFINE FIELD actor_id        ON access_log TYPE string READONLY;
+DEFINE FIELD granted_by_type ON access_log TYPE string READONLY;
+DEFINE FIELD granted_by_id   ON access_log TYPE string READONLY;
 DEFINE FIELD cert_id         ON access_log TYPE option<string> READONLY;
 DEFINE FIELD signature       ON access_log TYPE option<string> READONLY;
-DEFINE FIELD created_at      ON access_log TYPE datetime VALUE time::now() READONLY;
+DEFINE FIELD created_at      ON access_log TYPE datetime VALUE $before OR time::now() READONLY;
 
-DEFINE INDEX idx_access_log_node ON access_log FIELDS node;
+DEFINE INDEX idx_access_log_node ON access_log FIELDS node_id;
 
 -- ── link: an unauthenticated share of a node's subtree ───────────────────────
 -- The node key travels in the URL fragment and never reaches the server.
 DEFINE TABLE link SCHEMAFULL;
-DEFINE FIELD node       ON link TYPE record<node> READONLY;
-DEFINE FIELD created_by ON link TYPE record<user> READONLY;
+DEFINE FIELD node_id    ON link TYPE string READONLY;
+DEFINE FIELD created_by ON link TYPE string READONLY;
 DEFINE FIELD created_at ON link TYPE datetime VALUE $before OR time::now() READONLY;
 DEFINE FIELD revoked_at ON link TYPE option<datetime>;
 
-DEFINE INDEX idx_link_node ON link FIELDS node;
+DEFINE INDEX idx_link_node ON link FIELDS node_id;
 
 -- ── purge_horizon: per owner, the newest tombstone seq that has been purged ──
 -- A cursor older than this may have missed a deletion; pull answers 410 and the
--- client resyncs from scratch.
+-- client resyncs from scratch. The record id is the owner's userId.
 DEFINE TABLE purge_horizon SCHEMAFULL;
-DEFINE FIELD user       ON purge_horizon TYPE record<user> READONLY;
+DEFINE FIELD user_id    ON purge_horizon TYPE string READONLY;
 DEFINE FIELD seq        ON purge_horizon TYPE int DEFAULT 0;
 DEFINE FIELD updated_at ON purge_horizon TYPE datetime VALUE time::now();
 
-DEFINE INDEX idx_purge_horizon_user ON purge_horizon FIELDS user UNIQUE;
+DEFINE INDEX idx_purge_horizon_user ON purge_horizon FIELDS user_id UNIQUE;
 
 -- ── Shared transaction fragments ─────────────────────────────────────────────
 -- Flags a node (and its subtree for a whole-node grant) so the owner's next vault
 -- session rotates its key. Each touched node takes a new seq so the owner's pull
 -- sees the flag.
-DEFINE FUNCTION fn::flag_for_rotation($node: record<node>, $whole_node: bool) {
-    LET $targets = IF $whole_node {
-        (SELECT VALUE id FROM node WHERE id = $node OR $node IN ancestors)
+DEFINE FUNCTION fn::flag_for_rotation($node_id: string, $whole_node: bool) {
+    IF $whole_node {
+        UPDATE node SET needs_rotation = true, seq = fn::next_seq()
+            WHERE record::id(id) = $node_id OR $node_id IN ancestors;
     } ELSE {
-        [$node]
-    };
-    FOR $target IN $targets {
-        UPDATE $target SET needs_rotation = true, seq = fn::next_seq();
+        UPDATE type::record('node', $node_id) SET needs_rotation = true, seq = fn::next_seq();
     };
 };
 
@@ -171,9 +181,9 @@ DEFINE FUNCTION fn::revoke_grant($grant: record<access_grant>, $actor_type: stri
     IF $row != NONE AND $row.revoked_at = NONE {
         UPDATE $grant SET revoked_at = time::now(), seq = fn::next_seq();
         CREATE access_log SET
-            node = $row.node, action = 'revoke',
+            node_id = $row.node_id, action = 'revoke',
             principal_type = $row.principal_type, principal_id = $row.principal_id,
-            actor_type = $actor_type, actor_id = $actor_id;
-        fn::flag_for_rotation($row.node, $row.facets = NONE);
+            granted_by_type = $actor_type, granted_by_id = $actor_id;
+        fn::flag_for_rotation($row.node_id, $row.facets = NONE);
     };
 };

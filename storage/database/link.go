@@ -21,7 +21,7 @@ type Link struct {
 
 type dbLink struct {
 	ID        *models.RecordID `json:"id"`
-	Node      *models.RecordID `json:"node"`
+	NodeID    string           `json:"node_id"`
 	CreatedAt time.Time        `json:"created_at"`
 	RevokedAt *time.Time       `json:"revoked_at"`
 }
@@ -29,7 +29,7 @@ type dbLink struct {
 func (row dbLink) toLink() Link {
 	return Link{
 		ID:        recordIDString(row.ID),
-		NodeID:    recordIDString(row.Node),
+		NodeID:    row.NodeID,
 		CreatedAt: row.CreatedAt,
 		RevokedAt: row.RevokedAt,
 	}
@@ -46,11 +46,11 @@ func (s *SurrealStore) CreateLink(ctx context.Context, principal access.Principa
 		return nil, err
 	}
 	row, err := queryFirst[dbLink](ctx, s.DB,
-		"CREATE $link SET node = $node, created_by = $user",
+		"CREATE $link SET node_id = $node_id, created_by = $user_id",
 		map[string]any{
-			"link": models.NewRecordID("link", uuid.NewString()),
-			"node": models.NewRecordID("node", nodeID),
-			"user": models.NewRecordID("user", principal.UserID),
+			"link":    models.NewRecordID("link", uuid.NewString()),
+			"node_id": nodeID,
+			"user_id": principal.UserID,
 		})
 	if err != nil {
 		return nil, fmt.Errorf("create link: %w", err)
@@ -65,7 +65,7 @@ func (s *SurrealStore) RevokeLink(ctx context.Context, principal access.Principa
 	if err != nil {
 		return err
 	}
-	if _, err := s.authorizeNode(ctx, principal, recordIDString(row.Node), access.RoleAdmin); err != nil {
+	if _, err := s.authorizeNode(ctx, principal, row.NodeID, access.RoleAdmin); err != nil {
 		return err
 	}
 	return queryExec(ctx, s.DB, "UPDATE $link SET revoked_at = time::now() WHERE revoked_at = NONE",
@@ -78,5 +78,5 @@ func (s *SurrealStore) LinkedNode(ctx context.Context, linkID string) (*dbNode, 
 	if err != nil || link.RevokedAt != nil {
 		return nil, ErrNotFound
 	}
-	return s.getNodeRow(ctx, recordIDString(link.Node))
+	return s.getNodeRow(ctx, link.NodeID)
 }

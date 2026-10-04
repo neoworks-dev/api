@@ -109,27 +109,29 @@ func assemblePage(snapshot *dbPullSnapshot, limit int) *PullPage {
 const pullStatement = `
 BEGIN TRANSACTION;
 LET $head = (SELECT VALUE seq FROM ONLY feed_state:main);
-LET $whole = (SELECT VALUE node FROM access_grant
+LET $whole = (SELECT VALUE node_id FROM access_grant
 	WHERE principal_type = $principal_type AND principal_id = $principal_id
 	AND revoked_at = NONE AND facets = NONE);
-LET $partial = (SELECT VALUE node FROM access_grant
+LET $partial = (SELECT VALUE node_id FROM access_grant
 	WHERE principal_type = $principal_type AND principal_id = $principal_id
 	AND revoked_at = NONE AND facets != NONE);
 LET $reachable = array::concat($whole, $partial);
-LET $admin_whole = (SELECT VALUE node FROM access_grant
+LET $admin_whole = (SELECT VALUE node_id FROM access_grant
 	WHERE principal_type = $principal_type AND principal_id = $principal_id
 	AND revoked_at = NONE AND facets = NONE AND role = 'admin'
-	AND node.collection IN $admin_collections);
-LET $owners = (SELECT VALUE owner FROM node WHERE id IN $reachable);
-LET $horizons = (SELECT VALUE seq FROM purge_horizon WHERE user IN $owners);
+	AND collection IN $admin_collections);
+LET $admin_scope = array::concat($admin_whole,
+	(SELECT VALUE record::id(id) FROM node WHERE ancestors CONTAINSANY $admin_whole));
+LET $owners = array::distinct(array::map($reachable, |$node_id| type::record('node', $node_id).owner_id));
+LET $horizons = (SELECT VALUE seq FROM purge_horizon WHERE user_id IN $owners);
 LET $nodes = (SELECT * FROM node
 	WHERE seq > $cursor AND collection IN $read_collections
-	AND (id IN $reachable OR ancestors CONTAINSANY $whole)
+	AND (record::id(id) IN $reachable OR ancestors CONTAINSANY $whole)
 	ORDER BY seq ASC LIMIT $fetch);
 LET $grants = (SELECT * FROM access_grant
-	WHERE seq > $cursor AND node.collection IN $read_collections
+	WHERE seq > $cursor AND collection IN $read_collections
 	AND ((principal_type = $principal_type AND principal_id = $principal_id)
-		OR node IN $admin_whole OR node.ancestors CONTAINSANY $admin_whole)
+		OR node_id IN $admin_scope)
 	ORDER BY seq ASC LIMIT $fetch);
 RETURN { head: $head, horizons: $horizons, nodes: $nodes, grants: $grants };
 COMMIT TRANSACTION;`
@@ -143,9 +145,9 @@ func (s *SurrealStore) PullLink(ctx context.Context, linkID string, cursor int64
 	}
 	limit = clampLimit(limit)
 	snapshot, err := queryReturned[dbPullSnapshot](ctx, s.DB, linkPullStatement, map[string]any{
-		"node":   link.Node,
-		"cursor": cursor,
-		"fetch":  limit + 1,
+		"node_id": link.NodeID,
+		"cursor":  cursor,
+		"fetch":   limit + 1,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("pull link: %w", err)
@@ -159,10 +161,10 @@ func (s *SurrealStore) PullLink(ctx context.Context, linkID string, cursor int64
 const linkPullStatement = `
 BEGIN TRANSACTION;
 LET $head = (SELECT VALUE seq FROM ONLY feed_state:main);
-LET $owners = (SELECT VALUE owner FROM node WHERE id = $node);
-LET $horizons = (SELECT VALUE seq FROM purge_horizon WHERE user IN $owners);
+LET $owner_id = (SELECT VALUE owner_id FROM ONLY type::record('node', $node_id));
+LET $horizons = (SELECT VALUE seq FROM purge_horizon WHERE user_id = $owner_id);
 LET $nodes = (SELECT * FROM node
-	WHERE seq > $cursor AND (id = $node OR $node IN ancestors)
+	WHERE seq > $cursor AND (record::id(id) = $node_id OR $node_id IN ancestors)
 	ORDER BY seq ASC LIMIT $fetch);
 RETURN { head: $head, horizons: $horizons, nodes: $nodes, grants: [] };
 COMMIT TRANSACTION;`

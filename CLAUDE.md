@@ -92,5 +92,10 @@ appends a full snapshot, and the server never reads content, so it builds no
   with the `base_seq` check, so a grant revoked mid-request is seen by the write.
 - Every seq (node writes, grant changes) comes from `fn::next_seq()`, one counter
   row, so commit order equals seq order and a pull cursor never skips a change.
+- Node, grant and log rows use the contract's snake_case fields with plain string
+  ids (`owner_id`, `parent_id`, `node_id`), because the oauth service writes roots
+  and grants directly. `seq` on `node` and `access_grant` is assigned by the
+  counter on create whatever the writer supplies.
 - SurrealQL silently evaluates an undefined `$param` as NONE. Every parameter a
-  statement names must be bound; test each branch.
+  statement names must be bound; `statement_params_test.go` checks each statement
+  builder, so add new ones there.

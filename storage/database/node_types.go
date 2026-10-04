@@ -77,42 +77,42 @@ type NodeVersion struct {
 }
 
 type dbNode struct {
-	ID            *models.RecordID  `json:"id"`
-	Owner         *models.RecordID  `json:"owner"`
-	Parent        *models.RecordID  `json:"parent"`
-	Ancestors     []models.RecordID `json:"ancestors"`
-	Collection    string            `json:"collection"`
-	Kind          string            `json:"kind"`
-	Epoch         int               `json:"epoch"`
-	WrappedKey    *string           `json:"wrapped_key"`
-	Content       []FacetContent    `json:"content"`
-	Blob          *string           `json:"blob"`
-	BlobSize      int64             `json:"blob_size"`
-	BlobObjects   []string          `json:"blob_objects"`
-	Deleted       bool              `json:"deleted"`
-	DeletedAt     *time.Time        `json:"deleted_at"`
-	BaseSeq       int64             `json:"base_seq"`
-	Seq           int64             `json:"seq"`
-	AuthorType    string            `json:"author_type"`
-	AuthorID      string            `json:"author_id"`
-	CertID        *string           `json:"cert_id"`
-	Signature     string            `json:"signature"`
-	NeedsRotation bool              `json:"needs_rotation"`
-	CreatedAt     time.Time         `json:"created_at"`
-	UpdatedAt     time.Time         `json:"updated_at"`
+	ID            *models.RecordID `json:"id"`
+	OwnerID       string           `json:"owner_id"`
+	ParentID      *string          `json:"parent_id"`
+	Ancestors     []string         `json:"ancestors"`
+	Collection    string           `json:"collection"`
+	Kind          string           `json:"kind"`
+	Epoch         int              `json:"epoch"`
+	WrappedKey    *string          `json:"wrapped_key"`
+	Content       []FacetContent   `json:"content"`
+	BlobJSON      *string          `json:"blob_json"`
+	BlobSize      int64            `json:"blob_size"`
+	BlobObjects   []string         `json:"blob_objects"`
+	Deleted       bool             `json:"deleted"`
+	DeletedAt     *time.Time       `json:"deleted_at"`
+	BaseSeq       int64            `json:"base_seq"`
+	Seq           int64            `json:"seq"`
+	AuthorType    string           `json:"author_type"`
+	AuthorID      string           `json:"author_id"`
+	CertID        *string          `json:"cert_id"`
+	Signature     string           `json:"signature"`
+	NeedsRotation bool             `json:"needs_rotation"`
+	CreatedAt     time.Time        `json:"created_at"`
+	UpdatedAt     time.Time        `json:"updated_at"`
 }
 
 func (row dbNode) toNode() Node {
 	return Node{
 		ID:            recordIDString(row.ID),
-		ParentID:      optionalRecordID(row.Parent),
-		OwnerID:       recordIDString(row.Owner),
+		ParentID:      row.ParentID,
+		OwnerID:       row.OwnerID,
 		Collection:    row.Collection,
 		Kind:          row.Kind,
 		Epoch:         row.Epoch,
 		WrappedKey:    row.WrappedKey,
 		Content:       contentOrEmpty(row.Content),
-		Blob:          rawBlob(row.Blob),
+		Blob:          rawBlob(row.BlobJSON),
 		Deleted:       row.Deleted,
 		BaseSeq:       row.BaseSeq,
 		Seq:           row.Seq,
@@ -127,34 +127,34 @@ func (row dbNode) toNode() Node {
 }
 
 type dbNodeVersion struct {
-	Node       *models.RecordID `json:"node"`
-	Parent     *models.RecordID `json:"parent"`
-	Collection string           `json:"collection"`
-	Kind       string           `json:"kind"`
-	Epoch      int              `json:"epoch"`
-	WrappedKey *string          `json:"wrapped_key"`
-	Content    []FacetContent   `json:"content"`
-	Blob       *string          `json:"blob"`
-	Deleted    bool             `json:"deleted"`
-	BaseSeq    int64            `json:"base_seq"`
-	Seq        int64            `json:"seq"`
-	AuthorType string           `json:"author_type"`
-	AuthorID   string           `json:"author_id"`
-	CertID     *string          `json:"cert_id"`
-	Signature  string           `json:"signature"`
-	CreatedAt  time.Time        `json:"created_at"`
+	NodeID     string         `json:"node_id"`
+	ParentID   *string        `json:"parent_id"`
+	Collection string         `json:"collection"`
+	Kind       string         `json:"kind"`
+	Epoch      int            `json:"epoch"`
+	WrappedKey *string        `json:"wrapped_key"`
+	Content    []FacetContent `json:"content"`
+	BlobJSON   *string        `json:"blob_json"`
+	Deleted    bool           `json:"deleted"`
+	BaseSeq    int64          `json:"base_seq"`
+	Seq        int64          `json:"seq"`
+	AuthorType string         `json:"author_type"`
+	AuthorID   string         `json:"author_id"`
+	CertID     *string        `json:"cert_id"`
+	Signature  string         `json:"signature"`
+	CreatedAt  time.Time      `json:"created_at"`
 }
 
 func (row dbNodeVersion) toVersion() NodeVersion {
 	return NodeVersion{
-		NodeID:     recordIDString(row.Node),
-		ParentID:   optionalRecordID(row.Parent),
+		NodeID:     row.NodeID,
+		ParentID:   row.ParentID,
 		Collection: row.Collection,
 		Kind:       row.Kind,
 		Epoch:      row.Epoch,
 		WrappedKey: row.WrappedKey,
 		Content:    contentOrEmpty(row.Content),
-		Blob:       rawBlob(row.Blob),
+		Blob:       rawBlob(row.BlobJSON),
 		Deleted:    row.Deleted,
 		BaseSeq:    row.BaseSeq,
 		Seq:        row.Seq,
@@ -167,25 +167,25 @@ func (row dbNodeVersion) toVersion() NodeVersion {
 }
 
 type dbAccessGrant struct {
-	Node          *models.RecordID `json:"node"`
-	PrincipalType string           `json:"principal_type"`
-	PrincipalID   string           `json:"principal_id"`
-	Role          string           `json:"role"`
-	Facets        []int            `json:"facets"`
-	Epoch         int              `json:"epoch"`
-	WrappedKeys   string           `json:"wrapped_keys"`
-	GrantedByType string           `json:"granted_by_type"`
-	GrantedByID   string           `json:"granted_by_id"`
-	CertID        *string          `json:"cert_id"`
-	Signature     string           `json:"signature"`
-	Seq           int64            `json:"seq"`
-	CreatedAt     time.Time        `json:"created_at"`
-	RevokedAt     *time.Time       `json:"revoked_at"`
+	NodeID        string     `json:"node_id"`
+	PrincipalType string     `json:"principal_type"`
+	PrincipalID   string     `json:"principal_id"`
+	Role          string     `json:"role"`
+	Facets        []int      `json:"facets"`
+	Epoch         int        `json:"epoch"`
+	WrappedKeys   string     `json:"wrapped_keys"`
+	GrantedByType string     `json:"granted_by_type"`
+	GrantedByID   string     `json:"granted_by_id"`
+	CertID        *string    `json:"cert_id"`
+	Signature     string     `json:"signature"`
+	Seq           int64      `json:"seq"`
+	CreatedAt     time.Time  `json:"created_at"`
+	RevokedAt     *time.Time `json:"revoked_at"`
 }
 
 func (row dbAccessGrant) toGrant() AccessGrant {
 	return AccessGrant{
-		NodeID:        recordIDString(row.Node),
+		NodeID:        row.NodeID,
 		PrincipalType: row.PrincipalType,
 		PrincipalID:   row.PrincipalID,
 		Role:          row.Role,
@@ -200,14 +200,6 @@ func (row dbAccessGrant) toGrant() AccessGrant {
 		CreatedAt:     row.CreatedAt,
 		RevokedAt:     row.RevokedAt,
 	}
-}
-
-func optionalRecordID(recordID *models.RecordID) *string {
-	if recordID == nil {
-		return nil
-	}
-	id := recordIDString(recordID)
-	return &id
 }
 
 func contentOrEmpty(content []FacetContent) []FacetContent {

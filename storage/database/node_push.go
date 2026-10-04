@@ -126,7 +126,8 @@ func pushParams(principal access.Principal, validated *ValidatedNode, writerRole
 	node := validated.Node
 	params := map[string]any{
 		"node":            models.NewRecordID("node", node.ID),
-		"owner":           models.NewRecordID("user", node.OwnerID),
+		"node_id":         node.ID,
+		"owner_id":        node.OwnerID,
 		"has_parent":      node.ParentID != nil,
 		"collection":      node.Collection,
 		"kind":            node.Kind,
@@ -152,12 +153,15 @@ func addOptionalPushParams(params map[string]any, validated *ValidatedNode) {
 	node := validated.Node
 	if node.ParentID != nil {
 		params["parent"] = models.NewRecordID("node", *node.ParentID)
+		params["parent_id"] = *node.ParentID
+		params["parent_id"] = *node.ParentID
 	}
 	if node.WrappedKey != nil {
 		params["wrapped_key"] = *node.WrappedKey
 	}
 	if validated.BlobJSON != nil {
-		params["blob"] = *validated.BlobJSON
+		params["blob_json"] = *validated.BlobJSON
+		params["blob"] = validated.BlobObject
 	}
 	if node.CertID != nil {
 		params["cert_id"] = *node.CertID
@@ -169,25 +173,25 @@ func addOptionalPushParams(params map[string]any, validated *ValidatedNode) {
 func pushStatement(validated *ValidatedNode) string {
 	node := validated.Node
 	shared := []string{
-		"parent = $target_parent",
+		"parent_id = $target_parent_id",
 		"ancestors = IF $existing != NONE AND !$reparenting { $existing.ancestors } ELSE { $new_ancestors }",
 		"epoch = $epoch",
 		"wrapped_key = " + optionalValue(node.WrappedKey != nil, "$wrapped_key"),
 		"content = $content",
 		"blob = " + optionalValue(validated.BlobJSON != nil, "$blob"),
+		"blob_json = " + optionalValue(validated.BlobJSON != nil, "$blob_json"),
 		"blob_size = $blob_size",
 		"blob_objects = $blob_objects",
 		"deleted = $deleted",
 		"deleted_at = IF $deleted { time::now() } ELSE { NONE }",
 		"base_seq = $base_seq",
-		"seq = $seq",
 		"author_type = $author_type",
 		"author_id = $author_id",
 		"cert_id = " + optionalValue(node.CertID != nil, "$cert_id"),
 		"signature = $signature",
 		"needs_rotation = IF $existing != NONE AND $epoch <= $existing.epoch { $existing.needs_rotation } ELSE { false }",
 	}
-	immutable := []string{"owner = $owner", "collection = $collection", "kind = $kind"}
+	immutable := []string{"owner_id = $owner_id", "collection = $collection", "kind = $kind"}
 	return pushPreamble + pushWrite(strings.Join(shared, ", "), strings.Join(immutable, ", "), node.WrappedKey != nil, validated.BlobJSON != nil, node.CertID != nil)
 }
 
@@ -202,26 +206,26 @@ const pushPreamble = `
 BEGIN TRANSACTION;
 LET $existing = (SELECT * FROM ONLY $node);
 LET $parent_row = IF $has_parent { (SELECT * FROM ONLY $parent) } ELSE { NONE };
-LET $target_parent = IF $has_parent { $parent } ELSE { NONE };
-LET $new_ancestors = IF $parent_row != NONE { array::append($parent_row.ancestors, $parent) } ELSE { [] };
+LET $target_parent_id = IF $has_parent { $parent_id } ELSE { NONE };
+LET $new_ancestors = IF $parent_row != NONE { array::append($parent_row.ancestors, $parent_id) } ELSE { [] };
 LET $location_ancestors = IF $existing != NONE { $existing.ancestors } ELSE { $new_ancestors };
-LET $self_scope = IF $existing != NONE { [$node] } ELSE { [] };
+LET $self_scope = IF $existing != NONE { [$node_id] } ELSE { [] };
 LET $may_write_here = array::len((SELECT VALUE id FROM access_grant
 	WHERE principal_type = $principal_type AND principal_id = $principal_id
 	AND revoked_at = NONE AND role IN $writer_roles
-	AND ((facets = NONE AND node IN $location_ancestors) OR node IN $self_scope))) > 0;
+	AND ((facets = NONE AND node_id IN $location_ancestors) OR node_id IN $self_scope))) > 0;
 LET $may_write_new_parent = array::len((SELECT VALUE id FROM access_grant
 	WHERE principal_type = $principal_type AND principal_id = $principal_id
 	AND revoked_at = NONE AND role IN $writer_roles
-	AND facets = NONE AND node IN $new_ancestors)) > 0;
-LET $reparenting = $existing != NONE AND $existing.parent != $target_parent;
+	AND facets = NONE AND node_id IN $new_ancestors)) > 0;
+LET $reparenting = $existing != NONE AND $existing.parent_id != $target_parent_id;
 LET $parent_ok = !$has_parent OR ($parent_row != NONE
-	AND $parent_row.owner = $owner AND $parent_row.collection = $collection
+	AND $parent_row.owner_id = $owner_id AND $parent_row.collection = $collection
 	AND $parent_row.kind IN ['root', 'container']);
-LET $move_ok = !$reparenting OR ($parent != $node
-	AND !($node IN $parent_row.ancestors) AND $may_write_new_parent);
+LET $move_ok = !$reparenting OR ($parent_id != $node_id
+	AND !($node_id IN $parent_row.ancestors) AND $may_write_new_parent);
 LET $structure_ok = $parent_ok AND (IF $existing != NONE {
-	$existing.owner = $owner AND $existing.collection = $collection
+	$existing.owner_id = $owner_id AND $existing.collection = $collection
 	AND $existing.kind = $kind AND $move_ok
 } ELSE {
 	!$has_parent OR $parent_row.deleted = false
@@ -246,24 +250,24 @@ LET $verdict = IF !$authorized OR !$structure_ok {
 func pushWrite(shared, immutable string, hasWrappedKey, hasBlob, hasCert bool) string {
 	return `
 LET $written_seq = IF $verdict = 'ok' {
-	LET $seq = fn::next_seq();
-	CREATE node_version SET
-		node = $node, parent = $target_parent, collection = $collection, kind = $kind,
-		epoch = $epoch, wrapped_key = ` + optionalValue(hasWrappedKey, "$wrapped_key") + `,
-		content = $content, blob = ` + optionalValue(hasBlob, "$blob") + `,
-		blob_objects = $blob_objects, deleted = $deleted, base_seq = $base_seq, seq = $seq,
-		author_type = $author_type, author_id = $author_id,
-		cert_id = ` + optionalValue(hasCert, "$cert_id") + `, signature = $signature;
 	IF $existing = NONE {
 		CREATE $node SET ` + immutable + `, ` + shared + `;
 	} ELSE {
-		UPDATE $node SET ` + shared + `;
+		UPDATE $node SET ` + shared + `, seq = fn::next_seq();
 	};
+	LET $seq = (SELECT VALUE seq FROM ONLY $node);
+	CREATE node_version SET
+		node_id = $node_id, parent_id = $target_parent_id, collection = $collection, kind = $kind,
+		epoch = $epoch, wrapped_key = ` + optionalValue(hasWrappedKey, "$wrapped_key") + `,
+		content = $content, blob_json = ` + optionalValue(hasBlob, "$blob_json") + `,
+		blob_objects = $blob_objects, deleted = $deleted, base_seq = $base_seq, seq = $seq,
+		author_type = $author_type, author_id = $author_id,
+		cert_id = ` + optionalValue(hasCert, "$cert_id") + `, signature = $signature;
 	IF $reparenting {
 		UPDATE node SET
 			ancestors = array::concat($new_ancestors, array::slice(ancestors, array::len($existing.ancestors))),
 			seq = fn::next_seq()
-			WHERE $node IN ancestors;
+			WHERE $node_id IN ancestors;
 	};
 	$seq
 } ELSE {

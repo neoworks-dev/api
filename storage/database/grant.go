@@ -109,7 +109,7 @@ func (s *SurrealStore) CreateAccessGrant(ctx context.Context, principal access.P
 func (s *SurrealStore) nodeForGrantChange(ctx context.Context, principal access.Principal, nodeID string, bootstrap bool) (*dbNode, error) {
 	if bootstrap {
 		node, err := s.getNodeRow(ctx, nodeID)
-		if err == nil && recordIDString(node.Owner) == principal.UserID {
+		if err == nil && node.OwnerID == principal.UserID {
 			return node, nil
 		}
 	}
@@ -155,8 +155,9 @@ func (s *SurrealStore) checkGrantee(ctx context.Context, input GrantInput) error
 func grantParams(principal access.Principal, nodeID string, node *dbNode, input GrantInput, adminRoles []string) map[string]any {
 	params := map[string]any{
 		"node":              models.NewRecordID("node", nodeID),
+		"node_id":           nodeID,
 		"collection":        node.Collection,
-		"owner":             models.NewRecordID("user", principal.UserID),
+		"owner_id":          principal.UserID,
 		"grantee_type":      input.PrincipalType,
 		"grantee_id":        input.PrincipalID,
 		"role":              input.Role,
@@ -184,19 +185,19 @@ func grantStatement(input GrantInput) string {
 	assignments := `
 			role = $role, facets = ` + facets + `, epoch = $epoch, wrapped_keys = $wrapped_keys,
 			granted_by_type = $actor_type, granted_by_id = $actor_id, cert_id = ` + certID + `,
-			signature = $signature, seq = $seq, revoked_at = NONE`
+			signature = $signature, revoked_at = NONE`
 	return `
 BEGIN TRANSACTION;
 LET $target = (SELECT * FROM ONLY $node);
 LET $is_admin = $target != NONE AND array::len((SELECT VALUE id FROM access_grant
 	WHERE principal_type = $actor_type AND principal_id = $actor_id
 	AND revoked_at = NONE AND role IN $admin_roles AND facets = NONE
-	AND (node = $node OR node IN $target.ancestors))) > 0;
+	AND (node_id = $node_id OR node_id IN $target.ancestors))) > 0;
 LET $is_bootstrap = $bootstrap_allowed AND $target != NONE AND $target.kind = 'root'
-	AND $target.owner = $owner
-	AND array::len((SELECT VALUE id FROM access_grant WHERE node = $node)) = 0;
+	AND $target.owner_id = $owner_id
+	AND array::len((SELECT VALUE id FROM access_grant WHERE node_id = $node_id)) = 0;
 LET $existing_grant = (SELECT * FROM ONLY access_grant
-	WHERE node = $node AND principal_type = $grantee_type AND principal_id = $grantee_id);
+	WHERE node_id = $node_id AND principal_type = $grantee_type AND principal_id = $grantee_id);
 LET $verdict = IF $target = NONE OR $target.collection != $collection OR !($is_admin OR $is_bootstrap) {
 	'forbidden'
 } ELSE IF $target.epoch != $epoch {
@@ -205,23 +206,22 @@ LET $verdict = IF $target = NONE OR $target.collection != $collection OR !($is_a
 	'ok'
 };
 LET $stored = IF $verdict = 'ok' {
-	LET $seq = fn::next_seq();
 	IF $existing_grant = NONE {
-		CREATE access_grant SET node = $node, principal_type = $grantee_type, principal_id = $grantee_id, ` + assignments + `;
+		CREATE access_grant SET node_id = $node_id, principal_type = $grantee_type, principal_id = $grantee_id, ` + assignments + `;
 	} ELSE {
-		UPDATE access_grant SET ` + assignments + `
-			WHERE node = $node AND principal_type = $grantee_type AND principal_id = $grantee_id;
+		UPDATE access_grant SET ` + assignments + `, seq = fn::next_seq()
+			WHERE node_id = $node_id AND principal_type = $grantee_type AND principal_id = $grantee_id;
 	};
 	IF $existing_grant = NONE OR $existing_grant.revoked_at != NONE {
 		UPDATE node SET seq = fn::next_seq()
-			WHERE id = $node OR ($facets_none AND $node IN ancestors);
+			WHERE record::id(id) = $node_id OR ($facets_none AND $node_id IN ancestors);
 	};
 	CREATE access_log SET
-		node = $node, action = 'grant', principal_type = $grantee_type, principal_id = $grantee_id,
+		node_id = $node_id, action = 'grant', principal_type = $grantee_type, principal_id = $grantee_id,
 		role = $role, facets = ` + facets + `, epoch = $epoch, wrapped_keys = $wrapped_keys,
-		actor_type = $actor_type, actor_id = $actor_id, cert_id = ` + certID + `, signature = $signature;
+		granted_by_type = $actor_type, granted_by_id = $actor_id, cert_id = ` + certID + `, signature = $signature;
 	(SELECT * FROM ONLY access_grant
-		WHERE node = $node AND principal_type = $grantee_type AND principal_id = $grantee_id)
+		WHERE node_id = $node_id AND principal_type = $grantee_type AND principal_id = $grantee_id)
 } ELSE {
 	NONE
 };
@@ -242,6 +242,7 @@ func (s *SurrealStore) RevokeAccessGrant(ctx context.Context, principal access.P
 	}
 	params := map[string]any{
 		"node":         models.NewRecordID("node", nodeID),
+		"node_id":      nodeID,
 		"collection":   node.Collection,
 		"grantee_type": principalType,
 		"grantee_id":   principalID,
@@ -275,9 +276,9 @@ LET $target = (SELECT * FROM ONLY $node);
 LET $is_admin = $target != NONE AND array::len((SELECT VALUE id FROM access_grant
 	WHERE principal_type = $actor_type AND principal_id = $actor_id
 	AND revoked_at = NONE AND role IN $admin_roles AND facets = NONE
-	AND (node = $node OR node IN $target.ancestors))) > 0;
+	AND (node_id = $node_id OR node_id IN $target.ancestors))) > 0;
 LET $grant = (SELECT VALUE id FROM ONLY access_grant
-	WHERE node = $node AND principal_type = $grantee_type AND principal_id = $grantee_id);
+	WHERE node_id = $node_id AND principal_type = $grantee_type AND principal_id = $grantee_id);
 LET $outcome = IF $target = NONE OR $target.collection != $collection OR !$is_admin {
 	{ status: 'forbidden', version: 0 }
 } ELSE IF $grant = NONE {

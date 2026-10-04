@@ -1,6 +1,7 @@
 package database
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -20,6 +21,7 @@ const (
 type ValidatedNode struct {
 	Node        Node
 	BlobJSON    *string
+	BlobObject  map[string]any
 	BlobSize    int64
 	BlobObjects []string
 }
@@ -143,6 +145,9 @@ func withBlobFacts(node Node) (*ValidatedNode, error) {
 	}
 	blobJSON := string(compact)
 	validated.BlobJSON = &blobJSON
+	if err := json.Unmarshal(compact, &validated.BlobObject); err != nil {
+		return nil, err
+	}
 	validated.BlobSize = reference.TotalSize()
 	validated.BlobObjects = reference.ObjectIDs()
 	return validated, nil

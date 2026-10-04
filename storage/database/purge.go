@@ -20,7 +20,7 @@ type PurgeResult struct {
 
 type expiredTombstone struct {
 	ID          *models.RecordID `json:"id"`
-	Owner       *models.RecordID `json:"owner"`
+	OwnerID     string           `json:"owner_id"`
 	Seq         int64            `json:"seq"`
 	BlobObjects []string         `json:"blob_objects"`
 }
@@ -30,7 +30,7 @@ type expiredTombstone struct {
 // to the newest seq removed so that stale cursors are told to resync.
 func (s *SurrealStore) PurgeTombstones(ctx context.Context, olderThan time.Duration) (*PurgeResult, error) {
 	expired, err := queryRows[expiredTombstone](ctx, s.DB, `
-		SELECT id, owner, seq, blob_objects FROM node
+		SELECT id, owner_id, seq, blob_objects FROM node
 		WHERE deleted = true AND deleted_at != NONE AND deleted_at < $cutoff
 		LIMIT $batch`,
 		map[string]any{"cutoff": time.Now().Add(-olderThan), "batch": purgeBatchSize})
@@ -56,17 +56,18 @@ func (s *SurrealStore) PurgeTombstones(ctx context.Context, olderThan time.Durat
 func groupByOwner(expired []expiredTombstone) map[string][]expiredTombstone {
 	groups := map[string][]expiredTombstone{}
 	for _, tombstone := range expired {
-		owner := recordIDString(tombstone.Owner)
-		groups[owner] = append(groups[owner], tombstone)
+		groups[tombstone.OwnerID] = append(groups[tombstone.OwnerID], tombstone)
 	}
 	return groups
 }
 
 func (s *SurrealStore) purgeOwnerTombstones(ctx context.Context, owner string, group []expiredTombstone) ([]string, error) {
-	nodeIDs := make([]models.RecordID, 0, len(group))
+	nodeRecords := make([]models.RecordID, 0, len(group))
+	nodeIDs := make([]string, 0, len(group))
 	var highestSeq int64
 	for _, tombstone := range group {
-		nodeIDs = append(nodeIDs, *tombstone.ID)
+		nodeRecords = append(nodeRecords, *tombstone.ID)
+		nodeIDs = append(nodeIDs, recordIDString(tombstone.ID))
 		if tombstone.Seq > highestSeq {
 			highestSeq = tombstone.Seq
 		}
@@ -79,18 +80,19 @@ func (s *SurrealStore) purgeOwnerTombstones(ctx context.Context, owner string, g
 	horizon := models.NewRecordID("purge_horizon", owner)
 	err = queryExec(ctx, s.DB, `
 		BEGIN TRANSACTION;
-		DELETE node_version WHERE node IN $nodes;
-		DELETE access_grant WHERE node IN $nodes;
-		DELETE link WHERE node IN $nodes;
-		DELETE $nodes;
-		UPSERT $horizon SET user = $owner;
+		DELETE node_version WHERE node_id IN $node_ids;
+		DELETE access_grant WHERE node_id IN $node_ids;
+		DELETE link WHERE node_id IN $node_ids;
+		DELETE $node_records;
+		UPSERT $horizon SET user_id = $owner_id;
 		UPDATE $horizon SET seq = math::max([seq, $highest_seq]);
 		COMMIT TRANSACTION;`,
 		map[string]any{
-			"nodes":       nodeIDs,
-			"horizon":     horizon,
-			"owner":       models.NewRecordID("user", owner),
-			"highest_seq": highestSeq,
+			"node_ids":     nodeIDs,
+			"node_records": nodeRecords,
+			"horizon":      horizon,
+			"owner_id":     owner,
+			"highest_seq":  highestSeq,
 		})
 	if err != nil {
 		return nil, fmt.Errorf("purge tombstones of %s: %w", owner, err)
@@ -98,10 +100,10 @@ func (s *SurrealStore) purgeOwnerTombstones(ctx context.Context, owner string, g
 	return objects, nil
 }
 
-func (s *SurrealStore) objectsOfNodes(ctx context.Context, nodeIDs []models.RecordID) ([]string, error) {
+func (s *SurrealStore) objectsOfNodes(ctx context.Context, nodeIDs []string) ([]string, error) {
 	lists, err := queryRows[[]string](ctx, s.DB,
-		"SELECT VALUE blob_objects FROM node_version WHERE node IN $nodes",
-		map[string]any{"nodes": nodeIDs})
+		"SELECT VALUE blob_objects FROM node_version WHERE node_id IN $node_ids",
+		map[string]any{"node_ids": nodeIDs})
 	if err != nil {
 		return nil, fmt.Errorf("collect blob objects: %w", err)
 	}
