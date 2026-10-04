@@ -540,3 +540,23 @@ func TestPullReturnsTheAccessLogOfVisibleNodes(t *testing.T) {
 		t.Fatalf("the revoke entry should arrive after the cursor: %+v", page.AccessLog)
 	}
 }
+
+func TestInstallGrantsMustNameTheInstallsOwnCertificate(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	root := f.createRoot(owner, "calendar")
+	app, _ := f.createInstall(owner, "calendar:read")
+	_, otherCertificate := f.createInstall(owner, "calendar:read")
+	account := f.accountOf(owner)
+
+	request := account.GrantRequest(t, f.store, root.ID, readGrant(access.PrincipalTypeInstall, app.InstallID, 1))
+	request.Entry.CertID = &otherCertificate
+	request.Entry = account.Resign(t, request.Entry)
+	if _, err := f.store.CreateAccessGrant(context.Background(), owner, root.ID, request); !errors.Is(err, database.ErrForbidden) {
+		t.Fatalf("a grant naming another install's certificate: got %v want forbidden", err)
+	}
+	result := f.grant(owner, root.ID, readGrant(access.PrincipalTypeInstall, app.InstallID, 1))
+	if result.Entry.CertID == nil {
+		t.Fatal("the stored entry must keep the install's certId")
+	}
+}

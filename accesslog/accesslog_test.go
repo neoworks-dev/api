@@ -77,10 +77,12 @@ func TestValidateRejectsMalformedEntries(t *testing.T) {
 		"short signature":        func(e *accesslog.Entry) { e.Signature = "AAAA" },
 		"install actor no cert":  func(e *accesslog.Entry) { e.ActorType = "install" },
 		"user actor with cert":   func(e *accesslog.Entry) { e.CertID = &cert },
+		"install grant no cert":  func(e *accesslog.Entry) { e.PrincipalType = "install" },
 		"unknown actor type":     func(e *accesslog.Entry) { e.ActorType = "device" },
 		"unknown action":         func(e *accesslog.Entry) { e.Action = "share" },
 		"grant without keysHash": func(e *accesslog.Entry) { e.WrappedKeysHash = "" },
 		"revoke with keysHash":   func(e *accesslog.Entry) { e.Action = accesslog.ActionRevoke },
+		"revoke with role":       func(e *accesslog.Entry) { e.Action, e.WrappedKeysHash, e.Epoch = accesslog.ActionRevoke, "", 0 },
 		"negative index":         func(e *accesslog.Entry) { e.Index = -1 },
 	}
 	for name, mutate := range cases {
@@ -95,8 +97,13 @@ func TestValidateRejectsMalformedEntries(t *testing.T) {
 	if err := installEntry.Validate(); err != nil {
 		t.Errorf("an install entry with a certId is valid: %v", err)
 	}
+	installGrant := good
+	installGrant.PrincipalType, installGrant.CertID = "install", &cert
+	if err := installGrant.Validate(); err != nil {
+		t.Errorf("a user grant to an install naming its certId is valid: %v", err)
+	}
 	revoke := good
-	revoke.Action, revoke.WrappedKeysHash = accesslog.ActionRevoke, ""
+	revoke.Action, revoke.WrappedKeysHash, revoke.Role, revoke.Epoch, revoke.Facets = accesslog.ActionRevoke, "", "", 0, nil
 	if err := revoke.Validate(); err != nil {
 		t.Errorf("a revoke with an empty hash is valid: %v", err)
 	}

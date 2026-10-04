@@ -94,7 +94,10 @@ appends a full snapshot, and the server never reads content, so it builds no
   grants their own installs a role no higher than their own. The owner revokes
   anyone; a user revokes their own installs and their own grant. The server
   verifies each entry's Ed25519 signature and that it extends the chain head
-  (409 `log_head_moved` otherwise), and stores entries verbatim.
+  (409 `log_head_moved` otherwise), and stores entries verbatim. A user's grant
+  to an install names that install's delegation certificate in `certId` (it is
+  what proves the install is the user's); every other user-signed entry has no
+  `certId`. A revoke carries no role, facets, epoch or wrappedKeysHash.
 - Authorization for a write is evaluated inside the push transaction, together
   with the `base_seq` check, so a grant revoked mid-request is seen by the write.
 - Every seq (node writes, grant changes) comes from `fn::next_seq()`, one counter

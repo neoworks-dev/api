@@ -89,8 +89,13 @@ func TestGrantStatementsBindEveryParameter(t *testing.T) {
 	} {
 		entry.Facets = input.Facets
 		params := grantParams(uuid.NewString(), node, input, entry, "hash")
-		requireAllBound(t, "grant "+name, grantStatement(input), params)
+		requireAllBound(t, "grant "+name, grantStatement(input, false), params)
 	}
+	certID := uuid.NewString()
+	installEntry := accesslog.Entry{Action: accesslog.ActionGrant, Role: "read", Epoch: 1, CertID: &certID}
+	installInput := GrantInput{PrincipalType: "install", PrincipalID: uuid.NewString(), Role: "read", Epoch: 1, WrappedKeys: "k"}
+	params := grantParams(uuid.NewString(), node, installInput, installEntry, "hash")
+	requireAllBound(t, "grant to install", grantStatement(installInput, true), params)
 }
 
 func TestOtherStatementsBindEveryParameter(t *testing.T) {

@@ -160,13 +160,13 @@ func (s *SurrealStore) CreateAccessGrant(ctx context.Context, principal access.P
 	if err != nil {
 		return nil, err
 	}
-	if err := s.checkGrantAuthority(ctx, principal, node, nodeID, input); err != nil {
+	if err := s.checkGrantAuthority(ctx, principal, node, nodeID, request); err != nil {
 		return nil, err
 	}
 
 	params := grantParams(nodeID, node, input, entry, entryHash)
 	outcome, err := runWithRetry(ctx, func() (*dbGrantOutcome, error) {
-		return queryReturned[dbGrantOutcome](ctx, s.DB, grantStatement(input), params)
+		return queryReturned[dbGrantOutcome](ctx, s.DB, grantStatement(input, entry.CertID != nil), params)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create grant: %w", err)
@@ -190,7 +190,8 @@ func grantResult(outcome *dbGrantOutcome, entry accesslog.Entry, entryHash strin
 
 // checkGrantAuthority applies the amendment's rules: to another user only the
 // node's owner; to an install only its own user, with at most their own role.
-func (s *SurrealStore) checkGrantAuthority(ctx context.Context, principal access.Principal, node *dbNode, nodeID string, input GrantInput) error {
+func (s *SurrealStore) checkGrantAuthority(ctx context.Context, principal access.Principal, node *dbNode, nodeID string, request GrantRequest) error {
+	input := request.Grant
 	if input.PrincipalType == access.PrincipalTypeUser {
 		return s.checkUserGrant(ctx, principal, node, input)
 	}
@@ -201,10 +202,24 @@ func (s *SurrealStore) checkGrantAuthority(ctx context.Context, principal access
 	if install.UserID != principal.UserID {
 		return ErrForbidden
 	}
+	if !s.certificateDelegatesInstall(ctx, *request.Entry.CertID, principal.UserID, install.ID) {
+		return ErrForbidden
+	}
 	if node.OwnerID == principal.UserID {
 		return nil
 	}
 	return s.checkDelegation(ctx, principal, node, nodeID, input)
+}
+
+// certificateDelegatesInstall reports whether the certificate an install grant
+// names is the user's delegation of that install, which is what lets clients
+// check the install belongs to the granting user.
+func (s *SurrealStore) certificateDelegatesInstall(ctx context.Context, certID, userID, installID string) bool {
+	certificate, err := s.GetCertificate(ctx, certID)
+	if err != nil {
+		return false
+	}
+	return certificate.UserID == userID && certificate.InstallID == installID
 }
 
 func (s *SurrealStore) checkUserGrant(ctx context.Context, principal access.Principal, node *dbNode, input GrantInput) error {
@@ -287,6 +302,9 @@ func entryParams(nodeID string, entry accesslog.Entry, entryHash string) map[str
 	if entry.Facets != nil {
 		params["facets"] = entry.Facets
 	}
+	if entry.CertID != nil {
+		params["cert_id"] = *entry.CertID
+	}
 	return params
 }
 
@@ -299,13 +317,13 @@ func grantParams(nodeID string, node *dbNode, input GrantInput, entry accesslog.
 }
 
 // logInsert is the access_log CREATE shared by grants and revokes.
-func logInsert(hasFacets bool) string {
+func logInsert(hasFacets, hasCertificate bool) string {
 	return `CREATE access_log SET
 		node_id = $node_id, index = $index, prev_hash = $prev_hash, entry_hash = $entry_hash,
 		action = $action, principal_type = $grantee_type, principal_id = $grantee_id,
 		role = $role, facets = ` + optionalValue(hasFacets, "$facets") + `, epoch = $epoch,
 		wrapped_keys_hash = $wrapped_keys_hash, actor_type = $actor_type, actor_id = $actor_id,
-		cert_id = NONE, signature = $signature;`
+		cert_id = ` + optionalValue(hasCertificate, "$cert_id") + `, signature = $signature;`
 }
 
 // chainHeadChecks is the SurrealQL that reads the head and decides whether the
@@ -318,11 +336,11 @@ LET $head_ok = IF $head = NONE {
 	$index = $head.index + 1 AND $prev_hash = $head.entry_hash
 };`
 
-func grantStatement(input GrantInput) string {
+func grantStatement(input GrantInput, hasCertificate bool) string {
 	facets := optionalValue(input.Facets != nil, "$facets")
 	assignments := `
 			role = $role, facets = ` + facets + `, epoch = $epoch, wrapped_keys = $wrapped_keys,
-			granted_by_type = $actor_type, granted_by_id = $actor_id, cert_id = NONE,
+			granted_by_type = $actor_type, granted_by_id = $actor_id, cert_id = ` + optionalValue(hasCertificate, "$cert_id") + `,
 			signature = $signature, log_index = $index, revoked_at = NONE`
 	return `
 BEGIN TRANSACTION;
@@ -339,7 +357,7 @@ LET $verdict = IF $target = NONE OR $target.collection != $collection {
 	'ok'
 };
 LET $stored = IF $verdict = 'ok' {
-	` + logInsert(input.Facets != nil) + `
+	` + logInsert(input.Facets != nil, hasCertificate) + `
 	IF $existing_grant = NONE {
 		CREATE access_grant SET node_id = $node_id, principal_type = $grantee_type, principal_id = $grantee_id, ` + assignments + `;
 	} ELSE {
@@ -440,7 +458,7 @@ LET $verdict = IF $target = NONE OR $target.collection != $collection {
 	'ok'
 };
 LET $revoked = IF $verdict = 'ok' {
-	` + logInsert(hasFacets) + `
+	` + logInsert(hasFacets, false) + `
 	UPDATE access_grant SET revoked_at = time::now(), seq = fn::next_seq(), log_index = $index
 		WHERE node_id = $node_id AND principal_type = $grantee_type AND principal_id = $grantee_id;
 	fn::flag_for_rotation($node_id, $grant.facets = NONE);

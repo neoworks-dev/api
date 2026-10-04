@@ -76,18 +76,30 @@ func (entry Entry) Validate() error {
 	return entry.validateAction()
 }
 
-// validateActor requires a user to sign without a certificate and an install to
-// sign with the certificate that delegates to it.
+// validateActor pins certId: an install actor names its own certificate, a user
+// granting to an install names that install's certificate (it proves the install
+// is the user's), and any other user entry carries none.
 func (entry Entry) validateActor() error {
 	hasCertificate := entry.CertID != nil && *entry.CertID != ""
 	switch {
-	case entry.ActorType == "user" && entry.CertID == nil:
-		return nil
-	case entry.ActorType == "install" && hasCertificate:
-		return nil
+	case entry.ActorType == "install":
+		return requireCertificate(hasCertificate, "an install signs with its certId")
+	case entry.ActorType != "user":
+		return fmt.Errorf("unknown actorType %q", entry.ActorType)
+	case entry.Action == ActionGrant && entry.PrincipalType == "install":
+		return requireCertificate(hasCertificate, "a grant to an install names the install's certId")
+	case entry.CertID != nil:
+		return errors.New("only grants to an install carry a user-signed certId")
 	default:
-		return errors.New("a user signs without a certificate, an install with its certId")
+		return nil
 	}
+}
+
+func requireCertificate(hasCertificate bool, message string) error {
+	if !hasCertificate {
+		return errors.New(message)
+	}
+	return nil
 }
 
 func (entry Entry) validateAction() error {
@@ -95,8 +107,9 @@ func (entry Entry) validateAction() error {
 	case ActionGrant:
 		return requireSize("wrappedKeysHash", entry.WrappedKeysHash, hashBytes)
 	case ActionRevoke:
-		if entry.WrappedKeysHash != "" {
-			return errors.New("a revoke carries no wrappedKeysHash")
+		canonical := entry.WrappedKeysHash == "" && entry.Role == "" && entry.Facets == nil && entry.Epoch == 0
+		if !canonical {
+			return errors.New("a revoke carries no role, facets, epoch or wrappedKeysHash")
 		}
 		return nil
 	default:

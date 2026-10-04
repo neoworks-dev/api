@@ -85,26 +85,45 @@ func head(t *testing.T, store *database.SurrealStore, nodeID string) (int64, str
 }
 
 // GrantRequest builds a signed grant request extending the node's current chain.
+// A grant to an install names the install's newest certificate.
 func (account *Account) GrantRequest(t *testing.T, store *database.SurrealStore, nodeID string, input database.GrantInput) database.GrantRequest {
 	t.Helper()
 	index, prevHash := head(t, store, nodeID)
-	return account.GrantRequestAt(t, nodeID, input, index, prevHash)
+	entry := account.grantEntry(t, nodeID, input, index, prevHash)
+	if input.PrincipalType == access.PrincipalTypeInstall {
+		entry.CertID = latestCertificateID(t, store, input.PrincipalID)
+	}
+	return database.GrantRequest{Grant: input, Entry: account.sign(t, entry)}
 }
 
 // GrantRequestAt builds a signed grant request for an explicit chain position.
 func (account *Account) GrantRequestAt(t *testing.T, nodeID string, input database.GrantInput, index int64, prevHash string) database.GrantRequest {
 	t.Helper()
+	entry := account.grantEntry(t, nodeID, input, index, prevHash)
+	return database.GrantRequest{Grant: input, Entry: account.sign(t, entry)}
+}
+
+func (account *Account) grantEntry(t *testing.T, nodeID string, input database.GrantInput, index int64, prevHash string) accesslog.Entry {
+	t.Helper()
 	keysHash, err := accesslog.WrappedKeysHash(input.WrappedKeys)
 	if err != nil {
 		t.Fatalf("keys hash: %v", err)
 	}
-	entry := accesslog.Entry{
+	return accesslog.Entry{
 		NodeID: nodeID, Index: index, PrevHash: prevHash, Action: accesslog.ActionGrant,
 		PrincipalType: input.PrincipalType, PrincipalID: input.PrincipalID, Role: input.Role,
 		Facets: input.Facets, Epoch: input.Epoch, WrappedKeysHash: keysHash,
 		ActorType: "user", ActorID: account.Principal.UserID,
 	}
-	return database.GrantRequest{Grant: input, Entry: account.sign(t, entry)}
+}
+
+func latestCertificateID(t *testing.T, store *database.SurrealStore, installID string) *string {
+	t.Helper()
+	certificate, err := store.LatestCertificate(context.Background(), installID)
+	if err != nil {
+		return nil
+	}
+	return &certificate.CertID
 }
 
 // RevokeEntry builds a signed revoke entry extending the node's current chain.
@@ -113,9 +132,15 @@ func (account *Account) RevokeEntry(t *testing.T, store *database.SurrealStore, 
 	index, prevHash := head(t, store, nodeID)
 	entry := accesslog.Entry{
 		NodeID: nodeID, Index: index, PrevHash: prevHash, Action: accesslog.ActionRevoke,
-		PrincipalType: principalType, PrincipalID: principalID, Role: access.RoleRead, Epoch: 1,
+		PrincipalType: principalType, PrincipalID: principalID,
 		ActorType: "user", ActorID: account.Principal.UserID,
 	}
+	return account.sign(t, entry)
+}
+
+// Resign signs an entry again after a test changed it.
+func (account *Account) Resign(t *testing.T, entry accesslog.Entry) accesslog.Entry {
+	t.Helper()
 	return account.sign(t, entry)
 }
 
