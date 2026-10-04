@@ -45,11 +45,11 @@ func newFixture(t *testing.T, quotaBytes int64) *fixture {
 	})
 	owner := handlertest.CreateUser(t, store, "files:read", "files:write")
 	fx := &fixture{t: t, router: router, store: store, owner: owner, object: uuid.NewString()}
-	fx.nodeID = fx.storeFile(owner)
+	fx.nodeID = fx.storeFile(owner, fx.object)
 	return fx
 }
 
-func (fx *fixture) storeFile(owner access.Principal) string {
+func (fx *fixture) storeFile(owner access.Principal, objectID string) string {
 	ctx := context.Background()
 	root := database.Node{
 		ID: uuid.NewString(), OwnerID: owner.UserID, Collection: "files", Kind: database.KindRoot, Epoch: 1,
@@ -64,7 +64,7 @@ func (fx *fixture) storeFile(owner access.Principal) string {
 	wrapped := "wrapped"
 	file := root
 	file.ID, file.Kind, file.ParentID, file.WrappedKey = uuid.NewString(), database.KindItem, &root.ID, &wrapped
-	file.Blob = []byte(`{"objectId":"` + fx.object + `","chunks":3,"size":100}`)
+	file.Blob = []byte(`{"objectId":"` + objectID + `","chunks":3,"size":100}`)
 	fx.push(owner, file)
 	return file.ID
 }
@@ -200,7 +200,7 @@ func TestLinkPresignIsDownloadOnlyWithinTheSharedSubtree(t *testing.T) {
 		t.Fatalf("a link must only ever get download URLs: %v", parsed.URLs)
 	}
 
-	other := fx.storeFile(fx.owner)
+	other := fx.storeFile(fx.owner, uuid.NewString())
 	body["nodeId"] = other
 	if response := fx.router.Do(t, access.Principal{}, "POST", "/api/v1/links/"+link.ID+"/presign", body, nil); response.Code == http.StatusOK {
 		t.Fatal("a node outside the link's subtree must not be presigned")
