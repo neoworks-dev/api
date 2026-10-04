@@ -48,7 +48,9 @@ func (h *Handler) getBundle(w http.ResponseWriter, r *http.Request) {
 
 // rotateBundle swaps the bundle for the submitted one. If-Match carries the
 // version the client based the rotation on; the submitted bundle must carry the
-// next version. A stale If-Match gets 409 with the current version.
+// next version. A stale If-Match gets 409 with the current version. The
+// identity keys cannot change here: a new identity enters only through the
+// oauth rotation endpoint, which also writes the identity history row.
 func (h *Handler) rotateBundle(w http.ResponseWriter, r *http.Request) {
 	principal, _ := middleware.PrincipalFromContext(r.Context())
 	expected, err := parseIfMatch(r.Header.Get("If-Match"))
@@ -62,6 +64,16 @@ func (h *Handler) rotateBundle(w http.ResponseWriter, r *http.Request) {
 	}
 	if message := validateBundle(next, expected); message != "" {
 		respond.Error(w, http.StatusBadRequest, "invalid_bundle", message)
+		return
+	}
+
+	current, err := h.store.GetKeyBundle(r.Context(), principal.UserID)
+	if err != nil {
+		respond.StoreError(w, "rotateBundle", err)
+		return
+	}
+	if current.EncPub != next.EncPub || current.SignPub != next.SignPub {
+		respond.Error(w, http.StatusBadRequest, "identity_change_forbidden", "identity keys change only through key rotation")
 		return
 	}
 

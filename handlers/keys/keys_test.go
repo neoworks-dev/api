@@ -26,7 +26,7 @@ func newRouter(t *testing.T) (*handlertest.Router, *database.SurrealStore) {
 func nextBundle(version int) database.KeyBundle {
 	return database.KeyBundle{
 		Version: version, AmkPassword: "p2", AmkRecovery: "r2", IdentityPrivate: "i2",
-		EncPub: "e2", SignPub: "s2", SelfSig: "sig2",
+		EncPub: "enc", SignPub: "sign", SelfSig: "sig",
 	}
 }
 
@@ -148,5 +148,27 @@ func TestIdentityKeyHistoryOfUnknownUserIs404(t *testing.T) {
 	response := router.Do(t, user, "GET", "/api/v1/users/"+uuid.NewString()+"/identity-keys", nil, nil)
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("unknown user: got %d want 404", response.Code)
+	}
+}
+
+func TestBundleUpdateRefusesIdentityKeyChange(t *testing.T) {
+	router, store := newRouter(t)
+	user := handlertest.CreateUser(t, store)
+
+	changedEnc := nextBundle(2)
+	changedEnc.EncPub = "other-enc"
+	changedSign := nextBundle(2)
+	changedSign.SignPub = "other-sign"
+	for name, bundle := range map[string]database.KeyBundle{"encPub": changedEnc, "signPub": changedSign} {
+		response := router.Do(t, user, "PUT", "/api/v1/keys/bundle", bundle, map[string]string{"If-Match": "1"})
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("changed %s: got %d want 400", name, response.Code)
+		}
+	}
+
+	var unchanged database.KeyBundle
+	handlertest.Decode(t, router.Do(t, user, "GET", "/api/v1/keys/bundle", nil, nil), &unchanged)
+	if unchanged.Version != 1 || unchanged.EncPub != "enc" || unchanged.SignPub != "sign" {
+		t.Fatalf("bundle changed despite refusal: %+v", unchanged)
 	}
 }
