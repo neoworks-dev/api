@@ -1,7 +1,6 @@
 /**
- * Shared e2e helpers: PKCE OAuth signup against the running oauth server and a
- * thin GraphQL fetcher against the running api server. Used by the validation
- * suite; kept out of *.test.ts so bun does not run it as a test file.
+ * Shared e2e helpers: PKCE OAuth signup against the running oauth server. Kept
+ * out of *.test.ts so bun does not run it as a test file.
  *
  * Requires both servers up:
  *   go run ./cmd/oauth   (apps/oauth, default :8080)
@@ -118,38 +117,6 @@ export async function signupAndGetToken(
   const tokens = await tokenResp.json();
   if (!tokens.access_token) throw new Error("no access_token in token response");
   return tokens.access_token as string;
-}
-
-export interface GqlResult {
-  status: number;
-  data: unknown;
-  errors: Array<{ message: string; path?: string[]; extensions?: { code?: string } }> | undefined;
-}
-
-/** POST a GraphQL operation to /graphql. `token` omitted → unauthenticated call. */
-export async function gql(
-  query: string,
-  opts: { token?: string; variables?: Record<string, unknown> } = {},
-): Promise<GqlResult> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
-  const res = await fetch(`${API_BASE}/graphql`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ query, variables: opts.variables ?? {} }),
-  });
-  const json = (await res.json()) as { data?: unknown; errors?: GqlResult["errors"] };
-  return { status: res.status, data: json.data ?? null, errors: json.errors };
-}
-
-/** First error message, or "" when the response carried no errors. */
-export function firstError(r: GqlResult): string {
-  return r.errors?.[0]?.message ?? "";
-}
-
-/** First error's extensions.code (e.g. GRAPHQL_VALIDATION_FAILED), or "". */
-export function firstErrorCode(r: GqlResult): string {
-  return r.errors?.[0]?.extensions?.code ?? "";
 }
 
 /** Exits the process with a hint when a required server is not reachable. */

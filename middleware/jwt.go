@@ -30,8 +30,7 @@ func NewJWTMiddleware(issuer *oauth.TokenIssuer, redis *cache.RedisStore) *Clien
 }
 
 // Verify validates a bearer token (signature, expiry, revocation) and returns
-// its claims. Exposed so handlers can do conditional auth (e.g. allow public
-// GraphQL introspection but require auth for data operations).
+// its claims. Exposed so handlers can do conditional auth.
 func (m *ClientAuth) Verify(ctx context.Context, token string) (*oauth.Claims, error) {
 	claim, err := m.issuer.VerifyAccessToken(token)
 	if err != nil {

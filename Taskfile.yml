@@ -6,9 +6,3 @@ tasks:
     cmds:
       - go run ./cmd/migrate
     dir: '{{.ROOT_DIR}}'
-
-  gql:generate:
-    desc: Generate GraphQL code from schema
-    cmds:
-      - go run github.com/99designs/gqlgen generate --config schema/gqlgen.yml
-    dir: '{{.ROOT_DIR}}'

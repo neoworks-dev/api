@@ -3,7 +3,6 @@ package oauth
 import (
 	"crypto/ecdsa"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -26,54 +25,8 @@ type Claims struct {
 	jwt.RegisteredClaims
 	ClientID string   `json:"client_id"`
 	Scope    []string `json:"scope"`
-}
-
-// scopeReadActions are the scope actions that imply permission to decrypt a
-// scope's data. Mirrors decryptableLabels in scope-keys.js.
-var scopeReadActions = map[string]bool{"read": true, "write": true, "admin": true, "*": true}
-
-// scopeWriteActions are the scope actions that imply permission to create or
-// modify a scope's data. Mirrors writableLabels in scope-keys.js.
-var scopeWriteActions = map[string]bool{"write": true, "admin": true, "*": true}
-
-// AllowsScopeLabel reports whether the granted scopes permit reading (decrypting)
-// data in the given encryption label. An empty label is the legacy keyspace,
-// gated by a `legacy:read` grant. The label keys the per-scope key: "entity" for
-// "entity:action", or "org:entity" for "org:entity:action".
-func (c *Claims) AllowsScopeLabel(label string) bool {
-	if label == "" {
-		label = "legacy"
-	}
-	return c.grantsLabel(label, scopeReadActions)
-}
-
-// AllowsScopeWrite reports whether the granted scopes permit creating or
-// modifying data in the given encryption label.
-func (c *Claims) AllowsScopeWrite(label string) bool {
-	return c.grantsLabel(label, scopeWriteActions)
-}
-
-func (c *Claims) grantsLabel(label string, actions map[string]bool) bool {
-	for _, scope := range c.Scope {
-		scopeLabel, action, ok := splitScope(scope)
-		if ok && scopeLabel == label && actions[action] {
-			return true
-		}
-	}
-	return false
-}
-
-// splitScope parses `entity:action` or `org:entity:action` into its encryption
-// label and action. Scopes without an action (openid, profile) are not labels.
-func splitScope(scope string) (label, action string, ok bool) {
-	parts := strings.Split(scope, ":")
-	switch len(parts) {
-	case 2:
-		return parts[0], parts[1], true
-	case 3:
-		return parts[0] + ":" + parts[1], parts[2], true
-	}
-	return "", "", false
+	// InstallID binds the token to one app installation; empty for the account vault.
+	InstallID string `json:"install_id,omitempty"`
 }
 
 type TokenIssuer struct {
@@ -93,9 +46,15 @@ func NewTokenIssuer(privateKey *ecdsa.PrivateKey, issuer string) *TokenIssuer {
 // ── Issue ─────────────────────────────────────────────────────────────────────
 
 func (ti *TokenIssuer) IssueAccessToken(userID, clientID *models.RecordID, scopes []string) (string, *Claims, error) {
+	return ti.IssueAccessTokenForInstall(userID, clientID, "", scopes)
+}
+
+// IssueAccessTokenForInstall mints an access token bound to an app installation.
+// An empty installID yields an unbound token.
+func (ti *TokenIssuer) IssueAccessTokenForInstall(userID, clientID *models.RecordID, installID string, scopes []string) (string, *Claims, error) {
 	now := time.Now()
-	// A nil userID is a client_credentials token: the client acts as itself (its
-	// organization), with no user subject.
+	// A nil userID is a client_credentials token: the client acts as itself, with
+	// no user subject.
 	subject := ""
 	if userID != nil {
 		subject, _ = userID.ID.(string)
@@ -108,8 +67,9 @@ func (ti *TokenIssuer) IssueAccessToken(userID, clientID *models.RecordID, scope
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(AccessTokenTTL)),
 		},
-		ClientID: clientID.ID.(string),
-		Scope:    scopes,
+		ClientID:  clientID.ID.(string),
+		Scope:     scopes,
+		InstallID: installID,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)

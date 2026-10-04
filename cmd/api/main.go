@@ -10,35 +10,26 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/99designs/gqlgen/graphql"
-	"github.com/99designs/gqlgen/graphql/handler"
-	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
 	"github.com/neoworks/auth/config"
 	"github.com/neoworks/auth/crypto"
-	"github.com/neoworks/auth/dataplane"
-	"github.com/neoworks/auth/email"
-	"github.com/neoworks/auth/embeddings"
-	"github.com/neoworks/auth/gql"
-	resolvers "github.com/neoworks/auth/gql/resolvers"
 	approvalhandlers "github.com/neoworks/auth/handlers/approvals"
 	assethandlers "github.com/neoworks/auth/handlers/assets"
-	filehandlers "github.com/neoworks/auth/handlers/file"
-	spacehandlers "github.com/neoworks/auth/handlers/spaces"
+	devicehandlers "github.com/neoworks/auth/handlers/devices"
+	installhandlers "github.com/neoworks/auth/handlers/installs"
 	keyhandlers "github.com/neoworks/auth/handlers/keys"
-	molliehandlers "github.com/neoworks/auth/handlers/mollie"
 	"github.com/neoworks/auth/middleware"
-	"github.com/neoworks/auth/mollie"
 	"github.com/neoworks/auth/oauth"
-	"github.com/neoworks/auth/publicerr"
 	"github.com/neoworks/auth/push"
-	"github.com/neoworks/auth/scheduler"
 	"github.com/neoworks/auth/storage/cache"
 	"github.com/neoworks/auth/storage/database"
 	"github.com/neoworks/auth/storage/objectstore"
-	"github.com/vektah/gqlparser/v2/gqlerror"
+)
+
+const (
+	shutdownTimeout = 25 * time.Second
 )
 
 func main() {
@@ -47,62 +38,49 @@ func main() {
 
 	slog.Info("Starting api server")
 
-	// ── Config ────────────────────────────────────────────────────────────────
-	keyPath := env("KEY_PATH", "./keys/auth.pem")
-	surrealURL := env("SURREAL_URL", "ws://127.0.0.1:8000")
-	surrealUser := env("SURREAL_USER", "root")
-	surrealPass := env("SURREAL_PASS", "root")
-	surrealNS := env("SURREAL_NS", "neoworks")
-	surrealDB := env("SURREAL_DB", "auth")
-	issuerURL := env("ISSUER_URL", config.ServiceURL("oauth"))
-	port := env("PORT", "8081")
-	assetsPort := env("ASSETS_PORT", "8082")
-	s3Endpoint := stripScheme(env("S3_ENDPOINT", "127.0.0.1:9000"))
-	s3AccessKey := env("S3_ACCESS_KEY_ID", "minioadmin")
-	s3SecretKey := env("S3_SECRET_ACCESS_KEY", "minioadmin")
-	s3Bucket := env("S3_BUCKET_PRIVATE", "neoworks-private")
-	s3UseSSL := hasScheme(env("S3_ENDPOINT", ""), "https")
-
-	// ── Keys ──────────────────────────────────────────────────────────────────
-	keys, err := crypto.NewKeyManager(keyPath)
+	keys, err := crypto.NewKeyManager(env("KEY_PATH", "./keys/auth.pem"))
 	if err != nil {
 		log.Fatalf("key manager: %v", err)
 	}
 
-	// ── Storage ───────────────────────────────────────────────────────────────
 	redis := cache.NewRedisStore(cache.ConfigFromEnv())
+	surreal := connectSurreal()
+	objects := connectObjectStore()
 
+	issuer := oauth.NewTokenIssuer(keys.PrivateKey(), env("ISSUER_URL", config.ServiceURL("oauth")))
+	clientAuth := middleware.NewJWTMiddleware(issuer, redis)
+
+	servers := []*http.Server{
+		{Addr: ":" + env("PORT", "8081"), Handler: apiRouter(surreal, redis, objects, clientAuth)},
+		{Addr: ":" + env("ASSETS_PORT", "8082"), Handler: assethandlers.NewHandler(surreal, redis, objects, clientAuth).Router()},
+	}
+	for _, server := range servers {
+		go listen(server)
+	}
+	waitForShutdown(servers)
+}
+
+func connectSurreal() *database.SurrealStore {
 	surreal, err := database.NewSurrealStore(
-		surrealURL, surrealUser, surrealPass, surrealNS, surrealDB,
+		env("SURREAL_URL", "ws://127.0.0.1:8000"),
+		env("SURREAL_USER", "root"),
+		env("SURREAL_PASS", "root"),
+		env("SURREAL_NS", "neoworks"),
+		env("SURREAL_DB", "auth"),
 	)
 	if err != nil {
 		log.Fatalf("surrealdb: %v", err)
 	}
+	return surreal
+}
 
-	// Free-plan orgs share one SurrealDB instance, isolated by their per-client
-	// namespace (client_{clientID}); pro-plan orgs get a dedicated database
-	// (provisioned separately — not wired here yet). The shared instance defaults to
-	// the control-plane connection; point it at a separate instance in production.
-	if sharedURL := os.Getenv("SHARED_TENANT_SURREAL_URL"); sharedURL != "" {
-		surreal.UseSharedTenant(
-			sharedURL,
-			env("SHARED_TENANT_SURREAL_USER", "root"),
-			env("SHARED_TENANT_SURREAL_PASS", "root"),
-		)
-		slog.Info("shared tenant instance configured", "endpoint", sharedURL)
-	} else {
-		slog.Info("shared tenant instance defaulting to control-plane connection")
-	}
+func connectObjectStore() *objectstore.Store {
+	endpoint := env("S3_ENDPOINT", "127.0.0.1:9000")
+	accessKey := env("S3_ACCESS_KEY_ID", "minioadmin")
+	secretKey := env("S3_SECRET_ACCESS_KEY", "minioadmin")
 
-	// Per-tenant query admission control on the shared instance: caps concurrent
-	// queries per tenant (and globally) via Redis so a noisy neighbour queues rather
-	// than starving the others.
-	surreal.UseThrottler(database.NewRedisThrottler(redis.Client(), database.ThrottleConfigFromEnv()))
-
-	// Sample per-database query metrics into the usage time-series on an interval.
-	surreal.StartInstanceMetering(context.Background(), time.Minute)
-
-	objects, err := objectstore.New(s3Endpoint, s3AccessKey, s3SecretKey, s3Bucket, s3UseSSL)
+	objects, err := objectstore.New(stripScheme(endpoint), accessKey, secretKey,
+		env("S3_BUCKET_PRIVATE", "neoworks-private"), hasScheme(endpoint, "https"))
 	if err != nil {
 		log.Fatalf("objectstore: %v", err)
 	}
@@ -110,132 +88,46 @@ func main() {
 		log.Fatalf("objectstore bucket: %v", err)
 	}
 
-	// ── Core ──────────────────────────────────────────────────────────────────
-	issuer := oauth.NewTokenIssuer(keys.PrivateKey(), issuerURL)
-	pushSender := push.NewSender(push.ConfigFromEnv())
+	return objects
+}
 
-	// Background job: purge expired space-item tombstones and advance purge horizons.
-	scheduler.NewSpacePurgeScheduler(surreal).Start(context.Background())
-
-	// ── Middleware ────────────────────────────────────────────────────────────
-	clientAuth := middleware.NewJWTMiddleware(issuer, redis)
-
-	// ── Router ────────────────────────────────────────────────────────────────
+func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects *objectstore.Store, clientAuth *middleware.ClientAuth) http.Handler {
 	router := chi.NewRouter()
 	router.Use(chimiddleware.Logger)
 	router.Use(chimiddleware.Recoverer)
 	router.Use(chimiddleware.RealIP)
-	router.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-			// Custom response headers the browser must be allowed to read cross-origin
-			// (the single-shot thumbnail carries its wrapped DEK here).
-			w.Header().Set("Access-Control-Expose-Headers", "X-Wrapped-DEK, X-File-Mime, X-File-Scope")
-			if r.Method == http.MethodOptions {
-				w.WriteHeader(http.StatusNoContent)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	})
+	router.Use(allowCrossOrigin)
 
-	mailer := email.NewSender(email.ConfigFromEnv())
-	dataEngine := dataplane.NewEngine(surreal)
-	embedder := embeddings.NewClient(embeddings.ConfigFromEnv())
-	mollieClient := mollie.NewClient(mollie.ConfigFromEnv())
-	resolver := resolvers.NewGqlResolver(surreal, mailer, pushSender, dataEngine, embedder, mollieClient)
-
-	// Provision the OpenSchema public registry's client database + seed its
-	// catalog (idempotent). Non-fatal: a transient DB hiccup must not block boot.
-	if err := resolver.SeedOpenschemaRegistry(context.Background()); err != nil {
-		slog.Error("seed openschema registry", "error", err)
-	}
-
-	srv := handler.NewDefaultServer(
-		gql.NewExecutableSchema(gql.Config{Resolvers: resolver}),
-	)
-
-	// Default-deny error exposure: only errors explicitly marked Public reach the
-	// client. Everything else is logged server-side and returned as a generic
-	// message so internal details (DB schema, record ids) never leak.
-	srv.SetErrorPresenter(func(ctx context.Context, e error) *gqlerror.Error {
-		gqlErr := graphql.DefaultErrorPresenter(ctx, e)
-		if msg, ok := resolvers.AsPublic(e); ok {
-			gqlErr.Message = msg
-			return gqlErr
-		}
-		// Surface a sanitized reason for known query-shape DB failures; the full
-		// error is still logged server-side and unrecognized errors stay generic.
-		if msg, ok := publicerr.ClassifyDBError(e); ok {
-			slog.Error("graphql error", "error", e, "path", gqlErr.Path)
-			gqlErr.Message = msg
-			return gqlErr
-		}
-		slog.Error("graphql error", "error", e, "path", gqlErr.Path)
-		gqlErr.Message = "Internal server error"
-		return gqlErr
-	})
-
-	// Liveness/readiness probe. Boot-blocking dependencies (key manager, SurrealDB,
-	// object store) are validated before the server starts serving, so a plain 200
-	// here means the process is ready to take traffic.
 	router.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
 
-	// Key management — public endpoints (no auth)
-	keysHandler := keyhandlers.NewHandler(surreal, redis)
-	keysHandler.RegisterPublic(router)
+	router.Group(func(authenticated chi.Router) {
+		authenticated.Use(clientAuth.JWTMiddleware)
+		approvalhandlers.NewHandler(surreal, redis, push.NewSender(push.ConfigFromEnv())).RegisterAuthenticated(authenticated)
 
-	// Mollie payment webhook — public (Mollie calls it server-to-server; the
-	// handler authenticates by fetching the referenced payment from Mollie).
-	molliehandlers.NewHandler(surreal, mollieClient).RegisterPublic(router)
-
-	// Per-database data plane: schema introspection is public; data operations
-	// authenticate inside the handler (bearer + tenant match).
-	router.Handle("/graphql/db/{clientId}/{dbName}", middleware.Batch(dataEngine.Handler(clientAuth)))
-
-	// Protected endpoints — require client auth
-	router.Group(func(r chi.Router) {
-		r.Use(clientAuth.JWTMiddleware)
-		r.Handle("/graphql", middleware.Batch(srv))
-		keysHandler.RegisterAuthenticated(r)
-		approvalhandlers.NewHandler(surreal, redis, pushSender).RegisterAuthenticated(r)
-		filehandlers.NewHandler(surreal, objects).Register(r)
-		spacehandlers.NewHandler(surreal).Register(r)
+		authenticated.Group(func(principals chi.Router) {
+			principals.Use(middleware.PrincipalMiddleware(surreal))
+			keyhandlers.NewHandler(surreal).RegisterAuthenticated(principals)
+			devicehandlers.NewHandler(surreal).RegisterAuthenticated(principals)
+			installhandlers.NewHandler(surreal).RegisterAuthenticated(principals)
+		})
 	})
+	return router
+}
 
-	router.Handle("/playground", playground.Handler("NeoWorks API", "/graphql"))
-
-	// User uploads get their own origin: a second listener serves only the asset
-	// routes, and the API listener never serves them.
-	assetHandler := assethandlers.NewHandler(surreal, redis, objects, clientAuth)
-	servers := []*http.Server{
-		{Addr: ":" + port, Handler: router},
-		{Addr: ":" + assetsPort, Handler: assetHandler.Router()},
-	}
-	for _, server := range servers {
-		go listen(server)
-	}
-
-	// Graceful shutdown: on SIGTERM (pod eviction, rollout, HPA scale-down) stop
-	// accepting new connections and let in-flight OAuth/GraphQL requests drain
-	// before the process exits, instead of dropping them mid-flight.
-	shutdownSignal, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-	<-shutdownSignal.Done()
-
-	slog.Info("shutdown signal received; draining in-flight requests")
-	drainCtx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
-	defer cancel()
-	for _, server := range servers {
-		if err := server.Shutdown(drainCtx); err != nil {
-			slog.Error("graceful shutdown", "addr", server.Addr, "error", err)
+func allowCrossOrigin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, If-Match")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
 		}
-	}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func listen(server *http.Server) {
@@ -244,24 +136,40 @@ func listen(server *http.Server) {
 	}
 }
 
+// waitForShutdown drains in-flight requests on SIGTERM/SIGINT before exiting.
+func waitForShutdown(servers []*http.Server) {
+	shutdownSignal, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	<-shutdownSignal.Done()
+
+	slog.Info("shutdown signal received; draining in-flight requests")
+	drainContext, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	for _, server := range servers {
+		if err := server.Shutdown(drainContext); err != nil {
+			slog.Error("graceful shutdown", "addr", server.Addr, "error", err)
+		}
+	}
+}
+
 func env(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
+	if value := os.Getenv(key); value != "" {
+		return value
 	}
 	return fallback
 }
 
 // stripScheme removes a leading http:// or https:// from an endpoint string.
-func stripScheme(s string) string {
+func stripScheme(endpoint string) string {
 	for _, prefix := range []string{"https://", "http://"} {
-		if len(s) > len(prefix) && s[:len(prefix)] == prefix {
-			return s[len(prefix):]
+		if len(endpoint) > len(prefix) && endpoint[:len(prefix)] == prefix {
+			return endpoint[len(prefix):]
 		}
 	}
-	return s
+	return endpoint
 }
 
-func hasScheme(s, scheme string) bool {
+func hasScheme(endpoint, scheme string) bool {
 	prefix := scheme + "://"
-	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
+	return len(endpoint) >= len(prefix) && endpoint[:len(prefix)] == prefix
 }

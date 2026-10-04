@@ -3,11 +3,8 @@ package database
 import (
 	"context"
 	"errors"
-	"sync"
-	"time"
 
 	"github.com/neoworks/auth/oauth"
-	"github.com/neoworks/auth/provisioner"
 	surrealdb "github.com/surrealdb/surrealdb.go"
 	"github.com/surrealdb/surrealdb.go/pkg/models"
 )
@@ -15,39 +12,7 @@ import (
 var ErrNotFound = errors.New("not found")
 
 type SurrealStore struct {
-	DB        *surrealdb.DB
-	adminURL  string
-	adminUser string
-	adminPass string
-	adminNS   string
-
-	pricing Pricing
-
-	storageCache *storageUsageCache
-
-	// Tenant instance routing. Free-plan orgs share one SurrealDB instance
-	// (sharedTenant), isolated by the per-client namespace; pro-plan orgs may get a
-	// dedicated instance via the provisioner. sharedTenant defaults to the
-	// control-plane connection and is overridden with UseSharedTenant.
-	sharedTenant surrealTarget
-	prov         provisioner.InstanceProvisioner
-	instanceEnc  *Encryptor
-	targets      *targetCache
-	provLocks    sync.Map
-
-	// throttle admits/queues client-database queries per tenant to contain a noisy
-	// neighbour on the shared instance. Nil-safe: unset means no throttling.
-	throttle Throttler
-
-	// queryMetrics measures per-database query latency + in-flight counts, which
-	// SurrealDB does not expose, as the store brokers each client-database query.
-	queryMetrics *queryMetrics
-
-	Spaces      *SpaceStore
-	Connections *ConnectionStore
-	Settings    *SettingStore
-	Albums      *AlbumStore
-	Google      *GoogleStore
+	DB *surrealdb.DB
 }
 
 func NewSurrealStore(url, user, pass, ns, dbName string) (*SurrealStore, error) {
@@ -69,32 +34,7 @@ func NewSurrealStore(url, user, pass, ns, dbName string) (*SurrealStore, error) 
 		return nil, err
 	}
 
-	pricing, err := loadPricing()
-	if err != nil {
-		return nil, err
-	}
-
-	store := &SurrealStore{
-		DB:           db,
-		adminURL:     url,
-		adminUser:    user,
-		adminPass:    pass,
-		adminNS:      ns,
-		pricing:      pricing,
-		storageCache: newStorageUsageCache(),
-		targets:      newTargetCache(60 * time.Second),
-		queryMetrics: newQueryMetrics(),
-		// Default the shared tenant instance to the control-plane connection so a
-		// single-SurrealDB deployment works out of the box; UseSharedTenant points it
-		// at a separate instance in production.
-		sharedTenant: surrealTarget{Endpoint: url, User: user, Pass: pass},
-	}
-	store.Spaces = &SpaceStore{DB: db}
-	store.Connections = &ConnectionStore{DB: db}
-	store.Settings = &SettingStore{DB: db}
-	store.Albums = &AlbumStore{DB: db}
-	store.Google = &GoogleStore{DB: db}
-	return store, nil
+	return &SurrealStore{DB: db}, nil
 }
 
 // ── Clients ───────────────────────────────────────────────────────────────────
@@ -157,24 +97,21 @@ func (s *SurrealStore) GetUserByEmail(ctx context.Context, email string) (*oauth
 // ── Refresh tokens ────────────────────────────────────────────────────────────
 
 func (s *SurrealStore) SaveRefreshToken(ctx context.Context, rt oauth.RefreshToken) error {
-	_, err := surrealdb.Query[[]any](ctx, s.DB, `
-        CREATE refresh_token SET
-            id         = $id,
-            user    = $user,
-            client  = $client,
-            scopes     = $scopes,
-            used       = false,
-            revoked    = false,
-            expires_at = $expires_at,
-            created_at = $created_at
-    `, map[string]any{
+	assignments := "id = $id, user = $user, client = $client, scopes = $scopes, " +
+		"used = false, revoked = false, expires_at = $expires_at, created_at = $created_at"
+	params := map[string]any{
 		"id":         rt.ID,
 		"user":       rt.User,
 		"client":     rt.Client,
 		"scopes":     rt.Scopes,
 		"expires_at": rt.ExpiresAt,
 		"created_at": rt.CreatedAt,
-	})
+	}
+	if rt.Install != nil {
+		assignments += ", install = $install"
+		params["install"] = rt.Install
+	}
+	_, err := surrealdb.Query[[]any](ctx, s.DB, "CREATE refresh_token SET "+assignments, params)
 	return err
 }
 

@@ -1,8 +1,9 @@
 # NeoWorks API
 
-Core backend for the NeoWorks platform: GraphQL API, data plane, storage
-(SurrealDB), OAuth token issuance primitives, end-to-end-encryption key and
-device management, scheduling, email, and push. Go module
+Core backend for the NeoWorks platform: the REST API under `/api/v1` (encrypted
+node tree and sync, access grants, key bundles, devices, app installs, presigned
+blob URLs, link shares), storage (SurrealDB, S3-compatible object storage),
+OAuth token primitives, scheduling, email, and push. Go module
 `github.com/neoworks/auth`.
 
 ## License

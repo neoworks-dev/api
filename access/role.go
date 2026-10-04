@@ -1,0 +1,47 @@
+package access
+
+const (
+	RoleRead  = "read"
+	RoleWrite = "write"
+	RoleAdmin = "admin"
+)
+
+var roleRank = map[string]int{
+	RoleRead:  1,
+	RoleWrite: 2,
+	RoleAdmin: 3,
+}
+
+func ValidRole(role string) bool {
+	_, known := roleRank[role]
+	return known
+}
+
+// RoleAtLeast reports whether role grants everything minimum does.
+func RoleAtLeast(role, minimum string) bool {
+	return roleRank[role] >= roleRank[minimum] && roleRank[role] > 0
+}
+
+// RolesAtLeast lists the stored roles that satisfy minimum.
+func RolesAtLeast(minimum string) []string {
+	roles := []string{}
+	for _, role := range []string{RoleRead, RoleWrite, RoleAdmin} {
+		if RoleAtLeast(role, minimum) {
+			roles = append(roles, role)
+		}
+	}
+	return roles
+}
+
+// RolesUsable lists the stored roles that satisfy minimum once the token's
+// scopes cap them: a read scope caps every grant at read, a write scope leaves
+// the grant's own role in force.
+func (principal Principal) RolesUsable(collection, minimum string) []string {
+	if !principal.CanRead(collection) {
+		return []string{}
+	}
+	if minimum != RoleRead && !principal.CanWrite(collection) {
+		return []string{}
+	}
+	return RolesAtLeast(minimum)
+}

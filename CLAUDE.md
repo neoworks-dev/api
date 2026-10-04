@@ -75,46 +75,22 @@ RETURN $result;
 COMMIT TRANSACTION;
 ```
 
-## Current entities using this pattern
-- `file` / `file_version`
+## Where this pattern does not apply
 
-End-to-end encrypted collections (contacts, calendar, memories) do NOT use it.
-They version through `item` / `item_version` (`sql/migrations/054_items.surql`),
-where the client authors each version and the lineage lives inside the encrypted
-blob — the server cannot build a `derived_from` graph over ciphertext it cannot
-read. See `storage/database/item.go`.
+End-to-end encrypted data (the node tree) does not use it. Nodes version through
+`node` / `node_version` (`sql/migrations/003_nodes.surql`): every accepted write
+appends a full snapshot, and the server never reads content, so it builds no
+`derived_from` graph. See `storage/database/node_push.go`.
 
-# Canonical Entity Surface
+# Node access rules
 
-Versioning is one capability in a larger contract for how all entities are
-queried and mutated: base CRUD + opt-in capabilities (Queryable, SoftDeletable,
-Versioned, Related, Subscribable, Bulk) crossed by ownership-scope / validation /
-media-ref axes. The aim is to define each capability once (entity-generic Go store
-+ filter compiler, shared GraphQL primitives, SDK base) so entities stay
-consistent and new ones get a full surface for free. Spec + roadmap:
-see the `/docs/api/entity-surface` page in the web app
-(`apps/web/src/routes/(public)/docs/api/entity-surface/+page.svx`).
-
-Implemented so far:
-- **Filter compiler is entity-generic** — `storage/database/filter_compiler.go`
-  holds the operator logic (string/bool/int/date/stringList/fieldList/geo) plus a
-  generic `boolFilter[F]` engine for the and/or/not tree. Each entity adds a tiny
-  wiring file mapping its filter fields to columns: `file_filter.go`. To filter a
-  new entity, define its `XFilter` reusing the shared inputs and add a
-  `boolFilter[XFilter]` value.
-- **Shared GraphQL primitives** live in `schema/shared.graphql` (StringFilter,
-  BoolFilter, IntFilter, DateFilter, StringListFilter, GeoFilter, NearInput,
-  SortDirection). Per-entity `XFilter`/sort inputs reference them.
-- **Files** have the full Queryable surface: `FileFilter` + `FileSort` on the
-  file queries. FTS lives behind a FULLTEXT index (migration 025);
-  `StringFilter.search` is `@@`, `fuzzy` is `string::similarity::fuzzy`.
-
-The surface applies only to what the server can read. Files are now the only
-such entity: contacts, calendar and memories are encrypted envelopes, and their
-filter/search/sort engine runs on the client inside the Vault
-(`packages/sdk/src/vault/query.ts`). A new entity belongs here only if the server
-is meant to read its content.
-
-Not yet done: a generic `VersionedStore[Row]` (file is the only versioned store
-of this shape; deferred until a second one needs it), and the remaining
-capabilities (diff/merge/lineage nav, relation edit/traverse, bulk, real-time).
+- A request acts as a principal: `install:<id>` when the token carries an install,
+  otherwise `user:<id>` (`middleware/principal.go`). The token's collection scopes
+  cap a grant's role: `<collection>:read` allows read, `<collection>:write` allows
+  the grant's own role up to admin (`access/`).
+- Authorization for a write is evaluated inside the push transaction, together
+  with the `base_seq` check, so a grant revoked mid-request is seen by the write.
+- Every seq (node writes, grant changes) comes from `fn::next_seq()`, one counter
+  row, so commit order equals seq order and a pull cursor never skips a change.
+- SurrealQL silently evaluates an undefined `$param` as NONE. Every parameter a
+  statement names must be bound; test each branch.

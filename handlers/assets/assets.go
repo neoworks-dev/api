@@ -96,13 +96,12 @@ func corsMiddleware(next http.Handler) http.Handler {
 }
 
 type dbAsset struct {
-	ID           *models.RecordID `json:"id,omitempty"`
-	StorageKey   string           `json:"storage_key"`
-	Mime         string           `json:"mime"`
-	Size         int              `json:"size"`
-	Visibility   string           `json:"visibility"`
-	Owner        *models.RecordID `json:"owner,omitempty"`
-	Organization *models.RecordID `json:"organization,omitempty"`
+	ID         *models.RecordID `json:"id,omitempty"`
+	StorageKey string           `json:"storage_key"`
+	Mime       string           `json:"mime"`
+	Size       int              `json:"size"`
+	Visibility string           `json:"visibility"`
+	Owner      *models.RecordID `json:"owner,omitempty"`
 }
 
 // serve returns an asset's bytes. Public assets are served to anyone; private
@@ -192,7 +191,6 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 		Size:       len(data),
 		Visibility: visibility,
 		UserID:     claim.Subject,
-		ClientID:   claim.ClientID,
 	})
 	if err != nil || asset == nil || asset.ID == nil {
 		http.Error(w, "server error", http.StatusInternalServerError)
