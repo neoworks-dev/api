@@ -18,6 +18,7 @@ import (
 	"github.com/neoworks/auth/crypto"
 	approvalhandlers "github.com/neoworks/auth/handlers/approvals"
 	assethandlers "github.com/neoworks/auth/handlers/assets"
+	blobhandlers "github.com/neoworks/auth/handlers/blobs"
 	devicehandlers "github.com/neoworks/auth/handlers/devices"
 	installhandlers "github.com/neoworks/auth/handlers/installs"
 	keyhandlers "github.com/neoworks/auth/handlers/keys"
@@ -31,7 +32,10 @@ import (
 	"github.com/neoworks/auth/storage/objectstore"
 )
 
-const shutdownTimeout = 25 * time.Second
+const (
+	defaultStorageQuotaBytes = 10 << 30
+	shutdownTimeout          = 25 * time.Second
+)
 
 func main() {
 	_ = godotenv.Load(".env")
@@ -91,6 +95,10 @@ func connectObjectStore() *objectstore.Store {
 		log.Fatalf("objectstore bucket: %v", err)
 	}
 
+	publicEndpoint := env("S3_PUBLIC_ENDPOINT", endpoint)
+	if err := objects.UsePublicEndpoint(stripScheme(publicEndpoint), accessKey, secretKey, hasScheme(publicEndpoint, "https")); err != nil {
+		log.Fatalf("objectstore public endpoint: %v", err)
+	}
 	return objects
 }
 
@@ -100,6 +108,14 @@ func tombstoneRetention() time.Duration {
 		return 0
 	}
 	return time.Duration(days) * 24 * time.Hour
+}
+
+func storageQuotaBytes() int64 {
+	quota, err := strconv.ParseInt(os.Getenv("STORAGE_QUOTA_BYTES"), 10, 64)
+	if err != nil {
+		return defaultStorageQuotaBytes
+	}
+	return quota
 }
 
 func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects *objectstore.Store, clientAuth *middleware.ClientAuth) http.Handler {
@@ -115,7 +131,9 @@ func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects 
 	})
 
 	nodes := nodehandlers.NewHandler(surreal)
+	blobs := blobhandlers.NewHandler(surreal, objects, storageQuotaBytes())
 	nodes.RegisterPublic(router)
+	blobs.RegisterPublic(router)
 
 	router.Group(func(authenticated chi.Router) {
 		authenticated.Use(clientAuth.JWTMiddleware)
@@ -127,6 +145,7 @@ func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects 
 			devicehandlers.NewHandler(surreal).RegisterAuthenticated(principals)
 			installhandlers.NewHandler(surreal).RegisterAuthenticated(principals)
 			nodes.RegisterAuthenticated(principals)
+			blobs.RegisterAuthenticated(principals)
 		})
 	})
 	return router
