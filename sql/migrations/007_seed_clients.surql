@@ -53,6 +53,7 @@ CREATE client CONTENT {
     scopes:            [
         "openid", "profile", "email",
         "calendar:read", "calendar:write", "calendar:share",
+        "contacts:read",
         "google:read", "google:write", "google:share"
     ],
     auto_grant_scopes: true,
@@ -86,7 +87,7 @@ CREATE client CONTENT {
         "https://photos.neoworks.dev/callback",
         "http://127.0.0.1:8765/callback"
     ],
-    scopes:            ["openid", "profile", "email", "photos:read", "photos:write", "photos:share"],
+    scopes:            ["openid", "profile", "email", "photos:read", "photos:write", "photos:share", "contacts:read"],
     auto_grant_scopes: true,
     public:            true
 };
