@@ -72,6 +72,7 @@ func (s *SurrealStore) purgeOwnerTombstones(ctx context.Context, owner string, g
 		BEGIN TRANSACTION;
 		DELETE node_version WHERE node_id IN $node_ids;
 		DELETE access_grant WHERE node_id IN $node_ids;
+		DELETE access_log WHERE node_id IN $node_ids;
 		DELETE link WHERE node_id IN $node_ids;
 		DELETE $node_records;
 		UPSERT $horizon SET user_id = $owner_id;

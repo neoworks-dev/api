@@ -41,7 +41,7 @@ func TestIdentityLookupByEmailAndID(t *testing.T) {
 	ctx := context.Background()
 	owner := f.createUser()
 	byID, err := f.store.GetPublicIdentityByUserID(ctx, owner.UserID)
-	if err != nil || byID.SignPub != "sign-"+owner.UserID {
+	if err != nil || byID.SignPub == "" {
 		t.Fatalf("by id: %+v %v", byID, err)
 	}
 	user, _ := f.store.GetUserByID(ctx, owner.UserID)

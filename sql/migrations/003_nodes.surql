@@ -93,20 +93,24 @@ DEFINE FIELD created_at   ON node_version TYPE datetime VALUE time::now() READON
 DEFINE INDEX idx_node_version_node ON node_version FIELDS node_id, seq;
 
 -- ── access_grant: who may use a node, and the key material to do so ──────────
--- One row per (node, principal); a re-grant or a revoke updates it in place and
--- takes a new seq so the principal's next pull sees the change. The history of
--- every change lives in access_log. `facets` NONE grants the whole node and its
--- subtree; a facet list grants those facets of that node only. `seq` is taken
--- from the change counter on create; `collection` is copied from the node.
+-- Roles are read and write; the node's owner holds write on everything they own
+-- without a grant. One row per (node, principal); a re-grant or a revoke updates
+-- it in place, takes a new seq so the principal's next pull sees the change, and
+-- points `log_index` at the access_log entry that made it. `facets` NONE grants
+-- the whole node and its subtree; a facet list grants those facets of that node
+-- only. `signature` is the signature of that log entry. `seq` is taken from the
+-- change counter on create; `collection` and `owner_id` are copied from the node.
 DEFINE TABLE access_grant SCHEMAFULL;
 DEFINE FIELD node_id         ON access_grant TYPE string READONLY;
 DEFINE FIELD collection      ON access_grant TYPE string
     VALUE (SELECT VALUE collection FROM ONLY type::record('node', $this.node_id));
+DEFINE FIELD owner_id        ON access_grant TYPE string
+    VALUE (SELECT VALUE owner_id FROM ONLY type::record('node', $this.node_id));
 DEFINE FIELD principal_type  ON access_grant TYPE string READONLY
     ASSERT $value IN ["user", "install"];
 DEFINE FIELD principal_id    ON access_grant TYPE string READONLY;
 DEFINE FIELD role            ON access_grant TYPE string
-    ASSERT $value IN ["read", "write", "admin"];
+    ASSERT $value IN ["read", "write"];
 DEFINE FIELD facets          ON access_grant TYPE option<array<int>>;
 DEFINE FIELD epoch           ON access_grant TYPE int;
 DEFINE FIELD wrapped_keys    ON access_grant TYPE string;
@@ -114,6 +118,7 @@ DEFINE FIELD granted_by_type ON access_grant TYPE string ASSERT $value IN ["user
 DEFINE FIELD granted_by_id   ON access_grant TYPE string;
 DEFINE FIELD cert_id         ON access_grant TYPE option<string>;
 DEFINE FIELD signature       ON access_grant TYPE string;
+DEFINE FIELD log_index       ON access_grant TYPE int;
 DEFINE FIELD seq             ON access_grant TYPE int
     VALUE IF $before = NONE { fn::next_seq() } ELSE { $value };
 DEFINE FIELD created_at      ON access_grant TYPE datetime VALUE $before OR time::now() READONLY;
@@ -122,27 +127,44 @@ DEFINE FIELD revoked_at      ON access_grant TYPE option<datetime>;
 DEFINE INDEX idx_access_grant_unique    ON access_grant FIELDS node_id, principal_type, principal_id UNIQUE;
 DEFINE INDEX idx_access_grant_principal ON access_grant FIELDS principal_type, principal_id;
 DEFINE INDEX idx_access_grant_seq       ON access_grant FIELDS seq;
+DEFINE INDEX idx_access_grant_owner     ON access_grant FIELDS owner_id;
+DEFINE INDEX idx_access_grant_actor     ON access_grant FIELDS granted_by_id;
 
--- ── access_log: append-only audit trail of grants and revocations ────────────
--- Grant entries carry the granter's signature over the grant, so clients can
--- verify that the server did not add a member on its own. For a revocation,
--- granted_by_* is whoever revoked and there is no signature.
+-- ── access_log: the per-node hash chain of grants and revocations ────────────
+-- Every grant and revoke is one entry, signed by the acting user's identity key
+-- and chained to the previous entry by its hash. Entries are stored exactly as
+-- submitted and never changed or deleted. (node_id, index) is unique, so two
+-- writers cannot both extend the same head. `collection` and `node_ancestors`
+-- are copied from the node so pulls can find the entries of visible nodes;
+-- `seq` is taken from the change counter on create.
 DEFINE TABLE access_log SCHEMAFULL;
-DEFINE FIELD node_id         ON access_log TYPE string READONLY;
-DEFINE FIELD action          ON access_log TYPE string READONLY ASSERT $value IN ["grant", "revoke"];
-DEFINE FIELD principal_type  ON access_log TYPE string READONLY;
-DEFINE FIELD principal_id    ON access_log TYPE string READONLY;
-DEFINE FIELD role            ON access_log TYPE option<string> READONLY;
-DEFINE FIELD facets          ON access_log TYPE option<array<int>> READONLY;
-DEFINE FIELD epoch           ON access_log TYPE option<int> READONLY;
-DEFINE FIELD wrapped_keys    ON access_log TYPE option<string> READONLY;
-DEFINE FIELD granted_by_type ON access_log TYPE string READONLY;
-DEFINE FIELD granted_by_id   ON access_log TYPE string READONLY;
-DEFINE FIELD cert_id         ON access_log TYPE option<string> READONLY;
-DEFINE FIELD signature       ON access_log TYPE option<string> READONLY;
-DEFINE FIELD created_at      ON access_log TYPE datetime VALUE $before OR time::now() READONLY;
+DEFINE FIELD node_id          ON access_log TYPE string READONLY;
+DEFINE FIELD index            ON access_log TYPE int READONLY;
+DEFINE FIELD prev_hash        ON access_log TYPE string READONLY;
+DEFINE FIELD entry_hash       ON access_log TYPE string READONLY;
+DEFINE FIELD action           ON access_log TYPE string READONLY ASSERT $value IN ["grant", "revoke"];
+DEFINE FIELD principal_type   ON access_log TYPE string READONLY;
+DEFINE FIELD principal_id     ON access_log TYPE string READONLY;
+DEFINE FIELD role             ON access_log TYPE string READONLY;
+DEFINE FIELD facets           ON access_log TYPE option<array<int>> READONLY;
+DEFINE FIELD epoch            ON access_log TYPE int READONLY;
+DEFINE FIELD wrapped_keys_hash ON access_log TYPE string READONLY;
+DEFINE FIELD actor_type       ON access_log TYPE string READONLY;
+DEFINE FIELD actor_id         ON access_log TYPE string READONLY;
+DEFINE FIELD cert_id          ON access_log TYPE option<string> READONLY;
+DEFINE FIELD signature        ON access_log TYPE string READONLY;
+DEFINE FIELD collection       ON access_log TYPE string READONLY
+    VALUE (SELECT VALUE collection FROM ONLY type::record('node', $this.node_id));
+DEFINE FIELD node_ancestors   ON access_log TYPE array<string> READONLY
+    VALUE (SELECT VALUE ancestors FROM ONLY type::record('node', $this.node_id));
+DEFINE FIELD owner_id         ON access_log TYPE string READONLY
+    VALUE (SELECT VALUE owner_id FROM ONLY type::record('node', $this.node_id));
+DEFINE FIELD seq              ON access_log TYPE int READONLY
+    VALUE IF $before = NONE { fn::next_seq() } ELSE { $value };
+DEFINE FIELD created_at       ON access_log TYPE datetime VALUE $before OR time::now() READONLY;
 
-DEFINE INDEX idx_access_log_node ON access_log FIELDS node_id;
+DEFINE INDEX idx_access_log_chain ON access_log FIELDS node_id, index UNIQUE;
+DEFINE INDEX idx_access_log_seq   ON access_log FIELDS seq;
 
 -- ── link: an unauthenticated share of a node's subtree ───────────────────────
 -- The node key travels in the URL fragment and never reaches the server.
@@ -174,19 +196,5 @@ DEFINE FUNCTION fn::flag_for_rotation($node_id: string, $whole_node: bool) {
             WHERE record::id(id) = $node_id OR $node_id IN ancestors;
     } ELSE {
         UPDATE type::record('node', $node_id) SET needs_rotation = true, seq = fn::next_seq();
-    };
-};
-
--- Revokes one grant, appends the revocation to access_log and flags the keys the
--- principal held for rotation. Revoking an already revoked grant does nothing.
-DEFINE FUNCTION fn::revoke_grant($grant: record<access_grant>, $actor_type: string, $actor_id: string) {
-    LET $row = (SELECT * FROM ONLY $grant);
-    IF $row != NONE AND $row.revoked_at = NONE {
-        UPDATE $grant SET revoked_at = time::now(), seq = fn::next_seq();
-        CREATE access_log SET
-            node_id = $row.node_id, action = 'revoke',
-            principal_type = $row.principal_type, principal_id = $row.principal_id,
-            granted_by_type = $actor_type, granted_by_id = $actor_id;
-        fn::flag_for_rotation($row.node_id, $row.facets = NONE);
     };
 };

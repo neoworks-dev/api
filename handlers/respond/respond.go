@@ -48,7 +48,12 @@ func Decode(w http.ResponseWriter, r *http.Request, target any, maxBytes int64) 
 // logged and answered with a generic 500 so internals never reach the client.
 func StoreError(w http.ResponseWriter, operation string, err error) {
 	var purged *database.PurgedError
+	var headMoved *database.LogHeadMovedError
 	switch {
+	case errors.As(err, &headMoved):
+		JSON(w, http.StatusConflict, map[string]any{
+			"error": "log_head_moved", "message": "the access log head moved; re-read and re-sign", "head": headMoved.Head,
+		})
 	case errors.As(err, &purged):
 		JSON(w, http.StatusGone, map[string]any{"error": "cursor_purged", "purgeHorizon": purged.Horizon})
 	case errors.Is(err, database.ErrNotFound):

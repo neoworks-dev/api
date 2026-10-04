@@ -3,13 +3,11 @@ package access
 const (
 	RoleRead  = "read"
 	RoleWrite = "write"
-	RoleAdmin = "admin"
 )
 
 var roleRank = map[string]int{
 	RoleRead:  1,
 	RoleWrite: 2,
-	RoleAdmin: 3,
 }
 
 func ValidRole(role string) bool {
@@ -25,7 +23,7 @@ func RoleAtLeast(role, minimum string) bool {
 // RolesAtLeast lists the stored roles that satisfy minimum.
 func RolesAtLeast(minimum string) []string {
 	roles := []string{}
-	for _, role := range []string{RoleRead, RoleWrite, RoleAdmin} {
+	for _, role := range []string{RoleRead, RoleWrite} {
 		if RoleAtLeast(role, minimum) {
 			roles = append(roles, role)
 		}

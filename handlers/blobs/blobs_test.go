@@ -27,12 +27,13 @@ func (fakePresigner) PresignGet(_ context.Context, key string, _ time.Duration) 
 }
 
 type fixture struct {
-	t      *testing.T
-	router *handlertest.Router
-	store  *database.SurrealStore
-	owner  access.Principal
-	nodeID string
-	object string
+	t       *testing.T
+	router  *handlertest.Router
+	store   *database.SurrealStore
+	account *dbtest.Account
+	owner   access.Principal
+	nodeID  string
+	object  string
 }
 
 // newFixture stores a files node whose blob has 3 chunks and 100 declared bytes.
@@ -43,24 +44,19 @@ func newFixture(t *testing.T, quotaBytes int64) *fixture {
 		handler.RegisterAuthenticated(router)
 		handler.RegisterPublic(router)
 	})
-	owner := handlertest.CreateUser(t, store, "files:read", "files:write")
-	fx := &fixture{t: t, router: router, store: store, owner: owner, object: uuid.NewString()}
-	fx.nodeID = fx.storeFile(owner, fx.object)
+	account := dbtest.CreateAccount(t, store, "files:read", "files:write")
+	fx := &fixture{t: t, router: router, store: store, account: account, owner: account.Principal, object: uuid.NewString()}
+	fx.nodeID = fx.storeFile(fx.owner, fx.object)
 	return fx
 }
 
 func (fx *fixture) storeFile(owner access.Principal, objectID string) string {
-	ctx := context.Background()
 	root := database.Node{
 		ID: uuid.NewString(), OwnerID: owner.UserID, Collection: "files", Kind: database.KindRoot, Epoch: 1,
 		Content: []database.FacetContent{{Facet: 0, Ciphertext: "ct"}}, AuthorType: "user", AuthorID: owner.UserID, Signature: "sig",
 	}
 	fx.push(owner, root)
-	if _, err := fx.store.CreateAccessGrant(ctx, owner, root.ID, database.GrantInput{
-		PrincipalType: "user", PrincipalID: owner.UserID, Role: "admin", Epoch: 1, WrappedKeys: "k", Signature: "s",
-	}); err != nil {
-		fx.t.Fatalf("bootstrap grant: %v", err)
-	}
+	fx.account.Grant(fx.t, fx.store, root.ID, dbtest.WriteGrant("user", owner.UserID, 1))
 	wrapped := "wrapped"
 	file := root
 	file.ID, file.Kind, file.ParentID, file.WrappedKey = uuid.NewString(), database.KindItem, &root.ID, &wrapped
@@ -149,7 +145,8 @@ func TestPresignValidatesChunksAndObject(t *testing.T) {
 
 func TestPresignChecksNodeAccessAndScope(t *testing.T) {
 	fx := newFixture(t, 1000)
-	stranger := handlertest.CreateUser(t, fx.store, "files:read", "files:write")
+	strangerAccount := dbtest.CreateAccount(t, fx.store, "files:read", "files:write")
+	stranger := strangerAccount.Principal
 	if code, _ := fx.presign(stranger, "get", 0); code != http.StatusNotFound {
 		t.Fatalf("stranger get: got %d want 404", code)
 	}
@@ -158,11 +155,7 @@ func TestPresignChecksNodeAccessAndScope(t *testing.T) {
 	if err != nil || node.ParentID == nil {
 		t.Fatalf("load node: %v", err)
 	}
-	if _, err := fx.store.CreateAccessGrant(context.Background(), fx.owner, *node.ParentID, database.GrantInput{
-		PrincipalType: "user", PrincipalID: stranger.UserID, Role: "read", Epoch: 1, WrappedKeys: "k", Signature: "s",
-	}); err != nil {
-		t.Fatalf("grant read: %v", err)
-	}
+	fx.account.Grant(t, fx.store, *node.ParentID, dbtest.ReadGrant("user", stranger.UserID, 1))
 	if code, _ := fx.presign(stranger, "get", 0); code != http.StatusOK {
 		t.Fatalf("reader get: got %d want 200", code)
 	}

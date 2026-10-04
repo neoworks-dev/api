@@ -22,3 +22,17 @@ type PurgedError struct {
 
 func (err *PurgedError) Error() string { return ErrCursorPurged.Error() }
 func (err *PurgedError) Unwrap() error { return ErrCursorPurged }
+
+// LogHeadMovedError means an access log entry did not extend the chain's current
+// head. Head is nil when the node's chain is still empty.
+type LogHeadMovedError struct {
+	Head *LogHead
+}
+
+// LogHead is the last entry of a node's access chain.
+type LogHead struct {
+	Index     int64  `json:"index"`
+	EntryHash string `json:"entryHash"`
+}
+
+func (err *LogHeadMovedError) Error() string { return "access log head moved" }

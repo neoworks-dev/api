@@ -11,32 +11,31 @@ import (
 )
 
 type fixture struct {
-	t     *testing.T
-	store *database.SurrealStore
+	t        *testing.T
+	store    *database.SurrealStore
+	accounts map[string]*dbtest.Account
 }
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
-	return &fixture{t: t, store: dbtest.New(t)}
+	return &fixture{t: t, store: dbtest.New(t), accounts: map[string]*dbtest.Account{}}
 }
 
 func (f *fixture) createUser() access.Principal {
 	f.t.Helper()
-	userID := uuid.NewString()
-	_, err := f.store.CreateUserWithBundle(context.Background(), &database.CreateUserParams{
-		UserID:  userID,
-		Email:   userID[:8] + "@example.com",
-		AuthKey: "auth-key",
-		Bundle: database.KeyBundle{
-			Version: 1, PwhashSalt: "salt", PwhashOps: 3, PwhashMem: 67108864,
-			AmkPassword: "amkp", AmkRecovery: "amkr", IdentityPrivate: "idp",
-			EncPub: "enc-" + userID, SignPub: "sign-" + userID, SelfSig: "sig",
-		},
-	})
-	if err != nil {
-		f.t.Fatalf("create user: %v", err)
+	account := dbtest.CreateAccount(f.t, f.store)
+	f.accounts[account.Principal.UserID] = account
+	return account.Principal
+}
+
+// accountOf returns the signing account behind a user principal.
+func (f *fixture) accountOf(principal access.Principal) *dbtest.Account {
+	f.t.Helper()
+	account, found := f.accounts[principal.UserID]
+	if !found {
+		f.t.Fatalf("no account for %s", principal.UserID)
 	}
-	return userPrincipal(userID, "calendar:read", "calendar:write", "photos:read", "photos:write", "files:read", "files:write")
+	return account
 }
 
 func userPrincipal(userID string, scopes ...string) access.Principal {

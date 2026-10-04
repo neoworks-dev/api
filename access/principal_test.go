@@ -18,12 +18,10 @@ func TestRolesUsableAreCappedByTheTokenScopes(t *testing.T) {
 		minimum   string
 		want      []string
 	}{
-		{"read scope reads", readOnly, access.RoleRead, []string{"read", "write", "admin"}},
+		{"read scope reads", readOnly, access.RoleRead, []string{"read", "write"}},
 		{"read scope cannot write", readOnly, access.RoleWrite, []string{}},
-		{"read scope cannot administer", readOnly, access.RoleAdmin, []string{}},
-		{"write scope writes", readWrite, access.RoleWrite, []string{"write", "admin"}},
-		{"write scope implies read", readWrite, access.RoleRead, []string{"read", "write", "admin"}},
-		{"write scope can administer with an admin grant", readWrite, access.RoleAdmin, []string{"admin"}},
+		{"write scope writes", readWrite, access.RoleWrite, []string{"write"}},
+		{"write scope implies read", readWrite, access.RoleRead, []string{"read", "write"}},
 		{"other collection", none, access.RoleRead, []string{}},
 	}
 	for _, testCase := range cases {
@@ -32,18 +30,24 @@ func TestRolesUsableAreCappedByTheTokenScopes(t *testing.T) {
 			t.Errorf("%s: got %v want %v", testCase.name, got, testCase.want)
 		}
 	}
+	if access.ValidRole("admin") {
+		t.Error("admin is not a role")
+	}
 }
 
-func TestGoogleNodesFollowTheCalendarScopes(t *testing.T) {
+func TestGoogleNodesAreGatedByGoogleScopes(t *testing.T) {
+	google := access.Principal{Scopes: []string{"google:write"}}
 	calendar := access.Principal{Scopes: []string{"calendar:write"}}
-	contacts := access.Principal{Scopes: []string{"contacts:write"}}
-	if !calendar.CanRead("google") || !calendar.CanWrite("google") {
-		t.Error("calendar scopes should cover google nodes")
+	if !google.CanRead("google") || !google.CanWrite("google") {
+		t.Error("google scopes should cover google nodes")
 	}
-	if contacts.CanRead("google") {
-		t.Error("contacts scopes must not cover google nodes")
+	if calendar.CanRead("google") {
+		t.Error("calendar scopes must not cover google nodes")
 	}
-	if got := calendar.ReadableCollections(); !slices.Contains(got, "google") || !slices.Contains(got, "calendar") {
+	if google.CanRead("calendar") {
+		t.Error("google scopes must not cover calendar nodes")
+	}
+	if got := google.ReadableCollections(); !slices.Equal(got, []string{"google"}) {
 		t.Errorf("readable collections: %v", got)
 	}
 }

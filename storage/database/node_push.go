@@ -124,6 +124,7 @@ func sleepBeforeRetry(ctx context.Context, attempt int) error {
 
 func pushParams(principal access.Principal, validated *ValidatedNode, writerRoles []string) map[string]any {
 	node := validated.Node
+	isOwner := !principal.IsInstall() && node.OwnerID == principal.UserID
 	params := map[string]any{
 		"node":            models.NewRecordID("node", node.ID),
 		"node_id":         node.ID,
@@ -143,7 +144,8 @@ func pushParams(principal access.Principal, validated *ValidatedNode, writerRole
 		"principal_type":  principal.Type(),
 		"principal_id":    principal.ID(),
 		"writer_roles":    writerRoles,
-		"may_create_root": !principal.IsInstall() && node.OwnerID == principal.UserID,
+		"may_create_root": isOwner,
+		"owner_may_write": isOwner,
 	}
 	addOptionalPushParams(params, validated)
 	return params
@@ -210,11 +212,11 @@ LET $target_parent_id = IF $has_parent { $parent_id } ELSE { NONE };
 LET $new_ancestors = IF $parent_row != NONE { array::append($parent_row.ancestors, $parent_id) } ELSE { [] };
 LET $location_ancestors = IF $existing != NONE { $existing.ancestors } ELSE { $new_ancestors };
 LET $self_scope = IF $existing != NONE { [$node_id] } ELSE { [] };
-LET $may_write_here = array::len((SELECT VALUE id FROM access_grant
+LET $may_write_here = $owner_may_write OR array::len((SELECT VALUE id FROM access_grant
 	WHERE principal_type = $principal_type AND principal_id = $principal_id
 	AND revoked_at = NONE AND role IN $writer_roles
 	AND ((facets = NONE AND node_id IN $location_ancestors) OR node_id IN $self_scope))) > 0;
-LET $may_write_new_parent = array::len((SELECT VALUE id FROM access_grant
+LET $may_write_new_parent = $owner_may_write OR array::len((SELECT VALUE id FROM access_grant
 	WHERE principal_type = $principal_type AND principal_id = $principal_id
 	AND revoked_at = NONE AND role IN $writer_roles
 	AND facets = NONE AND node_id IN $new_ancestors)) > 0;

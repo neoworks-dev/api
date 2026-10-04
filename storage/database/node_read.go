@@ -40,6 +40,25 @@ func (s *SurrealStore) authorizeNode(ctx context.Context, principal access.Princ
 	return node, nil
 }
 
+// authorizeOwner returns the node when the principal is the user who owns it.
+// Unreadable and foreign nodes are reported as not found.
+func (s *SurrealStore) authorizeOwner(ctx context.Context, principal access.Principal, nodeID string) (*dbNode, error) {
+	node, err := s.authorizeNode(ctx, principal, nodeID, access.RoleRead)
+	if err != nil {
+		return nil, err
+	}
+	if principal.IsInstall() || node.OwnerID != principal.UserID {
+		return nil, ErrForbidden
+	}
+	return node, nil
+}
+
+// ownsNode reports whether the principal is the user who owns the node. The
+// owner holds write on everything they own without a grant.
+func ownsNode(principal access.Principal, node *dbNode) bool {
+	return !principal.IsInstall() && node.OwnerID == principal.UserID
+}
+
 // grantsReaching lists the principal's active grants that apply to the node: any
 // grant on the node itself, and whole-node grants on its ancestors.
 func (s *SurrealStore) grantsReaching(ctx context.Context, principal access.Principal, nodeID string, node *dbNode) ([]grantReach, error) {
@@ -56,6 +75,9 @@ func (s *SurrealStore) grantsReaching(ctx context.Context, principal access.Prin
 		})
 	if err != nil {
 		return nil, fmt.Errorf("load grants: %w", err)
+	}
+	if ownsNode(principal, node) {
+		rows = append(rows, grantReach{Role: access.RoleWrite})
 	}
 	return rows, nil
 }

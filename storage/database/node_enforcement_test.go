@@ -25,9 +25,8 @@ func TestInstallActsOnlyThroughItsGrantAndCertificate(t *testing.T) {
 		t.Fatalf("install without grant: got %s want forbidden", outcome.Status)
 	}
 
-	writeGrant := adminGrant(access.PrincipalTypeInstall, app.InstallID, 1)
-	writeGrant.Role = access.RoleWrite
-	f.grant(owner, root.ID, writeGrant)
+	shared := writeGrant(access.PrincipalTypeInstall, app.InstallID, 1)
+	f.grant(owner, root.ID, shared)
 	if outcome := f.push(app, child); outcome.Status != database.StatusOK {
 		t.Fatalf("install with grant: got %s want ok", outcome.Status)
 	}
@@ -45,9 +44,8 @@ func TestInstallTokenScopeCapsItsWriteGrant(t *testing.T) {
 	owner := f.createUser()
 	root := f.createRoot(owner, "calendar")
 	app, certID := f.createInstall(owner, "calendar:read")
-	writeGrant := adminGrant(access.PrincipalTypeInstall, app.InstallID, 1)
-	writeGrant.Role = access.RoleWrite
-	f.grant(owner, root.ID, writeGrant)
+	shared := writeGrant(access.PrincipalTypeInstall, app.InstallID, 1)
+	f.grant(owner, root.ID, shared)
 
 	child := newNode(app, owner.UserID, "calendar", database.KindItem, &root.ID)
 	child.CertID = &certID
@@ -64,9 +62,8 @@ func TestWriterCannotClaimAnotherOwnerOrCollection(t *testing.T) {
 	owner := f.createUser()
 	writer := f.createUser()
 	root := f.createRoot(owner, "calendar")
-	writeGrant := adminGrant(access.PrincipalTypeUser, writer.UserID, 1)
-	writeGrant.Role = access.RoleWrite
-	f.grant(owner, root.ID, writeGrant)
+	shared := writeGrant(access.PrincipalTypeUser, writer.UserID, 1)
+	f.grant(owner, root.ID, shared)
 
 	ownsItself := newNode(writer, writer.UserID, "calendar", database.KindItem, &root.ID)
 	if outcome := f.push(writer, ownsItself); outcome.Status != database.StatusForbidden {
@@ -131,9 +128,8 @@ func TestStrangerCannotReadHistoryOrCertificate(t *testing.T) {
 	stranger := f.createUser()
 	root := f.createRoot(owner, "calendar")
 	app, certID := f.createInstall(owner, "calendar:write")
-	writeGrant := adminGrant(access.PrincipalTypeInstall, app.InstallID, 1)
-	writeGrant.Role = access.RoleWrite
-	f.grant(owner, root.ID, writeGrant)
+	shared := writeGrant(access.PrincipalTypeInstall, app.InstallID, 1)
+	f.grant(owner, root.ID, shared)
 	item := newNode(app, owner.UserID, "calendar", database.KindItem, &root.ID)
 	item.CertID = &certID
 	f.pushOK(app, item)
@@ -145,9 +141,7 @@ func TestStrangerCannotReadHistoryOrCertificate(t *testing.T) {
 		t.Fatalf("stranger certificate: got %v want not found", err)
 	}
 
-	readGrant := adminGrant(access.PrincipalTypeUser, stranger.UserID, 1)
-	readGrant.Role = access.RoleRead
-	f.grant(owner, root.ID, readGrant)
+	f.grant(owner, root.ID, readGrant(access.PrincipalTypeUser, stranger.UserID, 1))
 	if _, err := f.store.CertificateForPrincipal(context.Background(), stranger, certID); err != nil {
 		t.Fatalf("a reader of the install's node may fetch its certificate: %v", err)
 	}
@@ -212,15 +206,14 @@ func TestPurgeReportsOnlyUnreferencedObjects(t *testing.T) {
 	}
 }
 
-func TestRevokingAnInstallRevokesItsGrantsTokensAndFlagsRotation(t *testing.T) {
+func TestRevokingAnInstallStopsItsTokensAndFlagsRotation(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 	owner := f.createUser()
 	root := f.createRoot(owner, "calendar")
 	app, _ := f.createInstall(owner, "calendar:write")
-	readGrant := adminGrant(access.PrincipalTypeInstall, app.InstallID, 1)
-	readGrant.Role = access.RoleRead
-	f.grant(owner, root.ID, readGrant)
+	shared := readGrant(access.PrincipalTypeInstall, app.InstallID, 1)
+	f.grant(owner, root.ID, shared)
 
 	refresh := oauth.RefreshToken{
 		ID:        &models.RecordID{Table: "refresh_token", ID: uuid.NewString()},
@@ -246,11 +239,12 @@ func TestRevokingAnInstallRevokesItsGrantsTokensAndFlagsRotation(t *testing.T) {
 	if err != nil || install.RevokedAt == nil {
 		t.Fatalf("install not marked revoked: %+v %v", install, err)
 	}
-	if page := f.pull(app, 0, 10); len(page.Nodes) != 0 {
-		t.Fatalf("revoked install still pulls %d nodes", len(page.Nodes))
-	}
 	if !f.pull(owner, 0, 10).Nodes[0].NeedsRotation {
 		t.Fatal("the granted node should need rotation")
+	}
+	f.revoke(owner, root.ID, access.PrincipalTypeInstall, app.InstallID)
+	if page := f.pull(app, 0, 10); len(page.Nodes) != 0 {
+		t.Fatalf("an install whose grant the owner revoked still pulls %d nodes", len(page.Nodes))
 	}
 	stranger := f.createUser()
 	if err := f.store.RevokeInstall(ctx, stranger.UserID, app.InstallID); !errors.Is(err, database.ErrNotFound) {
@@ -263,12 +257,9 @@ func TestRotationClearsNeedsRotationWhenEpochAdvances(t *testing.T) {
 	owner := f.createUser()
 	reader := f.createUser()
 	root := f.createRoot(owner, "calendar")
-	readGrant := adminGrant(access.PrincipalTypeUser, reader.UserID, 1)
-	readGrant.Role = access.RoleRead
-	f.grant(owner, root.ID, readGrant)
-	if err := f.store.RevokeAccessGrant(context.Background(), owner, root.ID, access.PrincipalTypeUser, reader.UserID); err != nil {
-		t.Fatalf("revoke: %v", err)
-	}
+	shared := readGrant(access.PrincipalTypeUser, reader.UserID, 1)
+	f.grant(owner, root.ID, shared)
+	f.revoke(owner, root.ID, access.PrincipalTypeUser, reader.UserID)
 
 	rotated := root
 	rotated.Epoch = 2
@@ -339,18 +330,5 @@ func TestABlobObjectBelongsToOneNode(t *testing.T) {
 	mine.Content = []database.FacetContent{{Facet: 0, Ciphertext: "renamed"}}
 	if outcome := f.push(owner, mine); outcome.Status != database.StatusOK {
 		t.Fatalf("rewriting a node with its own object: got %s want ok", outcome.Status)
-	}
-}
-
-func TestUserGrantersCannotAttachACertificate(t *testing.T) {
-	f := newFixture(t)
-	owner := f.createUser()
-	reader := f.createUser()
-	root := f.createRoot(owner, "calendar")
-	cert := uuid.NewString()
-	input := adminGrant(access.PrincipalTypeUser, reader.UserID, 1)
-	input.CertID = &cert
-	if _, err := f.store.CreateAccessGrant(context.Background(), owner, root.ID, input); !errors.Is(err, database.ErrInvalidInput) {
-		t.Fatalf("got %v want invalid input", err)
 	}
 }

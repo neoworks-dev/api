@@ -136,9 +136,11 @@ func (s *SurrealStore) ListInstalls(ctx context.Context, userID string) ([]Insta
 	return installs, nil
 }
 
-// RevokeInstall revokes an install and everything it holds in one transaction: its
-// refresh tokens stop working, each of its grants is revoked and logged, and the
-// nodes it could read are flagged for key rotation. Revoking twice is harmless.
+// RevokeInstall revokes an install in one transaction: its refresh tokens stop
+// working, its access tokens are refused from now on, and the nodes it could read
+// are flagged for key rotation. Its grants stay until the owner's vault revokes
+// them with signed log entries, since the server cannot sign for the user.
+// Revoking twice is harmless.
 func (s *SurrealStore) RevokeInstall(ctx context.Context, userID, installID string) error {
 	outcome, err := queryReturned[txOutcome](ctx, s.DB, `
 		BEGIN TRANSACTION;
@@ -148,10 +150,10 @@ func (s *SurrealStore) RevokeInstall(ctx context.Context, userID, installID stri
 		} ELSE {
 			UPDATE $install SET revoked_at = time::now() WHERE revoked_at = NONE;
 			UPDATE refresh_token SET revoked = true WHERE install = $install;
-			LET $grants = (SELECT VALUE id FROM access_grant
+			LET $grants = (SELECT node_id, facets FROM access_grant
 				WHERE principal_type = 'install' AND principal_id = $install_id AND revoked_at = NONE);
 			FOR $grant IN $grants {
-				fn::revoke_grant($grant, 'user', $user_id);
+				fn::flag_for_rotation($grant.node_id, $grant.facets = NONE);
 			};
 			{ status: 'ok', version: 0 }
 		};
@@ -161,7 +163,6 @@ func (s *SurrealStore) RevokeInstall(ctx context.Context, userID, installID stri
 			"install":    models.NewRecordID("install", installID),
 			"user":       models.NewRecordID("user", userID),
 			"install_id": installID,
-			"user_id":    userID,
 		})
 	if err != nil {
 		return fmt.Errorf("revoke install: %w", err)

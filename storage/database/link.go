@@ -40,9 +40,9 @@ func (s *SurrealStore) getLink(ctx context.Context, linkID string) (*dbLink, err
 		map[string]any{"link": models.NewRecordID("link", linkID)})
 }
 
-// CreateLink shares a node's subtree by link. It needs admin on the node.
+// CreateLink shares a node's subtree by link. Only the node's owner may.
 func (s *SurrealStore) CreateLink(ctx context.Context, principal access.Principal, nodeID string) (*Link, error) {
-	if _, err := s.authorizeNode(ctx, principal, nodeID, access.RoleAdmin); err != nil {
+	if _, err := s.authorizeOwner(ctx, principal, nodeID); err != nil {
 		return nil, err
 	}
 	row, err := queryFirst[dbLink](ctx, s.DB,
@@ -59,13 +59,13 @@ func (s *SurrealStore) CreateLink(ctx context.Context, principal access.Principa
 	return &link, nil
 }
 
-// RevokeLink disables a link. It needs admin on the linked node.
+// RevokeLink disables a link. Only the linked node's owner may.
 func (s *SurrealStore) RevokeLink(ctx context.Context, principal access.Principal, linkID string) error {
 	row, err := s.getLink(ctx, linkID)
 	if err != nil {
 		return err
 	}
-	if _, err := s.authorizeNode(ctx, principal, row.NodeID, access.RoleAdmin); err != nil {
+	if _, err := s.authorizeOwner(ctx, principal, row.NodeID); err != nil {
 		return err
 	}
 	return queryExec(ctx, s.DB, "UPDATE $link SET revoked_at = time::now() WHERE revoked_at = NONE",

@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/neoworks/auth/access"
 	"github.com/neoworks/auth/storage/database"
+	"github.com/neoworks/auth/storage/database/dbtest"
 	surrealdb "github.com/surrealdb/surrealdb.go"
 )
 
@@ -51,28 +52,45 @@ func (f *fixture) pushOK(author access.Principal, node database.Node) int64 {
 	return outcome.Seq
 }
 
-func adminGrant(principalType, principalID string, epoch int) database.GrantInput {
-	return database.GrantInput{
-		PrincipalType: principalType, PrincipalID: principalID, Role: access.RoleAdmin,
-		Epoch: epoch, WrappedKeys: "sealed", Signature: "grantsig",
-	}
+func writeGrant(principalType, principalID string, epoch int) database.GrantInput {
+	return dbtest.WriteGrant(principalType, principalID, epoch)
 }
 
-func (f *fixture) grant(by access.Principal, nodeID string, input database.GrantInput) *database.AccessGrant {
+func readGrant(principalType, principalID string, epoch int) database.GrantInput {
+	return dbtest.ReadGrant(principalType, principalID, epoch)
+}
+
+// grant signs and stores a grant by the user behind the principal.
+func (f *fixture) grant(by access.Principal, nodeID string, input database.GrantInput) *database.GrantResult {
 	f.t.Helper()
-	grant, err := f.store.CreateAccessGrant(context.Background(), by, nodeID, input)
-	if err != nil {
-		f.t.Fatalf("grant: %v", err)
-	}
-	return grant
+	return f.accountOf(by).Grant(f.t, f.store, nodeID, input)
 }
 
-// createRoot pushes a root for the owner and gives the owner admin on it.
+func (f *fixture) tryGrant(by access.Principal, nodeID string, input database.GrantInput) (*database.GrantResult, error) {
+	f.t.Helper()
+	request := f.accountOf(by).GrantRequest(f.t, f.store, nodeID, input)
+	return f.store.CreateAccessGrant(context.Background(), by, nodeID, request)
+}
+
+func (f *fixture) revoke(by access.Principal, nodeID, principalType, principalID string) {
+	f.t.Helper()
+	f.accountOf(by).Revoke(f.t, f.store, nodeID, principalType, principalID)
+}
+
+func (f *fixture) tryRevoke(by access.Principal, nodeID, principalType, principalID string) error {
+	f.t.Helper()
+	entry := f.accountOf(by).RevokeEntry(f.t, f.store, nodeID, principalType, principalID)
+	_, err := f.store.RevokeAccessGrant(context.Background(), by, nodeID, entry)
+	return err
+}
+
+// createRoot pushes a root for the owner and records the owner's own grant as
+// entry 0 of the root's log.
 func (f *fixture) createRoot(owner access.Principal, collection string) database.Node {
 	f.t.Helper()
 	root := newNode(owner, owner.UserID, collection, database.KindRoot, nil)
 	f.pushOK(owner, root)
-	f.grant(owner, root.ID, adminGrant(access.PrincipalTypeUser, owner.UserID, 1))
+	f.grant(owner, root.ID, writeGrant(access.PrincipalTypeUser, owner.UserID, 1))
 	return root
 }
 

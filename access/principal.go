@@ -41,24 +41,13 @@ func (principal Principal) ID() string {
 // CanRead reports whether the token's scopes allow reading the collection.
 // A write scope implies read.
 func (principal Principal) CanRead(collection string) bool {
-	scopeName := scopeCollection(collection)
-	return principal.hasScope(scopeName, "read") || principal.hasScope(scopeName, "write")
+	return principal.hasScope(collection, "read") || principal.hasScope(collection, "write")
 }
 
 // CanWrite reports whether the token's scopes allow writing the collection, and
-// therefore whether a grant's role is capped at admin instead of read.
+// therefore whether a grant's role is capped at read.
 func (principal Principal) CanWrite(collection string) bool {
-	return principal.hasScope(scopeCollection(collection), "write")
-}
-
-// scopeCollection names the collection whose scopes gate the given one. The
-// Google refresh token lives in a google node, which the calendar scopes cover:
-// there is no google scope.
-func scopeCollection(collection string) string {
-	if collection == "google" {
-		return "calendar"
-	}
-	return collection
+	return principal.hasScope(collection, "write")
 }
 
 func (principal Principal) ReadableCollections() []string {

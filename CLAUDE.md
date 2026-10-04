@@ -85,9 +85,16 @@ appends a full snapshot, and the server never reads content, so it builds no
 # Node access rules
 
 - A request acts as a principal: `install:<id>` when the token carries an install,
-  otherwise `user:<id>` (`middleware/principal.go`). The token's collection scopes
-  cap a grant's role: `<collection>:read` allows read, `<collection>:write` allows
-  the grant's own role up to admin (`access/`).
+  otherwise `user:<id>` (`middleware/principal.go`). Roles are `read` and `write`;
+  the token's collection scopes (`<collection>:read|write`, including `google`) cap
+  a grant's role (`access/`). The node's owner has write on everything they own
+  without a grant.
+- Sharing is a hash-chained access log per node (`accesslog/`, `access_log`). Only
+  the account (never an install) appends entries: the owner grants anyone; a user
+  grants their own installs a role no higher than their own. The owner revokes
+  anyone; a user revokes their own installs and their own grant. The server
+  verifies each entry's Ed25519 signature and that it extends the chain head
+  (409 `log_head_moved` otherwise), and stores entries verbatim.
 - Authorization for a write is evaluated inside the push transaction, together
   with the `base_seq` check, so a grant revoked mid-request is seen by the write.
 - Every seq (node writes, grant changes) comes from `fn::next_seq()`, one counter

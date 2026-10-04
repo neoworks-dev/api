@@ -2,11 +2,13 @@ package database_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
 
 	"github.com/neoworks/auth/access"
+	"github.com/neoworks/auth/accesslog"
 	"github.com/neoworks/auth/storage/database"
 )
 
@@ -39,18 +41,13 @@ func TestPushRequiresWriteOnSelfOrAncestor(t *testing.T) {
 		t.Fatalf("stranger push: got %s want forbidden", outcome.Status)
 	}
 
-	readOnly := database.GrantInput{
-		PrincipalType: access.PrincipalTypeUser, PrincipalID: stranger.UserID, Role: access.RoleRead,
-		Epoch: 1, WrappedKeys: "sealed", Signature: "sig",
-	}
+	readOnly := readGrant(access.PrincipalTypeUser, stranger.UserID, 1)
 	f.grant(owner, root.ID, readOnly)
 	if outcome := f.push(stranger, child); outcome.Status != database.StatusForbidden {
 		t.Fatalf("reader push: got %s want forbidden", outcome.Status)
 	}
 
-	writer := readOnly
-	writer.Role = access.RoleWrite
-	f.grant(owner, root.ID, writer)
+	f.grant(owner, root.ID, writeGrant(access.PrincipalTypeUser, stranger.UserID, 1))
 	if outcome := f.push(stranger, child); outcome.Status != database.StatusOK {
 		t.Fatalf("writer push: got %s want ok", outcome.Status)
 	}
@@ -125,10 +122,8 @@ func TestSubtreeGrantCoversDescendantsButFacetGrantDoesNot(t *testing.T) {
 	item := newNode(owner, owner.UserID, "calendar", database.KindItem, &container.ID)
 	f.pushOK(owner, item)
 
-	facetGrant := database.GrantInput{
-		PrincipalType: access.PrincipalTypeUser, PrincipalID: reader.UserID, Role: access.RoleRead,
-		Facets: []int{1}, Epoch: 1, WrappedKeys: "sealed", Signature: "sig",
-	}
+	facetGrant := readGrant(access.PrincipalTypeUser, reader.UserID, 1)
+	facetGrant.Facets = []int{1}
 	f.grant(owner, container.ID, facetGrant)
 	ids := nodeIDs(f.pull(reader, 0, 100).Nodes)
 	if !ids[container.ID] || ids[item.ID] || ids[root.ID] {
@@ -152,11 +147,7 @@ func TestNewGrantReDeliversExistingNodesToAnAlreadySyncedGrantee(t *testing.T) {
 	f.pushOK(owner, item)
 
 	cursor := f.pull(reader, 0, 100).Cursor
-	grant := database.GrantInput{
-		PrincipalType: access.PrincipalTypeUser, PrincipalID: reader.UserID, Role: access.RoleRead,
-		Epoch: 1, WrappedKeys: "sealed", Signature: "sig",
-	}
-	f.grant(owner, root.ID, grant)
+	f.grant(owner, root.ID, readGrant(access.PrincipalTypeUser, reader.UserID, 1))
 
 	page := f.pull(reader, cursor, 100)
 	ids := nodeIDs(page.Nodes)
@@ -165,23 +156,44 @@ func TestNewGrantReDeliversExistingNodesToAnAlreadySyncedGrantee(t *testing.T) {
 	}
 }
 
-func TestGrantChangesNeedAdmin(t *testing.T) {
+func TestOnlyTheOwnerGrantsToOtherUsers(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	writer := f.createUser()
 	third := f.createUser()
 	root := f.createRoot(owner, "calendar")
+	f.grant(owner, root.ID, writeGrant(access.PrincipalTypeUser, writer.UserID, 1))
 
-	writeGrant := adminGrant(access.PrincipalTypeUser, writer.UserID, 1)
-	writeGrant.Role = access.RoleWrite
-	f.grant(owner, root.ID, writeGrant)
-
-	_, err := f.store.CreateAccessGrant(t.Context(), writer, root.ID, adminGrant(access.PrincipalTypeUser, third.UserID, 1))
-	if err != database.ErrForbidden {
-		t.Fatalf("writer granting: got %v want forbidden", err)
+	if _, err := f.tryGrant(writer, root.ID, readGrant(access.PrincipalTypeUser, third.UserID, 1)); !errors.Is(err, database.ErrForbidden) {
+		t.Fatalf("a writer sharing with another user: got %v want forbidden", err)
 	}
-	if err := f.store.RevokeAccessGrant(t.Context(), writer, root.ID, access.PrincipalTypeUser, owner.UserID); err != database.ErrForbidden {
-		t.Fatalf("writer revoking: got %v want forbidden", err)
+	if _, err := f.tryGrant(third, root.ID, readGrant(access.PrincipalTypeUser, third.UserID, 1)); !errors.Is(err, database.ErrNotFound) {
+		t.Fatalf("an outsider granting: got %v want not found", err)
+	}
+	if err := f.tryRevoke(writer, root.ID, access.PrincipalTypeUser, owner.UserID); !errors.Is(err, database.ErrForbidden) {
+		t.Fatalf("a writer revoking the owner: got %v want forbidden", err)
+	}
+}
+
+func TestRevokeRules(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	writer := f.createUser()
+	other := f.createUser()
+	root := f.createRoot(owner, "calendar")
+	f.grant(owner, root.ID, writeGrant(access.PrincipalTypeUser, writer.UserID, 1))
+	f.grant(owner, root.ID, readGrant(access.PrincipalTypeUser, other.UserID, 1))
+	app, _ := f.createInstall(writer, "calendar:write")
+	f.grant(writer, root.ID, writeGrant(access.PrincipalTypeInstall, app.InstallID, 1))
+
+	if err := f.tryRevoke(writer, root.ID, access.PrincipalTypeUser, other.UserID); !errors.Is(err, database.ErrForbidden) {
+		t.Fatalf("revoking someone else's grant: got %v want forbidden", err)
+	}
+	f.revoke(writer, root.ID, access.PrincipalTypeInstall, app.InstallID)
+	f.revoke(writer, root.ID, access.PrincipalTypeUser, writer.UserID)
+	f.revoke(owner, root.ID, access.PrincipalTypeUser, other.UserID)
+	if err := f.tryRevoke(owner, root.ID, access.PrincipalTypeUser, other.UserID); !errors.Is(err, database.ErrNotFound) {
+		t.Fatalf("revoking an already revoked grant: got %v want not found", err)
 	}
 }
 
@@ -191,8 +203,8 @@ func TestGrantMustMatchNodeEpoch(t *testing.T) {
 	reader := f.createUser()
 	root := f.createRoot(owner, "calendar")
 
-	_, err := f.store.CreateAccessGrant(t.Context(), owner, root.ID, adminGrant(access.PrincipalTypeUser, reader.UserID, 2))
-	if err != database.ErrStaleEpoch {
+	_, err := f.tryGrant(owner, root.ID, readGrant(access.PrincipalTypeUser, reader.UserID, 2))
+	if !errors.Is(err, database.ErrStaleEpoch) {
 		t.Fatalf("got %v want stale epoch", err)
 	}
 }
@@ -202,16 +214,12 @@ func TestRevokedGrantStopsAccessAndFlagsRotation(t *testing.T) {
 	owner := f.createUser()
 	reader := f.createUser()
 	root := f.createRoot(owner, "calendar")
-	readGrant := adminGrant(access.PrincipalTypeUser, reader.UserID, 1)
-	readGrant.Role = access.RoleRead
-	f.grant(owner, root.ID, readGrant)
+	f.grant(owner, root.ID, readGrant(access.PrincipalTypeUser, reader.UserID, 1))
 	if len(f.pull(reader, 0, 10).Nodes) != 1 {
 		t.Fatal("reader should see the root")
 	}
 
-	if err := f.store.RevokeAccessGrant(t.Context(), owner, root.ID, access.PrincipalTypeUser, reader.UserID); err != nil {
-		t.Fatalf("revoke: %v", err)
-	}
+	f.revoke(owner, root.ID, access.PrincipalTypeUser, reader.UserID)
 	page := f.pull(reader, 0, 10)
 	if len(page.Nodes) != 0 {
 		t.Fatalf("revoked reader still pulls %d nodes", len(page.Nodes))
@@ -225,21 +233,164 @@ func TestRevokedGrantStopsAccessAndFlagsRotation(t *testing.T) {
 	}
 }
 
-func TestOnlyOwnerBootstrapsFirstAdminGrant(t *testing.T) {
+func TestOwnersGrantToThemselvesIsEntryZero(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	stranger := f.createUser()
 	root := newNode(owner, owner.UserID, "calendar", database.KindRoot, nil)
 	f.pushOK(owner, root)
 
-	_, err := f.store.CreateAccessGrant(t.Context(), stranger, root.ID, adminGrant(access.PrincipalTypeUser, stranger.UserID, 1))
-	if err != database.ErrNotFound {
-		t.Fatalf("stranger bootstrap: got %v want not found", err)
+	if _, err := f.tryGrant(stranger, root.ID, writeGrant(access.PrincipalTypeUser, stranger.UserID, 1)); !errors.Is(err, database.ErrNotFound) {
+		t.Fatalf("a stranger's grant: got %v want not found", err)
 	}
-	f.grant(owner, root.ID, adminGrant(access.PrincipalTypeUser, owner.UserID, 1))
-	_, err = f.store.CreateAccessGrant(t.Context(), owner, root.ID, adminGrant(access.PrincipalTypeUser, stranger.UserID, 1))
-	if err != nil {
-		t.Fatalf("owner admin grant: %v", err)
+	result := f.grant(owner, root.ID, writeGrant(access.PrincipalTypeUser, owner.UserID, 1))
+	if result.Entry.Index != 0 || result.Entry.PrevHash != accesslog.GenesisPrevHash || result.Grant.LogIndex != 0 {
+		t.Fatalf("bootstrap grant should be entry 0: %+v", result)
+	}
+	entries, err := f.store.ListAccessLog(t.Context(), owner, root.ID)
+	if err != nil || len(entries) != 1 || entries[0].EntryHash != result.Entry.EntryHash {
+		t.Fatalf("log after bootstrap: %+v %v", entries, err)
+	}
+}
+
+func TestAccessLogChainsEntriesAndRejectsAMovedHead(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	reader := f.createUser()
+	other := f.createUser()
+	root := f.createRoot(owner, "calendar")
+	account := f.accountOf(owner)
+
+	first := f.grant(owner, root.ID, readGrant(access.PrincipalTypeUser, reader.UserID, 1))
+	if first.Entry.Index != 1 {
+		t.Fatalf("second entry of the chain should have index 1, got %d", first.Entry.Index)
+	}
+	entries, _ := f.store.ListAccessLog(t.Context(), owner, root.ID)
+	if len(entries) != 2 || entries[1].PrevHash != entries[0].EntryHash {
+		t.Fatalf("entries must chain: %+v", entries)
+	}
+
+	stale := account.GrantRequestAt(t, root.ID, readGrant(access.PrincipalTypeUser, other.UserID, 1), 1, entries[0].EntryHash)
+	_, err := f.store.CreateAccessGrant(t.Context(), owner, root.ID, stale)
+	var moved *database.LogHeadMovedError
+	if !errors.As(err, &moved) || moved.Head == nil || moved.Head.Index != 1 || moved.Head.EntryHash != entries[1].EntryHash {
+		t.Fatalf("stale head: got %v want log_head_moved reporting index 1", err)
+	}
+	wrongPrev := account.GrantRequestAt(t, root.ID, readGrant(access.PrincipalTypeUser, other.UserID, 1), 2, entries[0].EntryHash)
+	if _, err := f.store.CreateAccessGrant(t.Context(), owner, root.ID, wrongPrev); !errors.As(err, &moved) {
+		t.Fatalf("right index but wrong prevHash: got %v want log_head_moved", err)
+	}
+	if reader := f.pull(other, 0, 10); len(reader.Grants) != 0 {
+		t.Fatal("a rejected entry must not store a grant")
+	}
+}
+
+func TestEntriesMustBeSignedByTheActingUserAndDescribeTheGrant(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	reader := f.createUser()
+	root := f.createRoot(owner, "calendar")
+	ctx := t.Context()
+	input := readGrant(access.PrincipalTypeUser, reader.UserID, 1)
+
+	forged := f.accountOf(reader).GrantRequest(t, f.store, root.ID, input)
+	forged.Entry.ActorID = owner.UserID
+	if _, err := f.store.CreateAccessGrant(ctx, owner, root.ID, forged); !errors.Is(err, database.ErrInvalidInput) {
+		t.Fatalf("an entry signed by another key: got %v want invalid input", err)
+	}
+
+	request := f.accountOf(owner).GrantRequest(t, f.store, root.ID, input)
+	request.Grant.Role = access.RoleWrite
+	if _, err := f.store.CreateAccessGrant(ctx, owner, root.ID, request); !errors.Is(err, database.ErrInvalidInput) {
+		t.Fatalf("a grant that differs from its entry: got %v want invalid input", err)
+	}
+
+	tampered := f.accountOf(owner).GrantRequest(t, f.store, root.ID, input)
+	tampered.Entry.Epoch = 1
+	tampered.Entry.Index = 5
+	if _, err := f.store.CreateAccessGrant(ctx, owner, root.ID, tampered); !errors.Is(err, database.ErrInvalidInput) {
+		t.Fatalf("changed entry bytes: got %v want invalid input", err)
+	}
+}
+
+func TestInstallsMayNotWriteTheAccessLog(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	reader := f.createUser()
+	root := f.createRoot(owner, "calendar")
+	app, _ := f.createInstall(owner, "calendar:write")
+	f.grant(owner, root.ID, writeGrant(access.PrincipalTypeInstall, app.InstallID, 1))
+
+	request := f.accountOf(owner).GrantRequest(t, f.store, root.ID, readGrant(access.PrincipalTypeUser, reader.UserID, 1))
+	if _, err := f.store.CreateAccessGrant(t.Context(), app, root.ID, request); !errors.Is(err, database.ErrForbidden) {
+		t.Fatalf("an install granting: got %v want forbidden", err)
+	}
+}
+
+func TestUsersPassSharesToTheirOwnInstallsWithAtMostTheirRole(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	reader := f.createUser()
+	root := f.createRoot(owner, "calendar")
+	f.grant(owner, root.ID, readGrant(access.PrincipalTypeUser, reader.UserID, 1))
+	app, _ := f.createInstall(reader, "calendar:write")
+	foreign, _ := f.createInstall(owner, "calendar:write")
+
+	if _, err := f.tryGrant(reader, root.ID, writeGrant(access.PrincipalTypeInstall, app.InstallID, 1)); !errors.Is(err, database.ErrForbidden) {
+		t.Fatalf("a reader granting write to their install: got %v want forbidden", err)
+	}
+	if _, err := f.tryGrant(reader, root.ID, readGrant(access.PrincipalTypeInstall, foreign.InstallID, 1)); !errors.Is(err, database.ErrForbidden) {
+		t.Fatalf("granting someone else's install: got %v want forbidden", err)
+	}
+	f.grant(reader, root.ID, readGrant(access.PrincipalTypeInstall, app.InstallID, 1))
+	if page := f.pull(app, 0, 10); len(page.Nodes) != 1 {
+		t.Fatalf("the install should pull the shared root, got %d nodes", len(page.Nodes))
+	}
+}
+
+func TestFacetSharesCanOnlyBePassedOnAsASubset(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	reader := f.createUser()
+	root := f.createRoot(owner, "calendar")
+	item := newNode(owner, owner.UserID, "calendar", database.KindItem, &root.ID)
+	f.pushOK(owner, item)
+	shared := readGrant(access.PrincipalTypeUser, reader.UserID, 1)
+	shared.Facets = []int{1}
+	f.grant(owner, item.ID, shared)
+	app, _ := f.createInstall(reader, "calendar:read")
+
+	whole := readGrant(access.PrincipalTypeInstall, app.InstallID, 1)
+	if _, err := f.tryGrant(reader, item.ID, whole); !errors.Is(err, database.ErrForbidden) {
+		t.Fatalf("whole-node pass-on of a facet share: got %v want forbidden", err)
+	}
+	wider := whole
+	wider.Facets = []int{1, 2}
+	if _, err := f.tryGrant(reader, item.ID, wider); !errors.Is(err, database.ErrForbidden) {
+		t.Fatalf("wider facets: got %v want forbidden", err)
+	}
+	subset := whole
+	subset.Facets = []int{1}
+	f.grant(reader, item.ID, subset)
+}
+
+func TestOwnerWritesWithoutAGrantButNotThroughAnInstallWithoutOne(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	root := newNode(owner, owner.UserID, "calendar", database.KindRoot, nil)
+	f.pushOK(owner, root)
+	item := newNode(owner, owner.UserID, "calendar", database.KindItem, &root.ID)
+	if outcome := f.push(owner, item); outcome.Status != database.StatusOK {
+		t.Fatalf("the owner writes in their own tree without any grant: got %s", outcome.Status)
+	}
+	if page := f.pull(owner, 0, 10); len(page.Nodes) != 2 {
+		t.Fatalf("the owner pulls their own nodes without a grant, got %d", len(page.Nodes))
+	}
+	app, certID := f.createInstall(owner, "calendar:write")
+	byInstall := newNode(app, owner.UserID, "calendar", database.KindItem, &root.ID)
+	byInstall.CertID = &certID
+	if outcome := f.push(app, byInstall); outcome.Status != database.StatusForbidden {
+		t.Fatalf("an install has no implicit access: got %s want forbidden", outcome.Status)
 	}
 }
 
@@ -283,9 +434,7 @@ func TestMovingAContainerMovesItsSubtreeAccess(t *testing.T) {
 	item := newNode(owner, owner.UserID, "calendar", database.KindItem, &private.ID)
 	f.pushOK(owner, item)
 
-	readGrant := adminGrant(access.PrincipalTypeUser, reader.UserID, 1)
-	readGrant.Role = access.RoleRead
-	f.grant(owner, shared.ID, readGrant)
+	f.grant(owner, shared.ID, readGrant(access.PrincipalTypeUser, reader.UserID, 1))
 	if nodeIDs(f.pull(reader, 0, 50).Nodes)[item.ID] {
 		t.Fatal("reader must not see the private item yet")
 	}
@@ -319,8 +468,8 @@ func TestDirectInsertsGetSeqFromTheCounter(t *testing.T) {
 	rows := []map[string]any{rootRow(first), rootRow(second)}
 	grantFor := func(row map[string]any, owner string) map[string]any {
 		return map[string]any{
-			"node_id": row["id"], "principal_type": "user", "principal_id": owner, "role": "admin", "epoch": 1,
-			"wrapped_keys": "wk", "granted_by_type": "user", "granted_by_id": owner, "signature": "gs",
+			"node_id": row["id"], "principal_type": "user", "principal_id": owner, "role": "write", "epoch": 1,
+			"wrapped_keys": "wk", "granted_by_type": "user", "granted_by_id": owner, "signature": "gs", "log_index": 0,
 		}
 	}
 	if err := queryAll(ctx, f, "INSERT INTO node $rows", map[string]any{"rows": rows}); err != nil {
@@ -341,16 +490,53 @@ func TestDirectInsertsGetSeqFromTheCounter(t *testing.T) {
 	}
 }
 
-func TestGoogleNodesAreGatedByTheCalendarScopes(t *testing.T) {
+func TestGoogleNodesAreGatedByGoogleScopes(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	root := f.createRoot(owner, "google")
 
 	if page := f.pull(owner, 0, 10); !nodeIDs(page.Nodes)[root.ID] {
-		t.Fatal("a calendar-scoped token should pull the google root")
+		t.Fatal("a google-scoped token should pull the google root")
 	}
-	photosOnly := userPrincipal(owner.UserID, "photos:read", "photos:write")
-	if page := f.pull(photosOnly, 0, 10); len(page.Nodes) != 0 {
-		t.Fatalf("a photos-scoped token pulled %d google nodes", len(page.Nodes))
+	calendarOnly := userPrincipal(owner.UserID, "calendar:read", "calendar:write")
+	if page := f.pull(calendarOnly, 0, 10); len(page.Nodes) != 0 {
+		t.Fatalf("a calendar-scoped token pulled %d google nodes", len(page.Nodes))
+	}
+	child := newNode(calendarOnly, owner.UserID, "google", database.KindItem, &root.ID)
+	if outcome := f.push(calendarOnly, child); outcome.Status != database.StatusForbidden {
+		t.Fatalf("a calendar-scoped push into google: got %s want forbidden", outcome.Status)
+	}
+	readOnly := userPrincipal(owner.UserID, "google:read")
+	if outcome := f.push(readOnly, child); outcome.Status != database.StatusForbidden {
+		t.Fatalf("a google:read push: got %s want forbidden", outcome.Status)
+	}
+}
+
+func TestPullReturnsTheAccessLogOfVisibleNodes(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	reader := f.createUser()
+	stranger := f.createUser()
+	root := f.createRoot(owner, "calendar")
+	f.grant(owner, root.ID, readGrant(access.PrincipalTypeUser, reader.UserID, 1))
+
+	ownerPage := f.pull(owner, 0, 50)
+	if len(ownerPage.AccessLog) != 2 {
+		t.Fatalf("the owner sees both entries, got %d", len(ownerPage.AccessLog))
+	}
+	readerPage := f.pull(reader, 0, 50)
+	if len(readerPage.AccessLog) != 2 || readerPage.Grants[0].LogIndex != 1 {
+		t.Fatalf("a reader sees the chain and its grant's logIndex: %d entries, grants %+v", len(readerPage.AccessLog), readerPage.Grants)
+	}
+	if page := f.pull(stranger, 0, 50); len(page.AccessLog) != 0 {
+		t.Fatalf("a stranger sees no entries, got %d", len(page.AccessLog))
+	}
+	after := f.pull(reader, readerPage.Cursor, 50)
+	if len(after.AccessLog) != 0 {
+		t.Fatal("entries before the cursor are not repeated")
+	}
+	f.revoke(owner, root.ID, access.PrincipalTypeUser, reader.UserID)
+	if page := f.pull(owner, ownerPage.Cursor, 50); len(page.AccessLog) != 1 || page.AccessLog[0].Action != "revoke" {
+		t.Fatalf("the revoke entry should arrive after the cursor: %+v", page.AccessLog)
 	}
 }

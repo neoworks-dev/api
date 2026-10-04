@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/neoworks/auth/access"
+	"github.com/neoworks/auth/accesslog"
 	"github.com/neoworks/auth/handlers/handlertest"
 	"github.com/neoworks/auth/handlers/nodes"
 	"github.com/neoworks/auth/storage/database"
@@ -63,15 +64,15 @@ func push(t *testing.T, router *handlertest.Router, author access.Principal, nod
 	return parsed
 }
 
-func bootstrapRoot(t *testing.T, router *handlertest.Router, owner access.Principal) map[string]any {
+// bootstrapRoot pushes a root for the owner and posts the owner's own grant as
+// entry 0 of its log.
+func bootstrapRoot(t *testing.T, router *handlertest.Router, store *database.SurrealStore, account *dbtest.Account) map[string]any {
 	t.Helper()
+	owner := account.Principal
 	root := wireNode(owner, "calendar", "root", nil)
 	push(t, router, owner, root)
-	grant := map[string]any{
-		"principalType": "user", "principalId": owner.UserID, "role": "admin",
-		"facets": nil, "epoch": 1, "wrappedKeys": "c2VhbGVk", "signature": "c2ln",
-	}
-	response := router.Do(t, owner, "POST", "/api/v1/nodes/"+root["id"].(string)+"/grants", grant, nil)
+	request := account.GrantRequest(t, store, root["id"].(string), dbtest.WriteGrant("user", owner.UserID, 1))
+	response := router.Do(t, owner, "POST", "/api/v1/nodes/"+root["id"].(string)+"/grants", request, nil)
 	if response.Code != http.StatusOK {
 		t.Fatalf("bootstrap grant: %d %s", response.Code, response.Body.String())
 	}
@@ -80,9 +81,11 @@ func bootstrapRoot(t *testing.T, router *handlertest.Router, owner access.Princi
 
 func TestPushReportsPerNodeStatuses(t *testing.T) {
 	router, store := newRouter(t)
-	owner := handlertest.CreateUser(t, store, "calendar:read", "calendar:write")
-	stranger := handlertest.CreateUser(t, store, "calendar:read", "calendar:write")
-	root := bootstrapRoot(t, router, owner)
+	ownerAccount := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	owner := ownerAccount.Principal
+	strangerAccount := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	stranger := strangerAccount.Principal
+	root := bootstrapRoot(t, router, store, ownerAccount)
 	rootID := root["id"].(string)
 
 	accepted := wireNode(owner, "calendar", "item", &rootID)
@@ -105,8 +108,9 @@ func TestPushReportsPerNodeStatuses(t *testing.T) {
 
 func TestPushRejectsAMalformedNodeWithoutWritingTheBatch(t *testing.T) {
 	router, store := newRouter(t)
-	owner := handlertest.CreateUser(t, store, "calendar:read", "calendar:write")
-	root := bootstrapRoot(t, router, owner)
+	ownerAccount := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	owner := ownerAccount.Principal
+	root := bootstrapRoot(t, router, store, ownerAccount)
 	rootID := root["id"].(string)
 
 	good := wireNode(owner, "calendar", "item", &rootID)
@@ -128,8 +132,9 @@ func TestPushRejectsAMalformedNodeWithoutWritingTheBatch(t *testing.T) {
 
 func TestPullAnswers410WithThePurgeHorizon(t *testing.T) {
 	router, store := newRouter(t)
-	owner := handlertest.CreateUser(t, store, "calendar:read", "calendar:write")
-	root := bootstrapRoot(t, router, owner)
+	ownerAccount := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	owner := ownerAccount.Principal
+	root := bootstrapRoot(t, router, store, ownerAccount)
 	rootID := root["id"].(string)
 
 	doomed := wireNode(owner, "calendar", "item", &rootID)
@@ -158,48 +163,105 @@ func TestPullAnswers410WithThePurgeHorizon(t *testing.T) {
 	}
 }
 
-func TestGrantEndpointsEnforceAdmin(t *testing.T) {
+func TestGrantEndpointsEnforceTheOwnerRules(t *testing.T) {
 	router, store := newRouter(t)
-	owner := handlertest.CreateUser(t, store, "calendar:read", "calendar:write")
-	writer := handlertest.CreateUser(t, store, "calendar:read", "calendar:write")
-	third := handlertest.CreateUser(t, store, "calendar:read", "calendar:write")
-	root := bootstrapRoot(t, router, owner)
-	rootPath := "/api/v1/nodes/" + root["id"].(string) + "/grants"
+	ownerAccount := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	owner := ownerAccount.Principal
+	writerAccount := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	writer := writerAccount.Principal
+	thirdAccount := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	third := thirdAccount.Principal
+	root := bootstrapRoot(t, router, store, ownerAccount)
+	rootID := root["id"].(string)
+	grantsPath := "/api/v1/nodes/" + rootID + "/grants"
 
-	grantTo := func(user access.Principal, role string) map[string]any {
-		return map[string]any{
-			"principalType": "user", "principalId": user.UserID, "role": role,
-			"facets": nil, "epoch": 1, "wrappedKeys": "c2VhbGVk", "signature": "c2ln",
-		}
-	}
-	if response := router.Do(t, owner, "POST", rootPath, grantTo(writer, "write"), nil); response.Code != http.StatusOK {
+	ownerGrant := ownerAccount.GrantRequest(t, store, rootID, dbtest.WriteGrant("user", writer.UserID, 1))
+	if response := router.Do(t, owner, "POST", grantsPath, ownerGrant, nil); response.Code != http.StatusOK {
 		t.Fatalf("owner grants write: %d %s", response.Code, response.Body.String())
 	}
-	if response := router.Do(t, writer, "POST", rootPath, grantTo(third, "read"), nil); response.Code != http.StatusForbidden {
-		t.Fatalf("writer grants: got %d want 403", response.Code)
+	var granted database.GrantResult
+	handlertest.Decode(t, router.Do(t, owner, "POST", grantsPath,
+		ownerAccount.GrantRequest(t, store, rootID, dbtest.ReadGrant("user", third.UserID, 1)), nil), &granted)
+	if granted.Grant.LogIndex != 2 || granted.Entry.EntryHash == "" {
+		t.Fatalf("the response should carry logIndex and entryHash: %+v", granted)
 	}
-	if response := router.Do(t, third, "POST", rootPath, grantTo(third, "admin"), nil); response.Code != http.StatusNotFound {
-		t.Fatalf("outsider grants: got %d want 404", response.Code)
+
+	if response := router.Do(t, writer, "POST", grantsPath,
+		writerAccount.GrantRequest(t, store, rootID, dbtest.ReadGrant("user", third.UserID, 1)), nil); response.Code != http.StatusForbidden {
+		t.Fatalf("a writer sharing with another user: got %d want 403", response.Code)
 	}
-	stale := grantTo(third, "read")
-	stale["epoch"] = 9
-	if response := router.Do(t, owner, "POST", rootPath, stale, nil); response.Code != http.StatusConflict {
+	if response := router.Do(t, third, "POST", grantsPath,
+		thirdAccount.GrantRequest(t, store, rootID, dbtest.ReadGrant("user", third.UserID, 1)), nil); response.Code != http.StatusForbidden {
+		t.Fatalf("a reader granting: got %d want 403", response.Code)
+	}
+	stale := dbtest.ReadGrant("user", third.UserID, 9)
+	if response := router.Do(t, owner, "POST", grantsPath, ownerAccount.GrantRequest(t, store, rootID, stale), nil); response.Code != http.StatusConflict {
 		t.Fatalf("stale epoch grant: got %d want 409", response.Code)
 	}
 
-	revokePath := rootPath + "/user/" + writer.UserID
-	if response := router.Do(t, writer, "DELETE", revokePath, nil, nil); response.Code != http.StatusForbidden {
-		t.Fatalf("writer revokes: got %d want 403", response.Code)
+	revokePath := grantsPath + "/revoke"
+	revoke := map[string]any{"entry": writerAccount.RevokeEntry(t, store, rootID, "user", owner.UserID)}
+	if response := router.Do(t, writer, "POST", revokePath, revoke, nil); response.Code != http.StatusForbidden {
+		t.Fatalf("a writer revoking the owner: got %d want 403", response.Code)
 	}
-	if response := router.Do(t, owner, "DELETE", revokePath, nil, nil); response.Code != http.StatusNoContent {
-		t.Fatalf("owner revokes: got %d want 204", response.Code)
+	revoke = map[string]any{"entry": ownerAccount.RevokeEntry(t, store, rootID, "user", writer.UserID)}
+	if response := router.Do(t, owner, "POST", revokePath, revoke, nil); response.Code != http.StatusOK {
+		t.Fatalf("owner revokes: got %d want 200", response.Code)
+	}
+}
+
+func TestStaleLogHeadAnswers409WithTheHead(t *testing.T) {
+	router, store := newRouter(t)
+	ownerAccount := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	other := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	root := bootstrapRoot(t, router, store, ownerAccount)
+	rootID := root["id"].(string)
+
+	stale := ownerAccount.GrantRequestAt(t, rootID, dbtest.ReadGrant("user", other.Principal.UserID, 1), 0, accesslog.GenesisPrevHash)
+	response := router.Do(t, ownerAccount.Principal, "POST", "/api/v1/nodes/"+rootID+"/grants", stale, nil)
+	if response.Code != http.StatusConflict {
+		t.Fatalf("an entry that does not extend the head: got %d want 409", response.Code)
+	}
+	var body struct {
+		Error string `json:"error"`
+		Head  struct {
+			Index     int64  `json:"index"`
+			EntryHash string `json:"entryHash"`
+		} `json:"head"`
+	}
+	handlertest.Decode(t, response, &body)
+	if body.Error != "log_head_moved" || body.Head.Index != 0 || body.Head.EntryHash == "" {
+		t.Fatalf("409 body: %+v", body)
+	}
+}
+
+func TestAccessLogEndpointReturnsTheChainToReaders(t *testing.T) {
+	router, store := newRouter(t)
+	ownerAccount := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	stranger := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	root := bootstrapRoot(t, router, store, ownerAccount)
+	path := "/api/v1/nodes/" + root["id"].(string) + "/access-log"
+
+	var log struct {
+		Entries []accesslog.Entry `json:"entries"`
+	}
+	handlertest.Decode(t, router.Do(t, ownerAccount.Principal, "GET", path, nil, nil), &log)
+	if len(log.Entries) != 1 || log.Entries[0].Index != 0 || log.Entries[0].EntryHash == "" {
+		t.Fatalf("log: %+v", log)
+	}
+	if response := router.Do(t, stranger.Principal, "GET", path, nil, nil); response.Code != http.StatusNotFound {
+		t.Fatalf("a stranger reading the log: got %d want 404", response.Code)
+	}
+	if response := router.Do(t, ownerAccount.Principal, "DELETE", "/api/v1/nodes/x/grants/user/y", nil, nil); response.Code != http.StatusMethodNotAllowed && response.Code != http.StatusNotFound {
+		t.Fatalf("the DELETE grant route is gone: got %d", response.Code)
 	}
 }
 
 func TestLinkPullNeedsNoPrincipal(t *testing.T) {
 	router, store := newRouter(t)
-	owner := handlertest.CreateUser(t, store, "calendar:read", "calendar:write")
-	root := bootstrapRoot(t, router, owner)
+	ownerAccount := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	owner := ownerAccount.Principal
+	root := bootstrapRoot(t, router, store, ownerAccount)
 
 	created := router.Do(t, owner, "POST", "/api/v1/links", map[string]any{"nodeId": root["id"]}, nil)
 	if created.Code != http.StatusOK {

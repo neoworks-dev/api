@@ -4,8 +4,7 @@
 -- default 8765) is registered on every client so `login` works with any of them.
 --
 -- A collection scope `<collection>:read|write` is the ceiling for the role any
--- access grant gives the token: the API caps the grant's role by it. Nodes of the
--- google collection (the Google refresh token) are covered by the calendar scopes.
+-- access grant gives the token: the API caps the grant's role by it.
 
 -- neoworks.dev web dashboard (connected apps, devices)
 CREATE client CONTENT {
@@ -49,7 +48,11 @@ CREATE client CONTENT {
         "https://calendar.neoworks.dev/callback",
         "http://127.0.0.1:8765/callback"
     ],
-    scopes:            ["openid", "profile", "email", "calendar:read", "calendar:write"],
+    scopes:            [
+        "openid", "profile", "email",
+        "calendar:read", "calendar:write",
+        "google:read", "google:write"
+    ],
     auto_grant_scopes: true,
     public:            true
 };

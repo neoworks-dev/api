@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/neoworks/auth/access"
+	"github.com/neoworks/auth/accesslog"
 )
 
 // SurrealQL evaluates a parameter that was never bound as NONE instead of
@@ -80,15 +81,14 @@ func TestPushStatementBindsEveryParameter(t *testing.T) {
 }
 
 func TestGrantStatementsBindEveryParameter(t *testing.T) {
-	owner := access.Principal{UserID: uuid.NewString(), Scopes: []string{"calendar:write"}}
-	cert := uuid.NewString()
 	node := &dbNode{Collection: "calendar"}
+	entry := accesslog.Entry{Action: accesslog.ActionGrant, Role: "read", Epoch: 1}
 	for name, input := range map[string]GrantInput{
-		"whole node": {PrincipalType: "user", PrincipalID: uuid.NewString(), Role: "read", Epoch: 1, WrappedKeys: "k", Signature: "s"},
-		"facets":     {PrincipalType: "user", PrincipalID: uuid.NewString(), Role: "read", Facets: []int{1}, Epoch: 1, WrappedKeys: "k", Signature: "s"},
-		"with cert":  {PrincipalType: "install", PrincipalID: uuid.NewString(), Role: "read", CertID: &cert, Epoch: 1, WrappedKeys: "k", Signature: "s"},
+		"whole node": {PrincipalType: "user", PrincipalID: uuid.NewString(), Role: "read", Epoch: 1, WrappedKeys: "k"},
+		"facets":     {PrincipalType: "user", PrincipalID: uuid.NewString(), Role: "read", Facets: []int{1}, Epoch: 1, WrappedKeys: "k"},
 	} {
-		params := grantParams(owner, uuid.NewString(), node, input, []string{"admin"})
+		entry.Facets = input.Facets
+		params := grantParams(uuid.NewString(), node, input, entry, "hash")
 		requireAllBound(t, "grant "+name, grantStatement(input), params)
 	}
 }
@@ -121,10 +121,14 @@ func withDeviceParams(params map[string]any) map[string]any {
 	return params
 }
 
-func TestRevokeGrantStatementBindsEveryParameter(t *testing.T) {
-	params := map[string]any{
-		"node": 1, "node_id": "n", "collection": "c", "grantee_type": "user", "grantee_id": "g",
-		"actor_type": "user", "actor_id": "a", "admin_roles": []string{"admin"},
+func TestRevokeStatementBindsEveryParameter(t *testing.T) {
+	for _, facets := range []bool{false, true} {
+		entry := accesslog.Entry{Action: accesslog.ActionRevoke, Role: "read", Epoch: 1}
+		if facets {
+			entry.Facets = []int{1}
+		}
+		params := entryParams("n", entry, "hash")
+		params["collection"] = "calendar"
+		requireAllBound(t, "revoke", revokeStatement(facets), params)
 	}
-	requireAllBound(t, "revoke grant", revokeGrantStatement, params)
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/neoworks/auth/accesslog"
 	"github.com/surrealdb/surrealdb.go/pkg/models"
 )
 
@@ -51,6 +52,7 @@ type AccessGrant struct {
 	CertID        *string    `json:"certId"`
 	Signature     string     `json:"signature"`
 	Seq           int64      `json:"seq"`
+	LogIndex      int64      `json:"logIndex"`
 	CreatedAt     time.Time  `json:"createdAt"`
 	RevokedAt     *time.Time `json:"revokedAt"`
 }
@@ -179,6 +181,7 @@ type dbAccessGrant struct {
 	CertID        *string    `json:"cert_id"`
 	Signature     string     `json:"signature"`
 	Seq           int64      `json:"seq"`
+	LogIndex      int64      `json:"log_index"`
 	CreatedAt     time.Time  `json:"created_at"`
 	RevokedAt     *time.Time `json:"revoked_at"`
 }
@@ -197,6 +200,7 @@ func (row dbAccessGrant) toGrant() AccessGrant {
 		CertID:        row.CertID,
 		Signature:     row.Signature,
 		Seq:           row.Seq,
+		LogIndex:      row.LogIndex,
 		CreatedAt:     row.CreatedAt,
 		RevokedAt:     row.RevokedAt,
 	}
@@ -230,4 +234,51 @@ func grantsFromRows(rows []dbAccessGrant) []AccessGrant {
 		grants = append(grants, row.toGrant())
 	}
 	return grants
+}
+
+type dbAccessLog struct {
+	NodeID          string  `json:"node_id"`
+	Index           int64   `json:"index"`
+	PrevHash        string  `json:"prev_hash"`
+	EntryHash       string  `json:"entry_hash"`
+	Action          string  `json:"action"`
+	PrincipalType   string  `json:"principal_type"`
+	PrincipalID     string  `json:"principal_id"`
+	Role            string  `json:"role"`
+	Facets          []int   `json:"facets"`
+	Epoch           int     `json:"epoch"`
+	WrappedKeysHash string  `json:"wrapped_keys_hash"`
+	ActorType       string  `json:"actor_type"`
+	ActorID         string  `json:"actor_id"`
+	CertID          *string `json:"cert_id"`
+	Signature       string  `json:"signature"`
+	Seq             int64   `json:"seq"`
+}
+
+func (row dbAccessLog) toEntry() accesslog.Entry {
+	return accesslog.Entry{
+		NodeID:          row.NodeID,
+		Index:           row.Index,
+		PrevHash:        row.PrevHash,
+		Action:          row.Action,
+		PrincipalType:   row.PrincipalType,
+		PrincipalID:     row.PrincipalID,
+		Role:            row.Role,
+		Facets:          row.Facets,
+		Epoch:           row.Epoch,
+		WrappedKeysHash: row.WrappedKeysHash,
+		ActorType:       row.ActorType,
+		ActorID:         row.ActorID,
+		CertID:          row.CertID,
+		Signature:       row.Signature,
+		EntryHash:       row.EntryHash,
+	}
+}
+
+func logFromRows(rows []dbAccessLog) []accesslog.Entry {
+	entries := make([]accesslog.Entry, 0, len(rows))
+	for _, row := range rows {
+		entries = append(entries, row.toEntry())
+	}
+	return entries
 }
