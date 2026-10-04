@@ -1,4 +1,5 @@
-// Package installs lists connected apps and revokes them.
+// Package installs lists connected apps, revokes them, and serves an install its
+// own delegation material.
 package installs
 
 import (
@@ -19,11 +20,12 @@ func NewHandler(store *database.SurrealStore) *Handler {
 }
 
 // RegisterAuthenticated mounts the install endpoints. Listing and revoking are
-// the account's.
+// the account's; /installs/me is the install's own.
 func (h *Handler) RegisterAuthenticated(router chi.Router) {
 	account := router.With(middleware.RequireAccountPrincipal)
 	account.Get("/api/v1/installs", h.list)
 	account.Delete("/api/v1/installs/{id}", h.revoke)
+	router.With(middleware.RequireInstallPrincipal).Get("/api/v1/installs/me", h.me)
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
@@ -45,4 +47,14 @@ func (h *Handler) revoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
+	principal, _ := middleware.PrincipalFromContext(r.Context())
+	grant, err := h.store.GetInstallGrant(r.Context(), principal.InstallID)
+	if err != nil {
+		respond.StoreError(w, "installMe", err)
+		return
+	}
+	respond.JSON(w, http.StatusOK, grant)
 }

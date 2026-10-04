@@ -1,0 +1,300 @@
+package database_test
+
+import (
+	"testing"
+
+	"github.com/neoworks/auth/access"
+	"github.com/neoworks/auth/storage/database"
+)
+
+func TestOwnerCreatesRootAndChildAndPullsBoth(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	root := f.createRoot(owner, "calendar")
+
+	child := newNode(owner, owner.UserID, "calendar", database.KindItem, &root.ID)
+	f.pushOK(owner, child)
+
+	page := f.pull(owner, 0, 100)
+	ids := nodeIDs(page.Nodes)
+	if !ids[root.ID] || !ids[child.ID] {
+		t.Fatalf("pull missing nodes: %v", ids)
+	}
+	if len(page.Grants) != 1 || page.HasMore {
+		t.Fatalf("expected the owner's own grant and no more pages, got %d grants hasMore=%v", len(page.Grants), page.HasMore)
+	}
+}
+
+func TestPushRequiresWriteOnSelfOrAncestor(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	stranger := f.createUser()
+	root := f.createRoot(owner, "calendar")
+
+	child := newNode(stranger, owner.UserID, "calendar", database.KindItem, &root.ID)
+	if outcome := f.push(stranger, child); outcome.Status != database.StatusForbidden {
+		t.Fatalf("stranger push: got %s want forbidden", outcome.Status)
+	}
+
+	readOnly := database.GrantInput{
+		PrincipalType: access.PrincipalTypeUser, PrincipalID: stranger.UserID, Role: access.RoleRead,
+		Epoch: 1, WrappedKeys: "sealed", Signature: "sig",
+	}
+	f.grant(owner, root.ID, readOnly)
+	if outcome := f.push(stranger, child); outcome.Status != database.StatusForbidden {
+		t.Fatalf("reader push: got %s want forbidden", outcome.Status)
+	}
+
+	writer := readOnly
+	writer.Role = access.RoleWrite
+	f.grant(owner, root.ID, writer)
+	if outcome := f.push(stranger, child); outcome.Status != database.StatusOK {
+		t.Fatalf("writer push: got %s want ok", outcome.Status)
+	}
+}
+
+func TestTokenScopeCapsGrantRole(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	root := f.createRoot(owner, "calendar")
+
+	readScoped := userPrincipal(owner.UserID, "calendar:read")
+	child := newNode(readScoped, owner.UserID, "calendar", database.KindItem, &root.ID)
+	if outcome := f.push(readScoped, child); outcome.Status != database.StatusForbidden {
+		t.Fatalf("read-scoped push: got %s want forbidden", outcome.Status)
+	}
+
+	otherCollection := userPrincipal(owner.UserID, "photos:write")
+	if page := f.pull(otherCollection, 0, 10); len(page.Nodes) != 0 {
+		t.Fatalf("photos-scoped token pulled %d calendar nodes", len(page.Nodes))
+	}
+}
+
+func TestBaseSeqConflictReturnsCurrent(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	root := f.createRoot(owner, "calendar")
+
+	item := newNode(owner, owner.UserID, "calendar", database.KindItem, &root.ID)
+	firstSeq := f.pushOK(owner, item)
+
+	stale := item
+	stale.BaseSeq = 0
+	outcome := f.push(owner, stale)
+	if outcome.Status != database.StatusConflict || outcome.Current == nil || outcome.Current.Seq != firstSeq {
+		t.Fatalf("expected conflict with current seq %d, got %+v", firstSeq, outcome)
+	}
+
+	next := item
+	next.BaseSeq = firstSeq
+	next.Content = []database.FacetContent{{Facet: 0, Ciphertext: "ct2"}}
+	secondSeq := f.pushOK(owner, next)
+	if secondSeq <= firstSeq {
+		t.Fatalf("seq did not advance: %d then %d", firstSeq, secondSeq)
+	}
+}
+
+func TestVersionsKeepEveryAcceptedWrite(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	root := f.createRoot(owner, "calendar")
+	item := newNode(owner, owner.UserID, "calendar", database.KindItem, &root.ID)
+	seq := f.pushOK(owner, item)
+	item.BaseSeq = seq
+	f.pushOK(owner, item)
+
+	versions, err := f.store.ListNodeVersions(t.Context(), owner, item.ID)
+	if err != nil {
+		t.Fatalf("versions: %v", err)
+	}
+	if len(versions) != 2 {
+		t.Fatalf("expected 2 versions, got %d", len(versions))
+	}
+}
+
+func TestSubtreeGrantCoversDescendantsButFacetGrantDoesNot(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	reader := f.createUser()
+	root := f.createRoot(owner, "calendar")
+	container := newNode(owner, owner.UserID, "calendar", database.KindContainer, &root.ID)
+	f.pushOK(owner, container)
+	item := newNode(owner, owner.UserID, "calendar", database.KindItem, &container.ID)
+	f.pushOK(owner, item)
+
+	facetGrant := database.GrantInput{
+		PrincipalType: access.PrincipalTypeUser, PrincipalID: reader.UserID, Role: access.RoleRead,
+		Facets: []int{1}, Epoch: 1, WrappedKeys: "sealed", Signature: "sig",
+	}
+	f.grant(owner, container.ID, facetGrant)
+	ids := nodeIDs(f.pull(reader, 0, 100).Nodes)
+	if !ids[container.ID] || ids[item.ID] || ids[root.ID] {
+		t.Fatalf("facet grant should reach only its own node, got %v", ids)
+	}
+
+	facetGrant.Facets = nil
+	f.grant(owner, container.ID, facetGrant)
+	ids = nodeIDs(f.pull(reader, 0, 100).Nodes)
+	if !ids[container.ID] || !ids[item.ID] || ids[root.ID] {
+		t.Fatalf("subtree grant should reach container and item, got %v", ids)
+	}
+}
+
+func TestNewGrantReDeliversExistingNodesToAnAlreadySyncedGrantee(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	reader := f.createUser()
+	root := f.createRoot(owner, "calendar")
+	item := newNode(owner, owner.UserID, "calendar", database.KindItem, &root.ID)
+	f.pushOK(owner, item)
+
+	cursor := f.pull(reader, 0, 100).Cursor
+	grant := database.GrantInput{
+		PrincipalType: access.PrincipalTypeUser, PrincipalID: reader.UserID, Role: access.RoleRead,
+		Epoch: 1, WrappedKeys: "sealed", Signature: "sig",
+	}
+	f.grant(owner, root.ID, grant)
+
+	page := f.pull(reader, cursor, 100)
+	ids := nodeIDs(page.Nodes)
+	if !ids[root.ID] || !ids[item.ID] || len(page.Grants) != 1 {
+		t.Fatalf("expected root, item and the grant after cursor %d, got nodes %v grants %d", cursor, ids, len(page.Grants))
+	}
+}
+
+func TestGrantChangesNeedAdmin(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	writer := f.createUser()
+	third := f.createUser()
+	root := f.createRoot(owner, "calendar")
+
+	writeGrant := adminGrant(access.PrincipalTypeUser, writer.UserID, 1)
+	writeGrant.Role = access.RoleWrite
+	f.grant(owner, root.ID, writeGrant)
+
+	_, err := f.store.CreateAccessGrant(t.Context(), writer, root.ID, adminGrant(access.PrincipalTypeUser, third.UserID, 1))
+	if err != database.ErrForbidden {
+		t.Fatalf("writer granting: got %v want forbidden", err)
+	}
+	if err := f.store.RevokeAccessGrant(t.Context(), writer, root.ID, access.PrincipalTypeUser, owner.UserID); err != database.ErrForbidden {
+		t.Fatalf("writer revoking: got %v want forbidden", err)
+	}
+}
+
+func TestGrantMustMatchNodeEpoch(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	reader := f.createUser()
+	root := f.createRoot(owner, "calendar")
+
+	_, err := f.store.CreateAccessGrant(t.Context(), owner, root.ID, adminGrant(access.PrincipalTypeUser, reader.UserID, 2))
+	if err != database.ErrStaleEpoch {
+		t.Fatalf("got %v want stale epoch", err)
+	}
+}
+
+func TestRevokedGrantStopsAccessAndFlagsRotation(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	reader := f.createUser()
+	root := f.createRoot(owner, "calendar")
+	readGrant := adminGrant(access.PrincipalTypeUser, reader.UserID, 1)
+	readGrant.Role = access.RoleRead
+	f.grant(owner, root.ID, readGrant)
+	if len(f.pull(reader, 0, 10).Nodes) != 1 {
+		t.Fatal("reader should see the root")
+	}
+
+	if err := f.store.RevokeAccessGrant(t.Context(), owner, root.ID, access.PrincipalTypeUser, reader.UserID); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
+	page := f.pull(reader, 0, 10)
+	if len(page.Nodes) != 0 {
+		t.Fatalf("revoked reader still pulls %d nodes", len(page.Nodes))
+	}
+	if len(page.Grants) != 1 || page.Grants[0].RevokedAt == nil {
+		t.Fatalf("reader should be told the grant was revoked: %+v", page.Grants)
+	}
+	ownerView := f.pull(owner, 0, 10)
+	if !ownerView.Nodes[0].NeedsRotation {
+		t.Fatal("revoking should flag the node for rotation")
+	}
+}
+
+func TestOnlyOwnerBootstrapsFirstAdminGrant(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	stranger := f.createUser()
+	root := newNode(owner, owner.UserID, "calendar", database.KindRoot, nil)
+	f.pushOK(owner, root)
+
+	_, err := f.store.CreateAccessGrant(t.Context(), stranger, root.ID, adminGrant(access.PrincipalTypeUser, stranger.UserID, 1))
+	if err != database.ErrNotFound {
+		t.Fatalf("stranger bootstrap: got %v want not found", err)
+	}
+	f.grant(owner, root.ID, adminGrant(access.PrincipalTypeUser, owner.UserID, 1))
+	_, err = f.store.CreateAccessGrant(t.Context(), owner, root.ID, adminGrant(access.PrincipalTypeUser, stranger.UserID, 1))
+	if err != nil {
+		t.Fatalf("owner admin grant: %v", err)
+	}
+}
+
+func TestPaginationAdvancesCursorWithoutSkipping(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	root := f.createRoot(owner, "calendar")
+	for index := 0; index < 5; index++ {
+		f.pushOK(owner, newNode(owner, owner.UserID, "calendar", database.KindItem, &root.ID))
+	}
+
+	seen := map[string]bool{}
+	var cursor int64
+	for pages := 0; pages < 10; pages++ {
+		page := f.pull(owner, cursor, 2)
+		for id := range nodeIDs(page.Nodes) {
+			seen[id] = true
+		}
+		cursor = page.Cursor
+		if !page.HasMore {
+			break
+		}
+	}
+	if len(seen) != 6 {
+		t.Fatalf("paged through %d nodes, want 6", len(seen))
+	}
+	if again := f.pull(owner, cursor, 2); len(again.Nodes) != 0 || again.HasMore {
+		t.Fatalf("caught-up pull should be empty, got %d nodes", len(again.Nodes))
+	}
+}
+
+func TestMovingAContainerMovesItsSubtreeAccess(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	reader := f.createUser()
+	root := f.createRoot(owner, "calendar")
+	shared := newNode(owner, owner.UserID, "calendar", database.KindContainer, &root.ID)
+	f.pushOK(owner, shared)
+	private := newNode(owner, owner.UserID, "calendar", database.KindContainer, &root.ID)
+	f.pushOK(owner, private)
+	item := newNode(owner, owner.UserID, "calendar", database.KindItem, &private.ID)
+	f.pushOK(owner, item)
+
+	readGrant := adminGrant(access.PrincipalTypeUser, reader.UserID, 1)
+	readGrant.Role = access.RoleRead
+	f.grant(owner, shared.ID, readGrant)
+	if nodeIDs(f.pull(reader, 0, 50).Nodes)[item.ID] {
+		t.Fatal("reader must not see the private item yet")
+	}
+
+	cursor := f.pull(reader, 0, 50).Cursor
+	moved := private
+	moved.ParentID = &shared.ID
+	moved.BaseSeq = f.nodeSeq(f.pull(owner, 0, 50), private.ID)
+	f.pushOK(owner, moved)
+
+	ids := nodeIDs(f.pull(reader, cursor, 50).Nodes)
+	if !ids[private.ID] || !ids[item.ID] {
+		t.Fatalf("moved subtree should reach the reader, got %v", ids)
+	}
+}

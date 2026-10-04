@@ -37,6 +37,20 @@ func (s *Store) EnsureBucket(ctx context.Context) error {
 	return s.client.MakeBucket(ctx, s.bucket, minio.MakeBucketOptions{})
 }
 
+// RemovePrefix deletes every object whose key starts with prefix.
+func (s *Store) RemovePrefix(ctx context.Context, prefix string) error {
+	objects := s.client.ListObjects(ctx, s.bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true})
+	for object := range objects {
+		if object.Err != nil {
+			return fmt.Errorf("list %s: %w", prefix, object.Err)
+		}
+		if err := s.client.RemoveObject(ctx, s.bucket, object.Key, minio.RemoveObjectOptions{}); err != nil {
+			return fmt.Errorf("remove %s: %w", object.Key, err)
+		}
+	}
+	return nil
+}
+
 // PutObject uploads raw bytes under an arbitrary key with the given content type.
 // Used for non-chunked assets (e.g. logos, documents) served by the assets service.
 func (s *Store) PutObject(ctx context.Context, key string, data []byte, contentType string) error {

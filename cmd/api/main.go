@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -20,17 +21,17 @@ import (
 	devicehandlers "github.com/neoworks/auth/handlers/devices"
 	installhandlers "github.com/neoworks/auth/handlers/installs"
 	keyhandlers "github.com/neoworks/auth/handlers/keys"
+	nodehandlers "github.com/neoworks/auth/handlers/nodes"
 	"github.com/neoworks/auth/middleware"
 	"github.com/neoworks/auth/oauth"
 	"github.com/neoworks/auth/push"
+	"github.com/neoworks/auth/scheduler"
 	"github.com/neoworks/auth/storage/cache"
 	"github.com/neoworks/auth/storage/database"
 	"github.com/neoworks/auth/storage/objectstore"
 )
 
-const (
-	shutdownTimeout = 25 * time.Second
-)
+const shutdownTimeout = 25 * time.Second
 
 func main() {
 	_ = godotenv.Load(".env")
@@ -49,6 +50,8 @@ func main() {
 
 	issuer := oauth.NewTokenIssuer(keys.PrivateKey(), env("ISSUER_URL", config.ServiceURL("oauth")))
 	clientAuth := middleware.NewJWTMiddleware(issuer, redis)
+
+	scheduler.NewTombstonePurger(surreal, objects, tombstoneRetention()).Start(context.Background())
 
 	servers := []*http.Server{
 		{Addr: ":" + env("PORT", "8081"), Handler: apiRouter(surreal, redis, objects, clientAuth)},
@@ -91,6 +94,14 @@ func connectObjectStore() *objectstore.Store {
 	return objects
 }
 
+func tombstoneRetention() time.Duration {
+	days, err := strconv.Atoi(os.Getenv("TOMBSTONE_RETENTION_DAYS"))
+	if err != nil || days < 1 {
+		return 0
+	}
+	return time.Duration(days) * 24 * time.Hour
+}
+
 func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects *objectstore.Store, clientAuth *middleware.ClientAuth) http.Handler {
 	router := chi.NewRouter()
 	router.Use(chimiddleware.Logger)
@@ -103,6 +114,9 @@ func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects 
 		_, _ = w.Write([]byte("ok"))
 	})
 
+	nodes := nodehandlers.NewHandler(surreal)
+	nodes.RegisterPublic(router)
+
 	router.Group(func(authenticated chi.Router) {
 		authenticated.Use(clientAuth.JWTMiddleware)
 		approvalhandlers.NewHandler(surreal, redis, push.NewSender(push.ConfigFromEnv())).RegisterAuthenticated(authenticated)
@@ -112,6 +126,7 @@ func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects 
 			keyhandlers.NewHandler(surreal).RegisterAuthenticated(principals)
 			devicehandlers.NewHandler(surreal).RegisterAuthenticated(principals)
 			installhandlers.NewHandler(surreal).RegisterAuthenticated(principals)
+			nodes.RegisterAuthenticated(principals)
 		})
 	})
 	return router
