@@ -29,6 +29,11 @@ DEFINE FIELD identity_private ON key_bundle TYPE string;
 DEFINE FIELD enc_pub          ON key_bundle TYPE string;
 DEFINE FIELD sign_pub         ON key_bundle TYPE string;
 DEFINE FIELD self_sig         ON key_bundle TYPE string;
+-- The identity before an unfinished full rotation, wrapped under the current
+-- AMK; cleared once every key is rewrapped to the new identity.
+DEFINE FIELD previous_identity_private ON key_bundle TYPE option<string>;
+DEFINE FIELD previous_enc_pub          ON key_bundle TYPE option<string>;
+DEFINE FIELD previous_sign_pub         ON key_bundle TYPE option<string>;
 DEFINE FIELD updated_at       ON key_bundle TYPE datetime VALUE time::now();
 
 DEFINE INDEX idx_key_bundle_user ON key_bundle FIELDS user UNIQUE;
