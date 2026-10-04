@@ -38,6 +38,22 @@ DEFINE FIELD updated_at       ON key_bundle TYPE datetime VALUE time::now();
 
 DEFINE INDEX idx_key_bundle_user ON key_bundle FIELDS user UNIQUE;
 
+-- ── identity_key: every identity key pair the user has had ──────────────────
+-- Version 1 is written at signup and has no rotation_sig. Each later version
+-- carries the signature of the version before it over the new public keys, so
+-- signatures made before a full rotation stay verifiable. retired_at is set when
+-- the next version is appended.
+DEFINE TABLE identity_key SCHEMAFULL;
+DEFINE FIELD user         ON identity_key TYPE record<user> READONLY;
+DEFINE FIELD version      ON identity_key TYPE int READONLY;
+DEFINE FIELD sign_pub     ON identity_key TYPE string READONLY;
+DEFINE FIELD enc_pub      ON identity_key TYPE string READONLY;
+DEFINE FIELD rotation_sig ON identity_key TYPE option<string> READONLY;
+DEFINE FIELD created_at   ON identity_key TYPE datetime VALUE $before OR time::now() READONLY;
+DEFINE FIELD retired_at   ON identity_key TYPE option<datetime>;
+
+DEFINE INDEX idx_identity_key_version ON identity_key FIELDS user, version UNIQUE;
+
 -- ── device: a browser, authenticator or app the user signed in on ─────────────
 -- The device's own AMK wrap never reaches the server.
 DEFINE TABLE device SCHEMAFULL;

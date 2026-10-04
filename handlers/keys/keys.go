@@ -33,6 +33,7 @@ func (h *Handler) RegisterAuthenticated(router chi.Router) {
 	router.With(middleware.RequireAccountPrincipal).Get("/api/v1/keys/bundle", h.getBundle)
 	router.With(middleware.RequireAccountPrincipal).Put("/api/v1/keys/bundle", h.rotateBundle)
 	router.Get("/api/v1/keys/identity", h.lookupIdentity)
+	router.Get("/api/v1/users/{userId}/identity-keys", h.identityKeyHistory)
 }
 
 func (h *Handler) getBundle(w http.ResponseWriter, r *http.Request) {
@@ -125,4 +126,20 @@ func (h *Handler) lookupIdentity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respond.JSON(w, http.StatusOK, identity)
+}
+
+// identityKeyHistory lists every identity version of a user, oldest first, so
+// verifiers can accept signatures made before a full rotation.
+func (h *Handler) identityKeyHistory(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "userId")
+	if !utils.IsLowercaseUUIDv4(userID) {
+		respond.Error(w, http.StatusBadRequest, "invalid_request", "userId must be a lowercase UUIDv4")
+		return
+	}
+	keys, err := h.store.GetIdentityKeys(r.Context(), userID)
+	if err != nil {
+		respond.StoreError(w, "identityKeyHistory", err)
+		return
+	}
+	respond.JSON(w, http.StatusOK, map[string]any{"keys": keys})
 }

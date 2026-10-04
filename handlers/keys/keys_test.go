@@ -1,8 +1,13 @@
 package keys_test
 
 import (
+	"context"
 	"net/http"
 	"testing"
+
+	"github.com/google/uuid"
+	surrealdb "github.com/surrealdb/surrealdb.go"
+	"github.com/surrealdb/surrealdb.go/pkg/models"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/neoworks/auth/access"
@@ -106,6 +111,42 @@ func TestIdentityLookup(t *testing.T) {
 		t.Fatalf("install lookup by email: got %d want 400", response.Code)
 	}
 	if response := router.Do(t, user, "GET", "/api/v1/keys/identity?userId=11111111-1111-4111-8111-111111111111", nil, nil); response.Code != http.StatusNotFound {
+		t.Fatalf("unknown user: got %d want 404", response.Code)
+	}
+}
+
+func TestIdentityKeyHistoryListsVersionsOldestFirst(t *testing.T) {
+	router, store := newRouter(t)
+	user := handlertest.CreateUser(t, store)
+	statement := `
+		UPDATE identity_key SET retired_at = time::now() WHERE user = $user AND version = 1;
+		CREATE identity_key SET user = $user, version = 2, sign_pub = 'sign2', enc_pub = 'enc2', rotation_sig = 'link';`
+	params := map[string]any{"user": models.NewRecordID("user", user.UserID)}
+	if _, err := surrealdb.Query[any](context.Background(), store.DB, statement, params); err != nil {
+		t.Fatalf("append version: %v", err)
+	}
+
+	response := router.Do(t, user, "GET", "/api/v1/users/"+user.UserID+"/identity-keys", nil, nil)
+	if response.Code != http.StatusOK {
+		t.Fatalf("history: %d %s", response.Code, response.Body.String())
+	}
+	var body struct {
+		Keys []database.IdentityKey `json:"keys"`
+	}
+	handlertest.Decode(t, response, &body)
+	if len(body.Keys) != 2 || body.Keys[0].Version != 1 || body.Keys[1].Version != 2 {
+		t.Fatalf("keys: %+v", body.Keys)
+	}
+	if body.Keys[0].RetiredAt == nil || body.Keys[1].RetiredAt != nil || body.Keys[0].RotationSig != "" || body.Keys[1].RotationSig != "link" {
+		t.Fatalf("retirement or links wrong: %+v", body.Keys)
+	}
+}
+
+func TestIdentityKeyHistoryOfUnknownUserIs404(t *testing.T) {
+	router, store := newRouter(t)
+	user := handlertest.CreateUser(t, store)
+	response := router.Do(t, user, "GET", "/api/v1/users/"+uuid.NewString()+"/identity-keys", nil, nil)
+	if response.Code != http.StatusNotFound {
 		t.Fatalf("unknown user: got %d want 404", response.Code)
 	}
 }

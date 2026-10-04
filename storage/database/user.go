@@ -74,6 +74,11 @@ func userCreationStatement(withDevice bool) string {
 			enc_pub          = $enc_pub,
 			sign_pub         = $sign_pub,
 			self_sig         = $self_sig;
+		CREATE identity_key SET
+			user     = $user_ref,
+			version  = 1,
+			sign_pub = $sign_pub,
+			enc_pub  = $enc_pub;
 		` + deviceStatement + `
 		RETURN [$created];
 		COMMIT TRANSACTION;`

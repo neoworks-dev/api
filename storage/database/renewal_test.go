@@ -14,6 +14,8 @@ import (
 	"github.com/neoworks/auth/accesslog"
 	"github.com/neoworks/auth/storage/database"
 	"github.com/neoworks/auth/storage/database/dbtest"
+	surrealdb "github.com/surrealdb/surrealdb.go"
+	"github.com/surrealdb/surrealdb.go/pkg/models"
 )
 
 // renewalDevice is an authenticator device with a registered renewal certificate.
@@ -227,4 +229,22 @@ func TestRenewalCertificateIsReadableByTheOwnerOnly(t *testing.T) {
 
 func base64Decode(value string) ([]byte, error) {
 	return base64.RawURLEncoding.DecodeString(value)
+}
+
+func TestRenewalAfterAFullRotationStillAcceptsTheRetiredIdentity(t *testing.T) {
+	setup, device := renewalSetup(t)
+	newPublicKey, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	statement := `
+		UPDATE identity_key SET retired_at = time::now() WHERE user = $user AND version = 1;
+		CREATE identity_key SET user = $user, version = 2, sign_pub = $sign_pub, enc_pub = 'enc2', rotation_sig = 'link';
+		UPDATE key_bundle SET sign_pub = $sign_pub WHERE user = $user;`
+	params := map[string]any{"user": models.NewRecordID("user", setup.owner.UserID), "sign_pub": accesslog.Encode(newPublicKey)}
+	if _, err := surrealdb.Query[any](context.Background(), setup.f.store.DB, statement, params); err != nil {
+		t.Fatalf("rotate identity: %v", err)
+	}
+
+	device.renew(t, setup.f, setup.install, time.Now().Add(30*24*time.Hour))
 }

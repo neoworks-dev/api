@@ -165,15 +165,15 @@ func (s *SurrealStore) verifiedRenewedCertificate(ctx context.Context, userID st
 	if err != nil || originCertID == "" || renewalCertID == "" {
 		return nil, fmt.Errorf("%w: the certificate must name its origin and renewal certificate", ErrInvalidInput)
 	}
-	bundle, err := s.GetKeyBundle(ctx, userID)
+	keys, err := s.GetIdentityKeys(ctx, userID)
 	if err != nil {
-		return nil, fmt.Errorf("%w: the user has no key bundle", ErrInvalidInput)
+		return nil, fmt.Errorf("%w: the user has no identity keys", ErrInvalidInput)
 	}
-	renewal, err := s.activeRenewal(ctx, userID, renewalCertID, bundle.SignPub, now)
+	renewal, err := s.activeRenewal(ctx, userID, renewalCertID, keys, now)
 	if err != nil {
 		return nil, err
 	}
-	origin, err := s.verifiedOrigin(ctx, userID, originCertID, bundle.SignPub)
+	origin, err := s.verifiedOrigin(ctx, userID, originCertID, keys)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +186,7 @@ func (s *SurrealStore) verifiedRenewedCertificate(ctx context.Context, userID st
 
 // activeRenewal loads a renewal certificate and requires it to be verified,
 // unexpired, unrevoked and bound to a device that is not revoked.
-func (s *SurrealStore) activeRenewal(ctx context.Context, userID, renewalCertID, userSignPub string, now time.Time) (*accesslog.RenewalCertificate, error) {
+func (s *SurrealStore) activeRenewal(ctx context.Context, userID, renewalCertID string, keys []IdentityKey, now time.Time) (*accesslog.RenewalCertificate, error) {
 	row, err := queryFirst[dbRenewalCertificate](ctx, s.DB, "SELECT * FROM $renewal WHERE user = $user",
 		map[string]any{
 			"renewal": models.NewRecordID("renewal_certificate", renewalCertID),
@@ -199,7 +199,7 @@ func (s *SurrealStore) activeRenewal(ctx context.Context, userID, renewalCertID,
 	if stored.RevokedAt != nil {
 		return nil, fmt.Errorf("%w: the renewal certificate was revoked", ErrForbidden)
 	}
-	renewal, err := accesslog.VerifyRenewalCertificate(stored.Certificate, stored.Signature, userSignPub, now)
+	renewal, err := verifyRenewalUnderHistory(keys, stored.Certificate, stored.Signature, now)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", ErrForbidden, err)
 	}
@@ -212,12 +212,16 @@ func (s *SurrealStore) activeRenewal(ctx context.Context, userID, renewalCertID,
 
 // verifiedOrigin loads an identity-signed certificate for the user and checks
 // its signature. Its own expiry does not matter: renewals outlive it.
-func (s *SurrealStore) verifiedOrigin(ctx context.Context, userID, originCertID, userSignPub string) (*accesslog.Certificate, error) {
+func (s *SurrealStore) verifiedOrigin(ctx context.Context, userID, originCertID string, keys []IdentityKey) (*accesslog.Certificate, error) {
 	stored, err := s.GetCertificate(ctx, originCertID)
 	if err != nil || stored.UserID != userID {
 		return nil, ErrForbidden
 	}
-	origin, err := accesslog.VerifyOriginCertificate(stored.Certificate, stored.Signature, userSignPub)
+	origin, err := verifyUnderIdentityHistory(keys,
+		func(certificate *accesslog.Certificate) time.Time { return certificate.IssuedAt },
+		func(signPub string) (*accesslog.Certificate, error) {
+			return accesslog.VerifyOriginCertificate(stored.Certificate, stored.Signature, signPub)
+		})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", ErrForbidden, err)
 	}
@@ -270,12 +274,16 @@ func (s *SurrealStore) verifiedCertificate(ctx context.Context, stored *Certific
 	if err != nil {
 		return nil, err
 	}
-	bundle, err := s.GetKeyBundle(ctx, stored.UserID)
+	keys, err := s.GetIdentityKeys(ctx, stored.UserID)
 	if err != nil {
-		return nil, fmt.Errorf("the user has no key bundle")
+		return nil, fmt.Errorf("the user has no identity keys")
 	}
 	if renewalCertID == "" {
-		return accesslog.VerifyIdentityCertificate(stored.Certificate, stored.Signature, bundle.SignPub, now)
+		return verifyUnderIdentityHistory(keys,
+			func(certificate *accesslog.Certificate) time.Time { return certificate.IssuedAt },
+			func(signPub string) (*accesslog.Certificate, error) {
+				return accesslog.VerifyIdentityCertificate(stored.Certificate, stored.Signature, signPub, now)
+			})
 	}
 	renewalRow, err := queryFirst[dbRenewalCertificate](ctx, s.DB, "SELECT * FROM $renewal",
 		map[string]any{"renewal": models.NewRecordID("renewal_certificate", renewalCertID)})
@@ -283,11 +291,11 @@ func (s *SurrealStore) verifiedCertificate(ctx context.Context, stored *Certific
 		return nil, fmt.Errorf("unknown renewal certificate")
 	}
 	renewalStored := renewalRow.toRenewalCertificate()
-	renewal, err := accesslog.VerifyRenewalCertificate(renewalStored.Certificate, renewalStored.Signature, bundle.SignPub, now)
+	renewal, err := verifyRenewalUnderHistory(keys, renewalStored.Certificate, renewalStored.Signature, now)
 	if err != nil {
 		return nil, err
 	}
-	origin, err := s.verifiedOrigin(ctx, stored.UserID, originCertID, bundle.SignPub)
+	origin, err := s.verifiedOrigin(ctx, stored.UserID, originCertID, keys)
 	if err != nil {
 		return nil, fmt.Errorf("unusable origin certificate")
 	}
@@ -343,4 +351,12 @@ func (s *SurrealStore) expiringEntry(ctx context.Context, install Install, deadl
 		Certificate: certificate.Certificate, CertificateSignature: certificate.Signature,
 		CertificateExpiresAt: expiresAt,
 	}, true
+}
+
+func verifyRenewalUnderHistory(keys []IdentityKey, certificate, signature string, now time.Time) (*accesslog.RenewalCertificate, error) {
+	return verifyUnderIdentityHistory(keys,
+		func(renewal *accesslog.RenewalCertificate) time.Time { return renewal.IssuedAt },
+		func(signPub string) (*accesslog.RenewalCertificate, error) {
+			return accesslog.VerifyRenewalCertificate(certificate, signature, signPub, now)
+		})
 }
