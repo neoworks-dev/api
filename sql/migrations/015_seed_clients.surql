@@ -7,7 +7,10 @@ CREATE client CONTENT {
     id:                "neoworks.dev",
     organization:      organization:neoworks,
     secret_hash:       NONE,
-    redirect_uris:     ["http://neoworks.localhost/auth/callback"],
+    redirect_uris:     [
+        "http://neoworks.localhost/auth/callback",
+        "https://neoworks.localhost/auth/callback"
+    ],
     scopes:            ["openid", "profile", "email", "tokens:read", "storage:read"],
     auto_grant_scopes: true,
     public:            true

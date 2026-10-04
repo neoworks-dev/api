@@ -60,10 +60,7 @@ func (c *httpClient) EmbedDocuments(ctx context.Context, texts []string) ([]Vect
 	}
 	out := make([]Vector, 0, len(texts))
 	for start := 0; start < len(texts); start += c.batchSize {
-		end := start + c.batchSize
-		if end > len(texts) {
-			end = len(texts)
-		}
+		end := min(start+c.batchSize, len(texts))
 		batch := make([]string, end-start)
 		for i, text := range texts[start:end] {
 			batch[i] = documentPrefix + text
