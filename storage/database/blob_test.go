@@ -27,3 +27,32 @@ func TestStorageUsageCountsLiveBlobsOnly(t *testing.T) {
 		t.Fatalf("usage after delete: %d", used)
 	}
 }
+
+func TestAnAlbumGranteeDownloadsThroughTheReferenceNode(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	recipient := f.createUser()
+	root := f.createRoot(owner, "photos")
+	album := newNode(owner, owner.UserID, "photos", database.KindContainer, &root.ID)
+	f.pushOK(owner, album)
+	objectID := uuid.NewString()
+	original := newNode(owner, owner.UserID, "photos", database.KindItem, &root.ID)
+	original.Blob = []byte(`{"objectId":"` + objectID + `","chunks":2,"size":50}`)
+	f.pushOK(owner, original)
+	reference := newNode(owner, owner.UserID, "photos", database.KindItem, &album.ID)
+	reference.Blob = []byte(`{"objectId":"` + objectID + `","chunks":2,"size":0}`)
+	f.pushOK(owner, reference)
+	f.grant(owner, album.ID, readGrant("user", recipient.UserID, 1))
+
+	ctx := context.Background()
+	target, err := f.store.AuthorizeBlob(ctx, recipient, reference.ID, objectID, false)
+	if err != nil || target.Chunks != 2 || target.OwnerID != owner.UserID {
+		t.Fatalf("download through the reference: %+v %v", target, err)
+	}
+	if _, err := f.store.AuthorizeBlob(ctx, recipient, original.ID, objectID, false); err == nil {
+		t.Fatal("the album grant must not open the original photo node")
+	}
+	if _, err := f.store.AuthorizeBlob(ctx, recipient, reference.ID, objectID, true); err == nil {
+		t.Fatal("a read grant must not upload through the reference")
+	}
+}

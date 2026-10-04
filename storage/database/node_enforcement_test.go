@@ -307,7 +307,7 @@ func TestLinkPullServesOnlyTheLinkedSubtree(t *testing.T) {
 	}
 }
 
-func TestABlobObjectBelongsToOneNode(t *testing.T) {
+func TestABlobObjectBelongsToOneOwner(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	other := f.createUser()
@@ -330,5 +330,28 @@ func TestABlobObjectBelongsToOneNode(t *testing.T) {
 	mine.Content = []database.FacetContent{{Facet: 0, Ciphertext: "renamed"}}
 	if outcome := f.push(owner, mine); outcome.Status != database.StatusOK {
 		t.Fatalf("rewriting a node with its own object: got %s want ok", outcome.Status)
+	}
+}
+
+func TestReferenceNodesShareTheirTargetsBlobObject(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	root := f.createRoot(owner, "photos")
+	album := newNode(owner, owner.UserID, "photos", database.KindContainer, &root.ID)
+	f.pushOK(owner, album)
+	objectID := uuid.NewString()
+	original := newNode(owner, owner.UserID, "photos", database.KindItem, &root.ID)
+	original.Blob = []byte(`{"objectId":"` + objectID + `","chunks":1,"size":50}`)
+	f.pushOK(owner, original)
+
+	reference := newNode(owner, owner.UserID, "photos", database.KindItem, &album.ID)
+	reference.Blob = []byte(`{"objectId":"` + objectID + `","chunks":1,"size":0}`)
+	if outcome := f.push(owner, reference); outcome.Status != database.StatusOK {
+		t.Fatalf("reference to the owner's own object: got %s want ok", outcome.Status)
+	}
+
+	used, err := f.store.StorageUsedBytes(context.Background(), owner.UserID)
+	if err != nil || used != 50 {
+		t.Fatalf("storage used with a reference: %d %v, want 50", used, err)
 	}
 }

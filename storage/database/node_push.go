@@ -227,7 +227,8 @@ LET $parent_ok = !$has_parent OR ($parent_row != NONE
 LET $move_ok = !$reparenting OR ($parent_id != $node_id
 	AND !($node_id IN $parent_row.ancestors) AND $may_write_new_parent);
 LET $objects_free = array::len((SELECT VALUE id FROM node
-	WHERE blob_objects CONTAINSANY $blob_objects AND record::id(id) != $node_id)) = 0;
+	WHERE blob_objects CONTAINSANY $blob_objects AND record::id(id) != $node_id
+	AND owner_id != $owner_id)) = 0;
 LET $structure_ok = $parent_ok AND $objects_free AND (IF $existing != NONE {
 	$existing.owner_id = $owner_id AND $existing.collection = $collection
 	AND $existing.kind = $kind AND $move_ok
