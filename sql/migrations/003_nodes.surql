@@ -38,7 +38,9 @@ DEFINE FIELD content[*].ciphertext ON node TYPE string;
 -- signed (an object loses key order, so the string is what is served).
 DEFINE FIELD blob           ON node TYPE option<object> FLEXIBLE;
 DEFINE FIELD blob_json      ON node TYPE option<string>;
--- Total stored bytes (original plus variants) and every object id, for quota and presign checks.
+-- Total stored bytes (original plus variants) and every object id, for quota and
+-- presign checks. An object id belongs to one node: pushes that name another
+-- node's object are refused, so presigned URLs can never reach a foreign object.
 DEFINE FIELD blob_size      ON node TYPE int DEFAULT 0;
 DEFINE FIELD blob_objects   ON node TYPE array<string> DEFAULT [];
 DEFINE FIELD deleted        ON node TYPE bool DEFAULT false;
@@ -62,6 +64,7 @@ DEFINE INDEX idx_node_parent     ON node FIELDS parent_id;
 DEFINE INDEX idx_node_ancestors  ON node FIELDS ancestors;
 DEFINE INDEX idx_node_deleted_at ON node FIELDS deleted_at;
 DEFINE INDEX idx_node_cert       ON node FIELDS cert_id;
+DEFINE INDEX idx_node_objects    ON node FIELDS blob_objects;
 
 -- ── node_version: append-only history ─────────────────────────────────────────
 -- A full snapshot of every accepted write, including everything its signature

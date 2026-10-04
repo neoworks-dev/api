@@ -315,3 +315,42 @@ func TestLinkPullServesOnlyTheLinkedSubtree(t *testing.T) {
 		t.Fatalf("revoked link: got %v want not found", err)
 	}
 }
+
+func TestABlobObjectBelongsToOneNode(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	other := f.createUser()
+	ownerRoot := f.createRoot(owner, "files")
+	otherRoot := f.createRoot(other, "files")
+	objectID := uuid.NewString()
+	blob := []byte(`{"objectId":"` + objectID + `","chunks":1,"size":10}`)
+
+	mine := newNode(owner, owner.UserID, "files", database.KindItem, &ownerRoot.ID)
+	mine.Blob = blob
+	seq := f.pushOK(owner, mine)
+
+	stolen := newNode(other, other.UserID, "files", database.KindItem, &otherRoot.ID)
+	stolen.Blob = blob
+	if outcome := f.push(other, stolen); outcome.Status != database.StatusForbidden {
+		t.Fatalf("claiming another node's object: got %s want forbidden", outcome.Status)
+	}
+
+	mine.BaseSeq = seq
+	mine.Content = []database.FacetContent{{Facet: 0, Ciphertext: "renamed"}}
+	if outcome := f.push(owner, mine); outcome.Status != database.StatusOK {
+		t.Fatalf("rewriting a node with its own object: got %s want ok", outcome.Status)
+	}
+}
+
+func TestUserGrantersCannotAttachACertificate(t *testing.T) {
+	f := newFixture(t)
+	owner := f.createUser()
+	reader := f.createUser()
+	root := f.createRoot(owner, "calendar")
+	cert := uuid.NewString()
+	input := adminGrant(access.PrincipalTypeUser, reader.UserID, 1)
+	input.CertID = &cert
+	if _, err := f.store.CreateAccessGrant(context.Background(), owner, root.ID, input); !errors.Is(err, database.ErrInvalidInput) {
+		t.Fatalf("got %v want invalid input", err)
+	}
+}

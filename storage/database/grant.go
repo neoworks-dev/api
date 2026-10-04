@@ -130,6 +130,9 @@ func grantFromOutcome(outcome *dbGrantOutcome) (*AccessGrant, error) {
 
 func (s *SurrealStore) checkGranter(ctx context.Context, principal access.Principal, input GrantInput) error {
 	if !principal.IsInstall() {
+		if input.CertID != nil {
+			return fmt.Errorf("%w: certId is only for install granters", ErrInvalidInput)
+		}
 		return nil
 	}
 	if input.CertID == nil || !s.certificateBelongsToInstall(ctx, *input.CertID, principal.InstallID) {
