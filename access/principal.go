@@ -50,6 +50,12 @@ func (principal Principal) CanWrite(collection string) bool {
 	return principal.hasScope(collection, "write")
 }
 
+// CanShare reports whether the token's scopes allow sharing the collection with
+// other people.
+func (principal Principal) CanShare(collection string) bool {
+	return principal.hasScope(collection, "share")
+}
+
 func (principal Principal) ReadableCollections() []string {
 	return principal.collectionsWhere(principal.CanRead)
 }

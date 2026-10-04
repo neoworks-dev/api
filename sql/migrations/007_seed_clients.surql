@@ -5,6 +5,8 @@
 --
 -- A collection scope `<collection>:read|write` is the ceiling for the role any
 -- access grant gives the token: the API caps the grant's role by it.
+-- `<collection>:share` lets the app share that collection with other people; the
+-- consent screen offers it as a separate, unchecked permission.
 
 -- neoworks.dev web dashboard (connected apps, devices)
 CREATE client CONTENT {
@@ -50,8 +52,8 @@ CREATE client CONTENT {
     ],
     scopes:            [
         "openid", "profile", "email",
-        "calendar:read", "calendar:write",
-        "google:read", "google:write"
+        "calendar:read", "calendar:write", "calendar:share",
+        "google:read", "google:write", "google:share"
     ],
     auto_grant_scopes: true,
     public:            true
@@ -68,7 +70,7 @@ CREATE client CONTENT {
         "https://contacts.neoworks.dev/callback",
         "http://127.0.0.1:8765/callback"
     ],
-    scopes:            ["openid", "profile", "email", "contacts:read", "contacts:write"],
+    scopes:            ["openid", "profile", "email", "contacts:read", "contacts:write", "contacts:share"],
     auto_grant_scopes: true,
     public:            true
 };
@@ -84,7 +86,7 @@ CREATE client CONTENT {
         "https://photos.neoworks.dev/callback",
         "http://127.0.0.1:8765/callback"
     ],
-    scopes:            ["openid", "profile", "email", "photos:read", "photos:write"],
+    scopes:            ["openid", "profile", "email", "photos:read", "photos:write", "photos:share"],
     auto_grant_scopes: true,
     public:            true
 };
@@ -100,29 +102,7 @@ CREATE client CONTENT {
         "https://files.neoworks.dev/callback",
         "http://127.0.0.1:8765/callback"
     ],
-    scopes:            ["openid", "profile", "email", "files:read", "files:write"],
-    auto_grant_scopes: true,
-    public:            true
-};
-
--- SDK demo (apps/sdk-demo): reference app for libneoworks, holds every collection.
-CREATE client CONTENT {
-    id:                "sdk-demo",
-    name:              "SDK Demo",
-    secret_hash:       NONE,
-    redirect_uris:     [
-        "http://localhost:5180/callback",
-        "https://sdk-demo.neoworks.localhost/callback",
-        "https://sdk-demo.neoworks.dev/callback",
-        "http://127.0.0.1:8765/callback"
-    ],
-    scopes:            [
-        "openid", "profile", "email",
-        "calendar:read", "calendar:write",
-        "contacts:read", "contacts:write",
-        "photos:read", "photos:write",
-        "files:read", "files:write"
-    ],
+    scopes:            ["openid", "profile", "email", "files:read", "files:write", "files:share"],
     auto_grant_scopes: true,
     public:            true
 };

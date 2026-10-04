@@ -313,7 +313,7 @@ func TestEntriesMustBeSignedByTheActingUserAndDescribeTheGrant(t *testing.T) {
 	}
 }
 
-func TestInstallsMayNotWriteTheAccessLog(t *testing.T) {
+func TestInstallsCannotSubmitTheUsersSignedEntries(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	reader := f.createUser()
@@ -322,8 +322,8 @@ func TestInstallsMayNotWriteTheAccessLog(t *testing.T) {
 	f.grant(owner, root.ID, writeGrant(access.PrincipalTypeInstall, app.InstallID, 1))
 
 	request := f.accountOf(owner).GrantRequest(t, f.store, root.ID, readGrant(access.PrincipalTypeUser, reader.UserID, 1))
-	if _, err := f.store.CreateAccessGrant(t.Context(), app, root.ID, request); !errors.Is(err, database.ErrForbidden) {
-		t.Fatalf("an install granting: got %v want forbidden", err)
+	if _, err := f.store.CreateAccessGrant(t.Context(), app, root.ID, request); !errors.Is(err, database.ErrInvalidInput) {
+		t.Fatalf("an install submitting the user's entry: got %v want invalid input", err)
 	}
 }
 

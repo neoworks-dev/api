@@ -19,6 +19,7 @@ var encoding = base64.RawURLEncoding
 var DefaultScopes = []string{
 	"calendar:read", "calendar:write", "photos:read", "photos:write",
 	"files:read", "files:write", "google:read", "google:write",
+	"calendar:share", "photos:share", "files:share", "google:share",
 }
 
 // Account is a stored user together with the identity signing key its access log
@@ -146,12 +147,7 @@ func (account *Account) Resign(t *testing.T, entry accesslog.Entry) accesslog.En
 
 func (account *Account) sign(t *testing.T, entry accesslog.Entry) accesslog.Entry {
 	t.Helper()
-	entryBytes, err := entry.Bytes()
-	if err != nil {
-		t.Fatalf("entry bytes: %v", err)
-	}
-	entry.Signature = encoding.EncodeToString(ed25519.Sign(account.Key, entryBytes))
-	return entry
+	return SignEntry(t, account.Key, entry)
 }
 
 // Grant signs and stores a grant, failing the test on any error.

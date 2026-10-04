@@ -4,12 +4,16 @@ package installs
 
 import (
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/neoworks/auth/handlers/respond"
 	"github.com/neoworks/auth/middleware"
 	"github.com/neoworks/auth/storage/database"
 )
+
+const maxExpiryWindowDays = 365
 
 type Handler struct {
 	store *database.SurrealStore
@@ -30,6 +34,10 @@ func (h *Handler) RegisterAuthenticated(router chi.Router) {
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	principal, _ := middleware.PrincipalFromContext(r.Context())
+	if r.URL.Query().Has("expiringWithin") {
+		h.listExpiring(w, r, principal.UserID)
+		return
+	}
 	installs, err := h.store.ListInstalls(r.Context(), principal.UserID)
 	if err != nil {
 		respond.StoreError(w, "listInstalls", err)
@@ -57,4 +65,20 @@ func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respond.JSON(w, http.StatusOK, grant)
+}
+
+// listExpiring answers GET /installs?expiringWithin=<days> with the user's
+// active installs whose newest certificate expires within that many days.
+func (h *Handler) listExpiring(w http.ResponseWriter, r *http.Request, userID string) {
+	days, err := strconv.Atoi(r.URL.Query().Get("expiringWithin"))
+	if err != nil || days < 1 || days > maxExpiryWindowDays {
+		respond.Error(w, http.StatusBadRequest, "invalid_request", "expiringWithin must be a number of days from 1 to 365")
+		return
+	}
+	installs, err := h.store.ListExpiringInstalls(r.Context(), userID, time.Duration(days)*24*time.Hour)
+	if err != nil {
+		respond.StoreError(w, "listExpiringInstalls", err)
+		return
+	}
+	respond.JSON(w, http.StatusOK, map[string]any{"installs": installs})
 }

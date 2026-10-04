@@ -107,3 +107,25 @@ func TestDataAccessNeedsAnInstallOrTheVaultClient(t *testing.T) {
 		t.Errorf("installless app token: got %d want 403", code)
 	}
 }
+
+func TestRequireClientAdmitsOnlyThatClient(t *testing.T) {
+	status := func(claims *oauth.Claims) int {
+		handler := middleware.RequireClient("neoworks-authenticator")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		request := httptest.NewRequest("GET", "/", nil)
+		request = request.WithContext(middleware.NewContextWithClaim(request.Context(), claims))
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		return recorder.Code
+	}
+	if code := status(claimsFor("user-1", "neoworks-authenticator", "")); code != http.StatusOK {
+		t.Errorf("authenticator token: got %d want 200", code)
+	}
+	if code := status(claimsFor("user-1", "neoworks-calendar", "")); code != http.StatusForbidden {
+		t.Errorf("other client: got %d want 403", code)
+	}
+	if code := status(nil); code != http.StatusForbidden {
+		t.Errorf("no claims: got %d want 403", code)
+	}
+}

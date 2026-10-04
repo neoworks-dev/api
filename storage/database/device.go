@@ -87,6 +87,20 @@ func (s *SurrealStore) ListDevices(ctx context.Context, userID string) ([]Device
 	return devices, nil
 }
 
+// getDevice returns one of the user's devices.
+func (s *SurrealStore) getDevice(ctx context.Context, userID, deviceID string) (*Device, error) {
+	row, err := queryFirst[dbDevice](ctx, s.DB, "SELECT * FROM $device WHERE user = $user",
+		map[string]any{
+			"device": models.NewRecordID("device", deviceID),
+			"user":   models.NewRecordID("user", userID),
+		})
+	if err != nil {
+		return nil, err
+	}
+	device := row.toDevice()
+	return &device, nil
+}
+
 // TouchDevice records that the device was just used.
 func (s *SurrealStore) TouchDevice(ctx context.Context, userID, deviceID string) error {
 	return queryExec(ctx, s.DB,
@@ -97,7 +111,8 @@ func (s *SurrealStore) TouchDevice(ctx context.Context, userID, deviceID string)
 		})
 }
 
-// RevokeDevice marks the device revoked and drops its push registrations. It is
+// RevokeDevice marks the device revoked, revokes its renewal certificates and
+// drops its push registrations. It is
 // idempotent and returns ErrNotFound for a device the user does not own.
 func (s *SurrealStore) RevokeDevice(ctx context.Context, userID, deviceID string) error {
 	outcome, err := queryReturned[txOutcome](ctx, s.DB, `
@@ -107,6 +122,7 @@ func (s *SurrealStore) RevokeDevice(ctx context.Context, userID, deviceID string
 			{ status: 'missing', version: 0 }
 		} ELSE {
 			UPDATE $device SET revoked_at = time::now() WHERE revoked_at = NONE;
+			UPDATE renewal_certificate SET revoked_at = time::now() WHERE device = $device AND revoked_at = NONE;
 			DELETE push_token WHERE device = $device;
 			{ status: 'ok', version: 0 }
 		};

@@ -68,7 +68,7 @@ func (input GrantInput) validateFacets() error {
 }
 
 // checkEntryMatchesGrant requires the signed entry to describe exactly this
-// grant, made by the authenticated user on this node.
+// grant, made by the authenticated principal on this node.
 func checkEntryMatchesGrant(principal access.Principal, nodeID string, input GrantInput, entry accesslog.Entry) error {
 	keysHash, err := accesslog.WrappedKeysHash(input.WrappedKeys)
 	if err != nil {
@@ -82,7 +82,8 @@ func checkEntryMatchesGrant(principal access.Principal, nodeID string, input Gra
 		slices.Equal(entry.Facets, input.Facets) &&
 		entry.Epoch == input.Epoch &&
 		entry.WrappedKeysHash == keysHash &&
-		entry.ActorID == principal.UserID
+		entry.ActorType == principal.Type() &&
+		entry.ActorID == principal.ID()
 	if !matches {
 		return fmt.Errorf("%w: the log entry does not describe this grant", ErrInvalidInput)
 	}
@@ -90,19 +91,19 @@ func checkEntryMatchesGrant(principal access.Principal, nodeID string, input Gra
 }
 
 // verifyEntry checks the entry's shape, its hash if given, and that the acting
-// user's identity key signed it.
+// principal's key signed it: the user's identity key, or the install's own key.
 func (s *SurrealStore) verifyEntry(ctx context.Context, principal access.Principal, entry accesslog.Entry) (string, error) {
 	if err := entry.Validate(); err != nil {
 		return "", fmt.Errorf("%w: %s", ErrInvalidInput, err)
 	}
-	if entry.ActorID != principal.UserID {
-		return "", fmt.Errorf("%w: the entry must be signed by the authenticated user", ErrInvalidInput)
+	if entry.ActorType != principal.Type() || entry.ActorID != principal.ID() {
+		return "", fmt.Errorf("%w: the entry must be signed by the authenticated principal", ErrInvalidInput)
 	}
-	bundle, err := s.GetKeyBundle(ctx, principal.UserID)
+	signPub, err := s.actorSignPub(ctx, principal)
 	if err != nil {
-		return "", fmt.Errorf("%w: the user has no key bundle", ErrInvalidInput)
+		return "", err
 	}
-	if err := entry.VerifySignature(bundle.SignPub); err != nil {
+	if err := entry.VerifySignature(signPub); err != nil {
 		return "", fmt.Errorf("%w: %s", ErrInvalidInput, err)
 	}
 	entryHash, err := entry.ComputedHash()
@@ -113,6 +114,21 @@ func (s *SurrealStore) verifyEntry(ctx context.Context, principal access.Princip
 		return "", fmt.Errorf("%w: entryHash does not match the entry", ErrInvalidInput)
 	}
 	return entryHash, nil
+}
+
+func (s *SurrealStore) actorSignPub(ctx context.Context, principal access.Principal) (string, error) {
+	if principal.IsInstall() {
+		install, err := s.GetInstall(ctx, principal.InstallID)
+		if err != nil {
+			return "", fmt.Errorf("%w: unknown install", ErrInvalidInput)
+		}
+		return install.SignPub, nil
+	}
+	bundle, err := s.GetKeyBundle(ctx, principal.UserID)
+	if err != nil {
+		return "", fmt.Errorf("%w: the user has no key bundle", ErrInvalidInput)
+	}
+	return bundle.SignPub, nil
 }
 
 type dbGrantOutcome struct {
@@ -134,15 +150,13 @@ func (head *dbLogHead) toHead() *LogHead {
 }
 
 // CreateAccessGrant appends a signed grant entry to the node's chain and stores
-// the grant. Only the account (never an install) grants. The owner may grant
-// anyone; a user may grant their own installs a role no higher than their own.
-// The entry must extend the chain head, the grant must be sealed to the node's
-// current epoch, and the entry must be signed by the acting user's identity key.
+// the grant. The owner may grant anyone; a user may grant their own installs a
+// role no higher than their own; an install the owner delegated sharing to
+// (`<collection>:share`) may grant other users. The entry must extend the chain
+// head, the grant must be sealed to the node's current epoch, and the entry must
+// be signed by the acting principal's key.
 func (s *SurrealStore) CreateAccessGrant(ctx context.Context, principal access.Principal, nodeID string, request GrantRequest) (*GrantResult, error) {
 	input, entry := request.Grant, request.Entry
-	if principal.IsInstall() {
-		return nil, ErrForbidden
-	}
 	if err := input.validate(); err != nil {
 		return nil, err
 	}
@@ -192,6 +206,9 @@ func grantResult(outcome *dbGrantOutcome, entry accesslog.Entry, entryHash strin
 // node's owner; to an install only its own user, with at most their own role.
 func (s *SurrealStore) checkGrantAuthority(ctx context.Context, principal access.Principal, node *dbNode, nodeID string, request GrantRequest) error {
 	input := request.Grant
+	if principal.IsInstall() {
+		return s.checkInstallGrant(ctx, principal, node, nodeID, request)
+	}
 	if input.PrincipalType == access.PrincipalTypeUser {
 		return s.checkUserGrant(ctx, principal, node, input)
 	}
@@ -208,7 +225,7 @@ func (s *SurrealStore) checkGrantAuthority(ctx context.Context, principal access
 	if node.OwnerID == principal.UserID {
 		return nil
 	}
-	return s.checkDelegation(ctx, principal, node, nodeID, input)
+	return s.checkDelegation(ctx, access.Principal{UserID: principal.UserID, Scopes: principal.Scopes}, node, nodeID, input)
 }
 
 // certificateDelegatesInstall reports whether the certificate an install grant
@@ -232,12 +249,12 @@ func (s *SurrealStore) checkUserGrant(ctx context.Context, principal access.Prin
 	return nil
 }
 
-// checkDelegation lets a user pass a share on to their own install: the grant's
-// role may not exceed the user's own role on the node, and when the user only
-// holds facet grants the install gets a subset of those facets.
-func (s *SurrealStore) checkDelegation(ctx context.Context, principal access.Principal, node *dbNode, nodeID string, input GrantInput) error {
-	own := access.Principal{UserID: principal.UserID, Scopes: principal.Scopes}
-	reaches, err := s.grantsReaching(ctx, own, nodeID, node)
+// checkDelegation bounds a grant by the holder's own reach on the node: the
+// role may not exceed the holder's role, and when the holder only has facet
+// grants the grantee gets a subset of those facets. The holder is the user for a
+// share passed to their install, and the install for a share it makes itself.
+func (s *SurrealStore) checkDelegation(ctx context.Context, holder access.Principal, node *dbNode, nodeID string, input GrantInput) error {
+	reaches, err := s.grantsReaching(ctx, holder, nodeID, node)
 	if err != nil {
 		return err
 	}
@@ -378,12 +395,10 @@ COMMIT TRANSACTION;`
 }
 
 // RevokeAccessGrant appends a signed revoke entry and revokes the grant it
-// names. The owner may revoke anyone; a user may revoke their own installs and
+// names. The owner may revoke anyone, as may an install holding the node's
+// `<collection>:share` delegation; a user may revoke their own installs and
 // their own grant. The principal's keys are flagged for rotation.
 func (s *SurrealStore) RevokeAccessGrant(ctx context.Context, principal access.Principal, nodeID string, entry accesslog.Entry) (*accesslog.Entry, error) {
-	if principal.IsInstall() {
-		return nil, ErrForbidden
-	}
 	if entry.Action != accesslog.ActionRevoke || entry.NodeID != nodeID {
 		return nil, fmt.Errorf("%w: the entry must be a revoke on this node", ErrInvalidInput)
 	}
@@ -425,6 +440,9 @@ func revokeResult(outcome *dbGrantOutcome, entry accesslog.Entry, entryHash stri
 }
 
 func (s *SurrealStore) checkRevokeAuthority(ctx context.Context, principal access.Principal, node *dbNode, entry accesslog.Entry) error {
+	if principal.IsInstall() {
+		return s.checkInstallShare(ctx, principal, node, entry)
+	}
 	if node.OwnerID == principal.UserID {
 		return nil
 	}

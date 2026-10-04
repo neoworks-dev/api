@@ -60,13 +60,30 @@ DEFINE FIELD revoked_at ON install TYPE option<datetime>;
 DEFINE INDEX idx_install_user ON install FIELDS user;
 
 -- ── certificate: the user's delegation certificate for an install ────────────
--- `bytes` and `signature` are stored and served verbatim; the server never
--- parses them. The record id is the certId.
+-- `bytes` and `signature` are stored and served verbatim. The record id is the
+-- certId. A certificate renewed by an authenticator names the identity-signed
+-- certificate it extends and the renewal certificate that signed it.
 DEFINE TABLE certificate SCHEMAFULL;
 DEFINE FIELD user       ON certificate TYPE record<user>    READONLY;
 DEFINE FIELD install    ON certificate TYPE record<install> READONLY;
 DEFINE FIELD bytes      ON certificate TYPE string          READONLY;
 DEFINE FIELD signature  ON certificate TYPE string          READONLY;
+DEFINE FIELD origin_cert_id  ON certificate TYPE option<string> READONLY;
+DEFINE FIELD renewal_cert_id ON certificate TYPE option<string> READONLY;
 DEFINE FIELD created_at ON certificate TYPE datetime VALUE $before OR time::now() READONLY;
 
 DEFINE INDEX idx_certificate_install ON certificate FIELDS install;
+
+-- ── renewal_certificate: lets one authenticator device extend certificates ───
+-- Signed by the user's identity key at enrollment. The record id is the
+-- renewalCertId. Revoking the device revokes it.
+DEFINE TABLE renewal_certificate SCHEMAFULL;
+DEFINE FIELD user       ON renewal_certificate TYPE record<user>   READONLY;
+DEFINE FIELD device     ON renewal_certificate TYPE record<device> READONLY;
+DEFINE FIELD bytes      ON renewal_certificate TYPE string         READONLY;
+DEFINE FIELD signature  ON renewal_certificate TYPE string         READONLY;
+DEFINE FIELD expires_at ON renewal_certificate TYPE datetime       READONLY;
+DEFINE FIELD created_at ON renewal_certificate TYPE datetime VALUE $before OR time::now() READONLY;
+DEFINE FIELD revoked_at ON renewal_certificate TYPE option<datetime>;
+
+DEFINE INDEX idx_renewal_certificate_device ON renewal_certificate FIELDS device;

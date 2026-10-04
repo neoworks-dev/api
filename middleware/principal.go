@@ -123,3 +123,17 @@ func (gate *dataAccessGate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	gate.next.ServeHTTP(w, r)
 }
+
+// RequireClient refuses tokens that were not issued to the given OAuth client.
+func RequireClient(clientID string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims := ClaimFromContext(r.Context())
+			if claims == nil || claims.ClientID != clientID {
+				writeAuthError(w, http.StatusForbidden, "client_not_allowed")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}

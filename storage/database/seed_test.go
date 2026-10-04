@@ -9,10 +9,10 @@ import (
 func TestFirstPartyClientsAreSeeded(t *testing.T) {
 	f := newFixture(t)
 	wanted := map[string][]string{
-		"neoworks-calendar":      {"calendar:read", "calendar:write"},
-		"neoworks-contacts":      {"contacts:read", "contacts:write"},
-		"neoworks-photos":        {"photos:read", "photos:write"},
-		"neoworks-files":         {"files:read", "files:write"},
+		"neoworks-calendar":      {"calendar:read", "calendar:write", "calendar:share"},
+		"neoworks-contacts":      {"contacts:read", "contacts:write", "contacts:share"},
+		"neoworks-photos":        {"photos:read", "photos:write", "photos:share"},
+		"neoworks-files":         {"files:read", "files:write", "files:share"},
 		"neoworks-authenticator": {"openid"},
 	}
 	for clientID, scopes := range wanted {

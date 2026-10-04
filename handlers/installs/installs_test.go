@@ -64,3 +64,27 @@ func TestInstallLifecycle(t *testing.T) {
 		t.Fatalf("revoke unknown: got %d want 404", response.Code)
 	}
 }
+
+func TestExpiringWithinValidatesTheWindow(t *testing.T) {
+	store := dbtest.New(t)
+	installHandler := installs.NewHandler(store)
+	router := handlertest.NewAuthenticated(func(router chi.Router) { installHandler.RegisterAuthenticated(router) })
+	user := handlertest.CreateUser(t, store, "calendar:read")
+
+	for _, window := range []string{"0", "-1", "abc", "400"} {
+		if response := router.Do(t, user, "GET", "/api/v1/installs?expiringWithin="+window, nil, nil); response.Code != http.StatusBadRequest {
+			t.Errorf("expiringWithin=%s: got %d want 400", window, response.Code)
+		}
+	}
+	var list struct {
+		Installs []database.ExpiringInstall `json:"installs"`
+	}
+	response := router.Do(t, user, "GET", "/api/v1/installs?expiringWithin=7", nil, nil)
+	if response.Code != http.StatusOK {
+		t.Fatalf("expiringWithin=7: %d", response.Code)
+	}
+	handlertest.Decode(t, response, &list)
+	if list.Installs == nil || len(list.Installs) != 0 {
+		t.Fatalf("expected an empty list, got %+v", list)
+	}
+}
