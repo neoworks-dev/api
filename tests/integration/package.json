@@ -1,7 +1,0 @@
-{
-  "name": "integration-tests",
-  "private": true,
-  "scripts": {
-    "test": "bun test"
-  }
-}
