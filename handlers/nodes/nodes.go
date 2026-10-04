@@ -95,14 +95,17 @@ func validateBatch(w http.ResponseWriter, nodes []database.Node, principal acces
 	for index, node := range nodes {
 		checked, err := database.ValidateNodeInput(node, principal)
 		if err != nil {
-			respond.JSON(w, http.StatusBadRequest, map[string]any{
-				"error": "invalid_node", "index": index, "message": err.Error(),
-			})
+			writeInvalidNode(w, index, err)
 			return nil, false
 		}
 		validated = append(validated, checked)
 	}
 	return validated, true
+}
+
+func writeInvalidNode(w http.ResponseWriter, index int, err error) {
+	body := map[string]any{"error": "invalid_node", "index": index, "message": err.Error()}
+	respond.JSON(w, http.StatusBadRequest, body)
 }
 
 func (h *Handler) pull(w http.ResponseWriter, r *http.Request) {

@@ -151,29 +151,7 @@ func outcomeError(outcome *txOutcome) error {
 }
 
 func rotationStatement(userID string, expectedVersion int, next KeyBundle, authKey *string) (string, map[string]any, error) {
-	assignments := []string{
-		"version = $next_version", "amk_password = $amk_password", "amk_recovery = $amk_recovery",
-		"identity_private = $identity_private", "enc_pub = $enc_pub", "sign_pub = $sign_pub",
-		"self_sig = $self_sig",
-	}
-	params := map[string]any{
-		"user":             models.NewRecordID("user", userID),
-		"expected_version": expectedVersion,
-		"next_version":     next.Version,
-		"amk_password":     next.AmkPassword,
-		"amk_recovery":     next.AmkRecovery,
-		"identity_private": next.IdentityPrivate,
-		"enc_pub":          next.EncPub,
-		"sign_pub":         next.SignPub,
-		"self_sig":         next.SelfSig,
-	}
-	if next.PwhashSalt != "" {
-		assignments = append(assignments, "pwhash_salt = $pwhash_salt", "pwhash_ops = $pwhash_ops", "pwhash_mem = $pwhash_mem")
-		params["pwhash_salt"] = next.PwhashSalt
-		params["pwhash_ops"] = next.PwhashOps
-		params["pwhash_mem"] = next.PwhashMem
-	}
-
+	assignments, params := rotationAssignments(userID, expectedVersion, next)
 	authUpdate := ""
 	if authKey != nil {
 		hash, err := bcrypt.GenerateFromPassword([]byte(*authKey), bcrypt.DefaultCost)
@@ -199,4 +177,32 @@ func rotationStatement(userID string, expectedVersion int, next KeyBundle, authK
 		RETURN $outcome;
 		COMMIT TRANSACTION;`
 	return statement, params, nil
+}
+
+// rotationAssignments lists the key_bundle assignments of a rotation with their
+// parameters. The KDF parameters change only when the new bundle carries them.
+func rotationAssignments(userID string, expectedVersion int, next KeyBundle) ([]string, map[string]any) {
+	assignments := []string{
+		"version = $next_version", "amk_password = $amk_password", "amk_recovery = $amk_recovery",
+		"identity_private = $identity_private", "enc_pub = $enc_pub", "sign_pub = $sign_pub",
+		"self_sig = $self_sig",
+	}
+	params := map[string]any{
+		"user":             models.NewRecordID("user", userID),
+		"expected_version": expectedVersion,
+		"next_version":     next.Version,
+		"amk_password":     next.AmkPassword,
+		"amk_recovery":     next.AmkRecovery,
+		"identity_private": next.IdentityPrivate,
+		"enc_pub":          next.EncPub,
+		"sign_pub":         next.SignPub,
+		"self_sig":         next.SelfSig,
+	}
+	if next.PwhashSalt != "" {
+		assignments = append(assignments, "pwhash_salt = $pwhash_salt", "pwhash_ops = $pwhash_ops", "pwhash_mem = $pwhash_mem")
+		params["pwhash_salt"] = next.PwhashSalt
+		params["pwhash_ops"] = next.PwhashOps
+		params["pwhash_mem"] = next.PwhashMem
+	}
+	return assignments, params
 }

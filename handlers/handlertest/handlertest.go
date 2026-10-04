@@ -29,19 +29,23 @@ type Router struct {
 func NewAuthenticated(register func(chi.Router)) *Router {
 	router := chi.NewRouter()
 	router.Group(func(authenticated chi.Router) {
-		authenticated.Use(func(next http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if principal, ok := principalFor(r); ok {
-					ctx := middleware.ContextWithPrincipal(r.Context(), principal)
-					ctx = middleware.NewContextWithClaim(ctx, claimsFor(principal, r.Header.Get("X-Test-Client")))
-					r = r.WithContext(ctx)
-				}
-				next.ServeHTTP(w, r)
-			})
-		})
+		authenticated.Use(injectPrincipal)
 		register(authenticated)
 	})
 	return &Router{Router: router}
+}
+
+func injectPrincipal(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFor(r)
+		if !ok {
+			next.ServeHTTP(w, r)
+			return
+		}
+		ctx := middleware.ContextWithPrincipal(r.Context(), principal)
+		ctx = middleware.NewContextWithClaim(ctx, claimsFor(principal, r.Header.Get("X-Test-Client")))
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 // claimsFor builds the claims a verified token for the principal would carry.

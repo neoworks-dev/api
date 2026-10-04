@@ -35,20 +35,27 @@ func ContextWithPrincipal(ctx context.Context, principal access.Principal) conte
 // different user or client than the token.
 func PrincipalMiddleware(installs InstallLookup) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			claims := ClaimFromContext(r.Context())
-			if claims == nil || claims.Subject == "" {
-				writeAuthError(w, http.StatusForbidden, "user_required")
-				return
-			}
-			if !installIsActive(r.Context(), installs, claims) {
-				writeAuthError(w, http.StatusUnauthorized, "invalid_token")
-				return
-			}
-			principal := access.Principal{UserID: claims.Subject, InstallID: claims.InstallID, Scopes: claims.Scope}
-			next.ServeHTTP(w, r.WithContext(ContextWithPrincipal(r.Context(), principal)))
-		})
+		return &principalResolver{installs: installs, next: next}
 	}
+}
+
+type principalResolver struct {
+	installs InstallLookup
+	next     http.Handler
+}
+
+func (resolver *principalResolver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	claims := ClaimFromContext(r.Context())
+	if claims == nil || claims.Subject == "" {
+		writeAuthError(w, http.StatusForbidden, "user_required")
+		return
+	}
+	if !installIsActive(r.Context(), resolver.installs, claims) {
+		writeAuthError(w, http.StatusUnauthorized, "invalid_token")
+		return
+	}
+	principal := access.Principal{UserID: claims.Subject, InstallID: claims.InstallID, Scopes: claims.Scope}
+	resolver.next.ServeHTTP(w, r.WithContext(ContextWithPrincipal(r.Context(), principal)))
 }
 
 func installIsActive(ctx context.Context, installs InstallLookup, claims *oauth.Claims) bool {

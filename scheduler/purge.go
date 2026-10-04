@@ -38,18 +38,24 @@ func NewTombstonePurger(store *database.SurrealStore, objects ObjectRemover, ret
 
 // Start runs the job once an hour until ctx ends.
 func (purger *TombstonePurger) Start(ctx context.Context) {
-	go func() {
-		ticker := time.NewTicker(purgeInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				purger.RunOnce(ctx)
-			}
-		}
-	}()
+	go purger.run(ctx)
+}
+
+func (purger *TombstonePurger) run(ctx context.Context) {
+	ticker := time.NewTicker(purgeInterval)
+	defer ticker.Stop()
+	for waitForTick(ctx, ticker) {
+		purger.RunOnce(ctx)
+	}
+}
+
+func waitForTick(ctx context.Context, ticker *time.Ticker) bool {
+	select {
+	case <-ctx.Done():
+		return false
+	case <-ticker.C:
+		return true
+	}
 }
 
 // RunOnce performs one purge pass.

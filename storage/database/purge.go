@@ -62,22 +62,12 @@ func groupByOwner(expired []expiredTombstone) map[string][]expiredTombstone {
 }
 
 func (s *SurrealStore) purgeOwnerTombstones(ctx context.Context, owner string, group []expiredTombstone) ([]string, error) {
-	nodeRecords := make([]models.RecordID, 0, len(group))
-	nodeIDs := make([]string, 0, len(group))
-	var highestSeq int64
-	for _, tombstone := range group {
-		nodeRecords = append(nodeRecords, *tombstone.ID)
-		nodeIDs = append(nodeIDs, recordIDString(tombstone.ID))
-		if tombstone.Seq > highestSeq {
-			highestSeq = tombstone.Seq
-		}
-	}
+	nodeRecords, nodeIDs, highestSeq := summarizeTombstones(group)
 	objects, err := s.objectsOfNodes(ctx, nodeIDs)
 	if err != nil {
 		return nil, err
 	}
 
-	horizon := models.NewRecordID("purge_horizon", owner)
 	err = queryExec(ctx, s.DB, `
 		BEGIN TRANSACTION;
 		DELETE node_version WHERE node_id IN $node_ids;
@@ -90,7 +80,7 @@ func (s *SurrealStore) purgeOwnerTombstones(ctx context.Context, owner string, g
 		map[string]any{
 			"node_ids":     nodeIDs,
 			"node_records": nodeRecords,
-			"horizon":      horizon,
+			"horizon":      models.NewRecordID("purge_horizon", owner),
 			"owner_id":     owner,
 			"highest_seq":  highestSeq,
 		})
@@ -98,6 +88,19 @@ func (s *SurrealStore) purgeOwnerTombstones(ctx context.Context, owner string, g
 		return nil, fmt.Errorf("purge tombstones of %s: %w", owner, err)
 	}
 	return objects, nil
+}
+
+// summarizeTombstones lists the group's record ids, bare ids and highest seq.
+func summarizeTombstones(group []expiredTombstone) ([]models.RecordID, []string, int64) {
+	records := make([]models.RecordID, 0, len(group))
+	ids := make([]string, 0, len(group))
+	var highestSeq int64
+	for _, tombstone := range group {
+		records = append(records, *tombstone.ID)
+		ids = append(ids, recordIDString(tombstone.ID))
+		highestSeq = max(highestSeq, tombstone.Seq)
+	}
+	return records, ids, highestSeq
 }
 
 func (s *SurrealStore) objectsOfNodes(ctx context.Context, nodeIDs []string) ([]string, error) {
