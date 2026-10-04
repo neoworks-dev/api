@@ -124,20 +124,25 @@ func (s *SurrealStore) queryApprovals(ctx context.Context, query string, vars ma
 
 // ── Push tokens ────────────────────────────────────────────────────────────────
 
+// UpsertPushToken registers a device's push token for the user. A token belongs
+// to one device, so registering it again replaces any earlier registration, also
+// under another user.
 func (s *SurrealStore) UpsertPushToken(ctx context.Context, userID string, deviceID *string, platform, token string) error {
-	fields := map[string]any{
-		"user":     models.NewRecordID("user", userID),
-		"platform": platform,
-		"token":    token,
+	assignments := "user = $user, platform = $platform, token = $push_token"
+	params := map[string]any{
+		"user":       models.NewRecordID("user", userID),
+		"platform":   platform,
+		"push_token": token,
 	}
 	if deviceID != nil {
-		fields["device"] = models.NewRecordID("device", *deviceID)
+		assignments += ", device = $device"
+		params["device"] = models.NewRecordID("device", *deviceID)
 	}
-	_, err := surrealdb.Query[[]any](ctx, s.DB,
-		`UPSERT push_token SET user = $user, device = $device, platform = $platform, token = $token
-		 WHERE token = $token`,
-		fields,
-	)
+	err := queryExec(ctx, s.DB, `
+		BEGIN TRANSACTION;
+		DELETE push_token WHERE token = $push_token;
+		CREATE push_token SET `+assignments+`;
+		COMMIT TRANSACTION;`, params)
 	if err != nil {
 		return fmt.Errorf("upsert push token: %w", err)
 	}

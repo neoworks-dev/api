@@ -23,6 +23,8 @@ import (
 	installhandlers "github.com/neoworks/auth/handlers/installs"
 	keyhandlers "github.com/neoworks/auth/handlers/keys"
 	nodehandlers "github.com/neoworks/auth/handlers/nodes"
+	notificationhandlers "github.com/neoworks/auth/handlers/notifications"
+	settinghandlers "github.com/neoworks/auth/handlers/settings"
 	"github.com/neoworks/auth/middleware"
 	"github.com/neoworks/auth/oauth"
 	"github.com/neoworks/auth/push"
@@ -137,7 +139,8 @@ func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects 
 
 	router.Group(func(authenticated chi.Router) {
 		authenticated.Use(clientAuth.JWTMiddleware)
-		approvalhandlers.NewHandler(surreal, redis, push.NewSender(push.ConfigFromEnv())).RegisterAuthenticated(authenticated)
+		pushSender := push.NewSender(push.ConfigFromEnv())
+		approvalhandlers.NewHandler(surreal, redis, pushSender).RegisterAuthenticated(authenticated)
 
 		authenticated.Group(func(principals chi.Router) {
 			principals.Use(middleware.PrincipalMiddleware(surreal))
@@ -146,6 +149,8 @@ func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects 
 			installhandlers.NewHandler(surreal).RegisterAuthenticated(principals)
 			nodes.RegisterAuthenticated(principals)
 			blobs.RegisterAuthenticated(principals)
+			settinghandlers.NewHandler(surreal).RegisterAuthenticated(principals)
+			notificationhandlers.NewHandler(surreal, pushSender).RegisterAuthenticated(principals)
 		})
 	})
 	return router

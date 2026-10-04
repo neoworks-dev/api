@@ -11,9 +11,11 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/neoworks/auth/access"
 	"github.com/neoworks/auth/middleware"
+	"github.com/neoworks/auth/oauth"
 	"github.com/neoworks/auth/storage/database"
 )
 
@@ -30,7 +32,9 @@ func NewAuthenticated(register func(chi.Router)) *Router {
 		authenticated.Use(func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if principal, ok := principalFor(r); ok {
-					r = r.WithContext(middleware.ContextWithPrincipal(r.Context(), principal))
+					ctx := middleware.ContextWithPrincipal(r.Context(), principal)
+					ctx = middleware.NewContextWithClaim(ctx, claimsFor(principal, r.Header.Get("X-Test-Client")))
+					r = r.WithContext(ctx)
 				}
 				next.ServeHTTP(w, r)
 			})
@@ -38,6 +42,19 @@ func NewAuthenticated(register func(chi.Router)) *Router {
 		register(authenticated)
 	})
 	return &Router{Router: router}
+}
+
+// claimsFor builds the claims a verified token for the principal would carry.
+func claimsFor(principal access.Principal, clientID string) *oauth.Claims {
+	if clientID == "" {
+		clientID = "test-client"
+	}
+	return &oauth.Claims{
+		RegisteredClaims: jwt.RegisteredClaims{Subject: principal.UserID},
+		ClientID:         clientID,
+		InstallID:        principal.InstallID,
+		Scope:            principal.Scopes,
+	}
 }
 
 type principalKey struct{}
