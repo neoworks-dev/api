@@ -61,6 +61,23 @@ CREATE client CONTENT {
 };
 
 CREATE client CONTENT {
+    id:                "neoworks-calendar-native",
+    name:              "Neoworks Calendar",
+    secret_hash:       NONE,
+    redirect_uris:     [
+        "neoworks-calendar://callback"
+    ],
+    scopes:            [
+        "openid", "profile", "email",
+        "calendar:read", "calendar:write", "calendar:share",
+        "contacts:read",
+        "google:read", "google:write", "google:share"
+    ],
+    auto_grant_scopes: true,
+    public:            true
+};
+
+CREATE client CONTENT {
     id:                "neoworks-contacts",
     name:              "Neoworks Contacts",
     secret_hash:       NONE,
