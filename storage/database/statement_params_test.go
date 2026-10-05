@@ -137,3 +137,15 @@ func TestRevokeStatementBindsEveryParameter(t *testing.T) {
 		requireAllBound(t, "revoke", revokeStatement(facets), params)
 	}
 }
+
+func TestRegistryStatementsBindEveryParameter(t *testing.T) {
+	input := RegistryPublishInput{Scope: "acme", Name: "commerce", Version: "1.0.0",
+		Files: []RegistryPublishFile{{Path: "a.schema", Contents: "x"}}}
+	requireAllBound(t, "registry publish", registryPublishStatement, registryPublishParams(uuid.NewString(), input))
+	requireAllBound(t, "registry list", registryListStatement, map[string]any{"limit": 1})
+	requireAllBound(t, "registry search", registrySearchStatement, map[string]any{"limit": 1, "query": "q"})
+	requireAllBound(t, "registry get", registryGetStatement, map[string]any{"scope": "s", "name": "n"})
+	requireAllBound(t, "registry versions", registryVersionsStatement, map[string]any{"schema": "s"})
+	requireAllBound(t, "registry version", registryVersionStatement, map[string]any{"schema": "s", "version": "v"})
+	requireAllBound(t, "registry files", registryFilesStatement, map[string]any{"version": "v"})
+}

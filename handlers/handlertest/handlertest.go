@@ -91,6 +91,15 @@ func (router *Router) Do(t *testing.T, principal access.Principal, method, path 
 	return recorder
 }
 
+// DoAnonymous sends a request that carries no principal, as an unauthenticated
+// caller of a public route.
+func (router *Router) DoAnonymous(t *testing.T, method, path string) *httptest.ResponseRecorder {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(method, path, nil))
+	return recorder
+}
+
 // Decode parses a recorded JSON response into target.
 func Decode(t *testing.T, recorder *httptest.ResponseRecorder, target any) {
 	t.Helper()

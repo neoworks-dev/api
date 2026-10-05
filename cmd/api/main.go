@@ -25,6 +25,7 @@ import (
 	keyhandlers "github.com/neoworks/auth/handlers/keys"
 	nodehandlers "github.com/neoworks/auth/handlers/nodes"
 	notificationhandlers "github.com/neoworks/auth/handlers/notifications"
+	registryhandlers "github.com/neoworks/auth/handlers/registry"
 	renewalhandlers "github.com/neoworks/auth/handlers/renewal"
 	settinghandlers "github.com/neoworks/auth/handlers/settings"
 	"github.com/neoworks/auth/middleware"
@@ -138,6 +139,8 @@ func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects 
 	blobs := blobhandlers.NewHandler(surreal, objects, storageQuotaBytes())
 	nodes.RegisterPublic(router)
 	blobs.RegisterPublic(router)
+	registry := registryhandlers.NewHandler(surreal)
+	registry.RegisterPublic(router)
 
 	router.Group(func(authenticated chi.Router) {
 		authenticated.Use(clientAuth.JWTMiddleware)
@@ -157,6 +160,7 @@ func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects 
 			nodes.RegisterAuthenticated(data)
 			renewals.RegisterVerifier(data)
 			blobs.RegisterAuthenticated(data)
+			registry.RegisterAuthenticated(principals)
 			settinghandlers.NewHandler(surreal).RegisterAuthenticated(principals)
 			notificationhandlers.NewHandler(surreal, pushSender).RegisterAuthenticated(principals)
 		})

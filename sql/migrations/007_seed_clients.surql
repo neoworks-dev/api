@@ -107,3 +107,20 @@ CREATE client CONTENT {
     auto_grant_scopes: true,
     public:            true
 };
+
+-- OpenSchema registry site. `schemas:publish` lets the signed-in user publish
+-- schema versions; reading the registry needs no token.
+CREATE client CONTENT {
+    id:                "openschema",
+    name:              "OpenSchema",
+    secret_hash:       NONE,
+    redirect_uris:     [
+        "http://localhost:5178/auth/callback",
+        "https://openschema.neoworks.localhost/auth/callback",
+        "https://openschema.neoworks.dev/auth/callback",
+        "http://127.0.0.1:8765/callback"
+    ],
+    scopes:            ["openid", "profile", "email", "schemas:publish"],
+    auto_grant_scopes: true,
+    public:            true
+};

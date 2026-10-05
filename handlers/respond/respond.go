@@ -64,6 +64,8 @@ func StoreError(w http.ResponseWriter, operation string, err error) {
 		Error(w, http.StatusConflict, "stale_epoch", "the node key epoch has changed; re-seal to the current epoch")
 	case errors.Is(err, database.ErrUnknownPrincipal):
 		Error(w, http.StatusUnprocessableEntity, "unknown_principal", "the principal does not exist or was revoked")
+	case errors.Is(err, database.ErrVersionExists):
+		Error(w, http.StatusConflict, "version_exists", "that version is already published and cannot change")
 	case errors.Is(err, database.ErrInvalidInput):
 		Error(w, http.StatusBadRequest, "invalid_request", err.Error())
 	default:

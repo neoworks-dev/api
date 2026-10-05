@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"slices"
 
 	"github.com/neoworks/auth/access"
 	"github.com/neoworks/auth/oauth"
@@ -131,6 +132,21 @@ func RequireClient(clientID string) func(http.Handler) http.Handler {
 			claims := ClaimFromContext(r.Context())
 			if claims == nil || claims.ClientID != clientID {
 				writeAuthError(w, http.StatusForbidden, "client_not_allowed")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// RequireScope refuses tokens that were not granted the scope. It must run after
+// PrincipalMiddleware.
+func RequireScope(scope string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			principal, ok := PrincipalFromContext(r.Context())
+			if !ok || !slices.Contains(principal.Scopes, scope) {
+				writeAuthError(w, http.StatusForbidden, "scope_not_granted")
 				return
 			}
 			next.ServeHTTP(w, r)

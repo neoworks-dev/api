@@ -14,6 +14,7 @@ func TestFirstPartyClientsAreSeeded(t *testing.T) {
 		"neoworks-photos":        {"photos:read", "photos:write", "photos:share"},
 		"neoworks-files":         {"files:read", "files:write", "files:share"},
 		"neoworks-authenticator": {"openid"},
+		"openschema":             {"openid", "schemas:publish"},
 	}
 	for clientID, scopes := range wanted {
 		client, err := f.store.GetClient(context.Background(), clientID)
