@@ -15,7 +15,7 @@ CREATE client CONTENT {
     secret_hash:       NONE,
     redirect_uris:     [
         "http://neoworks.localhost/auth/callback",
-        "https://neoworks.localhost/auth/callback",
+        "https://neoworks.localhost:8443/auth/callback",
         "https://neoworks.dev/auth/callback",
         "http://127.0.0.1:8765/callback"
     ],
@@ -46,7 +46,7 @@ CREATE client CONTENT {
     redirect_uris:     [
         "dev.neoworks.calendar://callback",
         "http://localhost:5175/callback",
-        "https://calendar.neoworks.localhost/callback",
+        "https://calendar.neoworks.localhost:8443/callback",
         "https://calendar.neoworks.dev/callback",
         "http://127.0.0.1:8765/callback"
     ],
@@ -84,7 +84,7 @@ CREATE client CONTENT {
     redirect_uris:     [
         "dev.neoworks.contacts://callback",
         "http://localhost:5176/callback",
-        "https://contacts.neoworks.localhost/callback",
+        "https://contacts.neoworks.localhost:8443/callback",
         "https://contacts.neoworks.dev/callback",
         "http://127.0.0.1:8765/callback"
     ],
@@ -100,7 +100,7 @@ CREATE client CONTENT {
     redirect_uris:     [
         "dev.neoworks.photos://callback",
         "http://localhost:5177/callback",
-        "https://photos.neoworks.localhost/callback",
+        "https://photos.neoworks.localhost:8443/callback",
         "https://photos.neoworks.dev/callback",
         "http://127.0.0.1:8765/callback"
     ],
@@ -116,7 +116,7 @@ CREATE client CONTENT {
     redirect_uris:     [
         "dev.neoworks.files://callback",
         "http://localhost:5183/callback",
-        "https://files.neoworks.localhost/callback",
+        "https://files.neoworks.localhost:8443/callback",
         "https://files.neoworks.dev/callback",
         "http://127.0.0.1:8765/callback"
     ],
@@ -133,7 +133,7 @@ CREATE client CONTENT {
     secret_hash:       NONE,
     redirect_uris:     [
         "http://localhost:5178/auth/callback",
-        "https://openschema.neoworks.localhost/auth/callback",
+        "https://openschema.neoworks.localhost:8443/auth/callback",
         "https://openschema.neoworks.dev/auth/callback",
         "http://127.0.0.1:8765/callback"
     ],

@@ -23,12 +23,34 @@ func BaseScheme() string {
 	return "https"
 }
 
+// BasePort is the explicit port of every service origin; empty means the
+// scheme's default port.
+func BasePort() string {
+	return os.Getenv("BASE_PORT")
+}
+
 // ServiceURL returns the base URL of a service subdomain, e.g.
-// ServiceURL("oauth") -> https://oauth.neoworks.localhost. An empty subdomain
-// returns the root web-app URL.
+// ServiceURL("oauth") -> https://oauth.neoworks.localhost:8443 when BASE_PORT
+// is 8443. The port is omitted when it is the scheme's default. An empty
+// subdomain returns the root web-app URL.
 func ServiceURL(subdomain string) string {
-	if subdomain == "" {
-		return BaseScheme() + "://" + BaseDomain()
+	host := BaseDomain()
+	if subdomain != "" {
+		host = subdomain + "." + host
 	}
-	return BaseScheme() + "://" + subdomain + "." + BaseDomain()
+	return BaseScheme() + "://" + host + portSuffix(BaseScheme(), BasePort())
+}
+
+// portSuffix returns ":port", or "" when the port is empty or the scheme's default.
+func portSuffix(scheme, port string) string {
+	if port == "" {
+		return ""
+	}
+	if scheme == "https" && port == "443" {
+		return ""
+	}
+	if scheme == "http" && port == "80" {
+		return ""
+	}
+	return ":" + port
 }
