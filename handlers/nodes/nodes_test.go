@@ -29,7 +29,7 @@ func wireNode(author access.Principal, collection, kind string, parentID *string
 	node := map[string]any{
 		"id": uuid.NewString(), "parentId": parentID, "ownerId": author.UserID,
 		"collection": collection, "kind": kind, "epoch": 1,
-		"content":    []map[string]any{{"facet": 0, "ciphertext": "Y3Q"}},
+		"content":    "",
 		"blob":       nil,
 		"deleted":    false,
 		"baseSeq":    0,
@@ -40,6 +40,7 @@ func wireNode(author access.Principal, collection, kind string, parentID *string
 		node["wrappedKey"] = nil
 	} else {
 		node["wrappedKey"] = "d3JhcHBlZA"
+		node["content"] = dbtest.Content("ct")
 	}
 	return node
 }
@@ -69,7 +70,8 @@ func push(t *testing.T, router *handlertest.Router, author access.Principal, nod
 func bootstrapRoot(t *testing.T, router *handlertest.Router, store *database.SurrealStore, account *dbtest.Account) map[string]any {
 	t.Helper()
 	owner := account.Principal
-	root := wireNode(owner, "calendar", "root", nil)
+	dbtest.PublishNodeSchemas(t, store)
+	root := wireNode(owner, "@neoworks/calendar", "root", nil)
 	push(t, router, owner, root)
 	request := account.GrantRequest(t, store, root["id"].(string), dbtest.WriteGrant("user", owner.UserID, 1))
 	response := router.Do(t, owner, "POST", "/api/v1/nodes/"+root["id"].(string)+"/grants", request, nil)
@@ -81,15 +83,15 @@ func bootstrapRoot(t *testing.T, router *handlertest.Router, store *database.Sur
 
 func TestPushReportsPerNodeStatuses(t *testing.T) {
 	router, store := newRouter(t)
-	ownerAccount := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	ownerAccount := dbtest.CreateAccount(t, store, "@neoworks/calendar:read", "@neoworks/calendar:write")
 	owner := ownerAccount.Principal
-	strangerAccount := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	strangerAccount := dbtest.CreateAccount(t, store, "@neoworks/calendar:read", "@neoworks/calendar:write")
 	stranger := strangerAccount.Principal
 	root := bootstrapRoot(t, router, store, ownerAccount)
 	rootID := root["id"].(string)
 
-	accepted := wireNode(owner, "calendar", "item", &rootID)
-	rejected := wireNode(stranger, "calendar", "item", &rootID)
+	accepted := wireNode(owner, "@neoworks/calendar", "item", &rootID)
+	rejected := wireNode(stranger, "@neoworks/calendar", "item", &rootID)
 	rejected["ownerId"] = owner.UserID
 
 	first := push(t, router, owner, accepted)
@@ -108,13 +110,13 @@ func TestPushReportsPerNodeStatuses(t *testing.T) {
 
 func TestPushRejectsAMalformedNodeWithoutWritingTheBatch(t *testing.T) {
 	router, store := newRouter(t)
-	ownerAccount := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	ownerAccount := dbtest.CreateAccount(t, store, "@neoworks/calendar:read", "@neoworks/calendar:write")
 	owner := ownerAccount.Principal
 	root := bootstrapRoot(t, router, store, ownerAccount)
 	rootID := root["id"].(string)
 
-	good := wireNode(owner, "calendar", "item", &rootID)
-	bad := wireNode(owner, "calendar", "item", &rootID)
+	good := wireNode(owner, "@neoworks/calendar", "item", &rootID)
+	bad := wireNode(owner, "@neoworks/calendar", "item", &rootID)
 	bad["signature"] = ""
 	response := router.Do(t, owner, "POST", "/api/v1/nodes/push", map[string]any{"nodes": []any{good, bad}}, nil)
 	if response.Code != http.StatusBadRequest {
@@ -132,16 +134,16 @@ func TestPushRejectsAMalformedNodeWithoutWritingTheBatch(t *testing.T) {
 
 func TestPullAnswers410WithThePurgeHorizon(t *testing.T) {
 	router, store := newRouter(t)
-	ownerAccount := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	ownerAccount := dbtest.CreateAccount(t, store, "@neoworks/calendar:read", "@neoworks/calendar:write")
 	owner := ownerAccount.Principal
 	root := bootstrapRoot(t, router, store, ownerAccount)
 	rootID := root["id"].(string)
 
-	doomed := wireNode(owner, "calendar", "item", &rootID)
+	doomed := wireNode(owner, "@neoworks/calendar", "item", &rootID)
 	seq := push(t, router, owner, doomed).Results[0].Seq
 	doomed["baseSeq"] = seq
 	doomed["deleted"] = true
-	doomed["content"] = []map[string]any{}
+	doomed["content"] = ""
 	tombstoneSeq := push(t, router, owner, doomed).Results[0].Seq
 	if _, err := store.PurgeTombstones(t.Context(), -60_000_000_000); err != nil {
 		t.Fatalf("purge: %v", err)
@@ -165,11 +167,11 @@ func TestPullAnswers410WithThePurgeHorizon(t *testing.T) {
 
 func TestGrantEndpointsEnforceTheOwnerRules(t *testing.T) {
 	router, store := newRouter(t)
-	ownerAccount := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	ownerAccount := dbtest.CreateAccount(t, store, "@neoworks/calendar:read", "@neoworks/calendar:write")
 	owner := ownerAccount.Principal
-	writerAccount := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	writerAccount := dbtest.CreateAccount(t, store, "@neoworks/calendar:read", "@neoworks/calendar:write")
 	writer := writerAccount.Principal
-	thirdAccount := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	thirdAccount := dbtest.CreateAccount(t, store, "@neoworks/calendar:read", "@neoworks/calendar:write")
 	third := thirdAccount.Principal
 	root := bootstrapRoot(t, router, store, ownerAccount)
 	rootID := root["id"].(string)
@@ -212,8 +214,8 @@ func TestGrantEndpointsEnforceTheOwnerRules(t *testing.T) {
 
 func TestStaleLogHeadAnswers409WithTheHead(t *testing.T) {
 	router, store := newRouter(t)
-	ownerAccount := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
-	other := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	ownerAccount := dbtest.CreateAccount(t, store, "@neoworks/calendar:read", "@neoworks/calendar:write")
+	other := dbtest.CreateAccount(t, store, "@neoworks/calendar:read", "@neoworks/calendar:write")
 	root := bootstrapRoot(t, router, store, ownerAccount)
 	rootID := root["id"].(string)
 
@@ -237,8 +239,8 @@ func TestStaleLogHeadAnswers409WithTheHead(t *testing.T) {
 
 func TestAccessLogEndpointReturnsTheChainToReaders(t *testing.T) {
 	router, store := newRouter(t)
-	ownerAccount := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
-	stranger := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	ownerAccount := dbtest.CreateAccount(t, store, "@neoworks/calendar:read", "@neoworks/calendar:write")
+	stranger := dbtest.CreateAccount(t, store, "@neoworks/calendar:read", "@neoworks/calendar:write")
 	root := bootstrapRoot(t, router, store, ownerAccount)
 	path := "/api/v1/nodes/" + root["id"].(string) + "/access-log"
 
@@ -259,7 +261,7 @@ func TestAccessLogEndpointReturnsTheChainToReaders(t *testing.T) {
 
 func TestLinkPullNeedsNoPrincipal(t *testing.T) {
 	router, store := newRouter(t)
-	ownerAccount := dbtest.CreateAccount(t, store, "calendar:read", "calendar:write")
+	ownerAccount := dbtest.CreateAccount(t, store, "@neoworks/calendar:read", "@neoworks/calendar:write")
 	owner := ownerAccount.Principal
 	root := bootstrapRoot(t, router, store, ownerAccount)
 

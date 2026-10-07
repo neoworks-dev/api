@@ -56,18 +56,22 @@ func requireAllBound(t *testing.T, name, statement string, bound map[string]any,
 }
 
 func TestPushStatementBindsEveryParameter(t *testing.T) {
-	owner := access.Principal{UserID: uuid.NewString(), Scopes: []string{"files:write"}}
+	owner := access.Principal{UserID: uuid.NewString(), Scopes: []string{"@neoworks/files:write"}}
 	parent := uuid.NewString()
 	wrapped, cert := "wrapped", uuid.NewString()
+	target, role := uuid.NewString(), "read"
 	blobJSON := `{"objectId":"` + uuid.NewString() + `","chunks":1,"size":1}`
 	variants := map[string]Node{
-		"root": {ID: uuid.NewString(), OwnerID: owner.UserID, Collection: "files", Kind: KindRoot, Epoch: 1,
+		"root": {ID: uuid.NewString(), OwnerID: owner.UserID, Collection: "@neoworks/files", Kind: KindRoot, Epoch: 1,
 			AuthorType: "user", AuthorID: owner.UserID, Signature: "s"},
-		"item with blob and cert": {ID: uuid.NewString(), ParentID: &parent, OwnerID: owner.UserID, Collection: "files",
+		"item with blob and cert": {ID: uuid.NewString(), ParentID: &parent, OwnerID: owner.UserID, Collection: "@neoworks/files",
 			Kind: KindItem, Epoch: 1, WrappedKey: &wrapped, CertID: &cert, Blob: []byte(blobJSON),
 			AuthorType: "user", AuthorID: owner.UserID, Signature: "s"},
-		"plain item": {ID: uuid.NewString(), ParentID: &parent, OwnerID: owner.UserID, Collection: "files",
+		"plain item": {ID: uuid.NewString(), ParentID: &parent, OwnerID: owner.UserID, Collection: "@neoworks/files",
 			Kind: KindItem, Epoch: 1, WrappedKey: &wrapped, AuthorType: "user", AuthorID: owner.UserID, Signature: "s"},
+		"shortcut": {ID: uuid.NewString(), ParentID: &parent, OwnerID: owner.UserID, Collection: "@neoworks/files",
+			Kind: KindItem, Epoch: 1, WrappedKey: &wrapped, TargetID: &target, TargetRole: &role,
+			AuthorType: "user", AuthorID: owner.UserID, Signature: "s"},
 	}
 	for name, node := range variants {
 		validated := &ValidatedNode{Node: node, BlobObjects: []string{}}
@@ -75,13 +79,13 @@ func TestPushStatementBindsEveryParameter(t *testing.T) {
 			validated.BlobJSON = &blobJSON
 			validated.BlobObject = map[string]any{"objectId": "x"}
 		}
-		params := pushParams(owner, validated, []string{"write", "admin"})
+		params := pushParams(owner, validated, []string{"write"}, shortcutTargetRoles(owner, node))
 		requireAllBound(t, "push "+name, pushStatement(validated), params, "parent", "parent_id")
 	}
 }
 
 func TestGrantStatementsBindEveryParameter(t *testing.T) {
-	node := &dbNode{Collection: "calendar"}
+	node := &dbNode{Collection: "@neoworks/calendar"}
 	entry := accesslog.Entry{Action: accesslog.ActionGrant, Role: "read", Epoch: 1}
 	for name, input := range map[string]GrantInput{
 		"whole node": {PrincipalType: "user", PrincipalID: uuid.NewString(), Role: "read", Epoch: 1, WrappedKeys: "k"},
@@ -99,7 +103,7 @@ func TestGrantStatementsBindEveryParameter(t *testing.T) {
 }
 
 func TestOtherStatementsBindEveryParameter(t *testing.T) {
-	principal := access.Principal{UserID: uuid.NewString(), Scopes: []string{"calendar:read"}}
+	principal := access.Principal{UserID: uuid.NewString(), Scopes: []string{"@neoworks/calendar:read"}}
 	requireAllBound(t, "pull", pullStatement, pullParams(principal, 0, 10))
 	requireAllBound(t, "link pull", linkPullStatement, map[string]any{"node_id": "n", "cursor": 0, "fetch": 1})
 
@@ -133,7 +137,7 @@ func TestRevokeStatementBindsEveryParameter(t *testing.T) {
 			entry.Facets = []int{1}
 		}
 		params := entryParams("n", entry, "hash")
-		params["collection"] = "calendar"
+		params["collection"] = "@neoworks/calendar"
 		requireAllBound(t, "revoke", revokeStatement(facets), params)
 	}
 }

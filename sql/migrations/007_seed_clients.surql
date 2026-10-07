@@ -3,6 +3,7 @@
 -- the dev and prod hosts. The MCP's loopback callback (NW_MCP_REDIRECT_PORT,
 -- default 8765) is registered on every client so `login` works with any of them.
 --
+-- A collection is the registry path `@scope/name` of the schema its nodes follow.
 -- A collection scope `<collection>:read|write` is the ceiling for the role any
 -- access grant gives the token: the API caps the grant's role by it.
 -- `<collection>:share` lets the app share that collection with other people; the
@@ -52,9 +53,9 @@ CREATE client CONTENT {
     ],
     scopes:            [
         "openid", "profile", "email",
-        "calendar:read", "calendar:write", "calendar:share",
-        "contacts:read",
-        "google:read", "google:write", "google:share"
+        "@neoworks/calendar:read", "@neoworks/calendar:write", "@neoworks/calendar:share",
+        "@neoworks/contacts:read",
+        "@neoworks/google:read", "@neoworks/google:write", "@neoworks/google:share"
     ],
     auto_grant_scopes: true,
     public:            true
@@ -69,9 +70,9 @@ CREATE client CONTENT {
     ],
     scopes:            [
         "openid", "profile", "email",
-        "calendar:read", "calendar:write", "calendar:share",
-        "contacts:read",
-        "google:read", "google:write", "google:share"
+        "@neoworks/calendar:read", "@neoworks/calendar:write", "@neoworks/calendar:share",
+        "@neoworks/contacts:read",
+        "@neoworks/google:read", "@neoworks/google:write", "@neoworks/google:share"
     ],
     auto_grant_scopes: true,
     public:            true
@@ -88,7 +89,7 @@ CREATE client CONTENT {
         "https://contacts.neoworks.dev/callback",
         "http://127.0.0.1:8765/callback"
     ],
-    scopes:            ["openid", "profile", "email", "contacts:read", "contacts:write", "contacts:share"],
+    scopes:            ["openid", "profile", "email", "@neoworks/contacts:read", "@neoworks/contacts:write", "@neoworks/contacts:share"],
     auto_grant_scopes: true,
     public:            true
 };
@@ -104,7 +105,7 @@ CREATE client CONTENT {
         "https://photos.neoworks.dev/callback",
         "http://127.0.0.1:8765/callback"
     ],
-    scopes:            ["openid", "profile", "email", "photos:read", "photos:write", "photos:share", "contacts:read"],
+    scopes:            ["openid", "profile", "email", "@neoworks/photos:read", "@neoworks/photos:write", "@neoworks/photos:share", "@neoworks/contacts:read"],
     auto_grant_scopes: true,
     public:            true
 };
@@ -120,7 +121,7 @@ CREATE client CONTENT {
         "https://files.neoworks.dev/callback",
         "http://127.0.0.1:8765/callback"
     ],
-    scopes:            ["openid", "profile", "email", "files:read", "files:write", "files:share"],
+    scopes:            ["openid", "profile", "email", "@neoworks/files:read", "@neoworks/files:write", "@neoworks/files:share"],
     auto_grant_scopes: true,
     public:            true
 };

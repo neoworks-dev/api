@@ -59,9 +59,24 @@ func ownsNode(principal access.Principal, node *dbNode) bool {
 	return !principal.IsInstall() && node.OwnerID == principal.UserID
 }
 
-// grantsReaching lists the principal's active grants that apply to the node: any
-// grant on the node itself, and whole-node grants on its ancestors.
+// grantsReaching lists what gives the principal access to the node: any grant
+// on the node itself, whole-node grants on its ancestors, ownership, and live
+// shortcuts to it, each capped at the role the shortcut passes on.
 func (s *SurrealStore) grantsReaching(ctx context.Context, principal access.Principal, nodeID string, node *dbNode) ([]grantReach, error) {
+	reaches, err := s.directReaches(ctx, principal, nodeID, node)
+	if err != nil {
+		return nil, err
+	}
+	throughShortcuts, err := s.reachesThroughShortcuts(ctx, principal, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	return append(reaches, throughShortcuts...), nil
+}
+
+// directReaches lists the principal's grants on the node and whole-node grants
+// on its ancestors, plus write when the principal owns the node.
+func (s *SurrealStore) directReaches(ctx context.Context, principal access.Principal, nodeID string, node *dbNode) ([]grantReach, error) {
 	rows, err := queryRows[grantReach](ctx, s.DB, `
 		SELECT role, facets FROM access_grant
 		WHERE principal_type = $principal_type AND principal_id = $principal_id
@@ -80,6 +95,35 @@ func (s *SurrealStore) grantsReaching(ctx context.Context, principal access.Prin
 		rows = append(rows, grantReach{Role: access.RoleWrite})
 	}
 	return rows, nil
+}
+
+// reachesThroughShortcuts gives, for each live shortcut to the node that the
+// principal reaches directly, the lower of its role there and the role the
+// shortcut passes on, as a whole-node reach.
+func (s *SurrealStore) reachesThroughShortcuts(ctx context.Context, principal access.Principal, nodeID string) ([]grantReach, error) {
+	shortcuts, err := queryRows[dbNode](ctx, s.DB,
+		"SELECT * FROM node WHERE target_id = $node_id AND deleted = false", map[string]any{"node_id": nodeID})
+	if err != nil {
+		return nil, fmt.Errorf("load shortcuts: %w", err)
+	}
+	reaches := []grantReach{}
+	for index := range shortcuts {
+		shortcut := &shortcuts[index]
+		atShortcut, err := s.directReaches(ctx, principal, recordIDString(shortcut.ID), shortcut)
+		if err != nil {
+			return nil, err
+		}
+		reaches = append(reaches, cappedReaches(atShortcut, *shortcut.TargetRole)...)
+	}
+	return reaches, nil
+}
+
+func cappedReaches(reaches []grantReach, ceiling string) []grantReach {
+	capped := make([]grantReach, 0, len(reaches))
+	for _, reach := range reaches {
+		capped = append(capped, grantReach{Role: access.LowerRole(reach.Role, ceiling)})
+	}
+	return capped
 }
 
 func holdsRole(reaches []grantReach, roles []string) bool {

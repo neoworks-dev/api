@@ -19,7 +19,7 @@ func TestInstallLifecycle(t *testing.T) {
 	ctx := context.Background()
 	installHandler := installs.NewHandler(store)
 	router := handlertest.NewAuthenticated(func(router chi.Router) { installHandler.RegisterAuthenticated(router) })
-	user := handlertest.CreateUser(t, store, "calendar:read", "calendar:write")
+	user := handlertest.CreateUser(t, store, "@neoworks/calendar:read", "@neoworks/calendar:write")
 
 	installID, certID := uuid.NewString(), uuid.NewString()
 	if _, err := store.CreateInstall(ctx, database.CreateInstallParams{
@@ -69,7 +69,7 @@ func TestExpiringWithinValidatesTheWindow(t *testing.T) {
 	store := dbtest.New(t)
 	installHandler := installs.NewHandler(store)
 	router := handlertest.NewAuthenticated(func(router chi.Router) { installHandler.RegisterAuthenticated(router) })
-	user := handlertest.CreateUser(t, store, "calendar:read")
+	user := handlertest.CreateUser(t, store, "@neoworks/calendar:read")
 
 	for _, window := range []string{"0", "-1", "abc", "400"} {
 		if response := router.Do(t, user, "GET", "/api/v1/installs?expiringWithin="+window, nil, nil); response.Code != http.StatusBadRequest {

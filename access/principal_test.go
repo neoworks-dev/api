@@ -8,9 +8,9 @@ import (
 )
 
 func TestRolesUsableAreCappedByTheTokenScopes(t *testing.T) {
-	readOnly := access.Principal{Scopes: []string{"calendar:read"}}
-	readWrite := access.Principal{Scopes: []string{"calendar:write"}}
-	none := access.Principal{Scopes: []string{"photos:write"}}
+	readOnly := access.Principal{Scopes: []string{"@neoworks/calendar:read"}}
+	readWrite := access.Principal{Scopes: []string{"@neoworks/calendar:write"}}
+	none := access.Principal{Scopes: []string{"@neoworks/photos:write"}}
 
 	cases := []struct {
 		name      string
@@ -25,7 +25,7 @@ func TestRolesUsableAreCappedByTheTokenScopes(t *testing.T) {
 		{"other collection", none, access.RoleRead, []string{}},
 	}
 	for _, testCase := range cases {
-		got := testCase.principal.RolesUsable("calendar", testCase.minimum)
+		got := testCase.principal.RolesUsable("@neoworks/calendar", testCase.minimum)
 		if !slices.Equal(got, testCase.want) {
 			t.Errorf("%s: got %v want %v", testCase.name, got, testCase.want)
 		}
@@ -36,18 +36,18 @@ func TestRolesUsableAreCappedByTheTokenScopes(t *testing.T) {
 }
 
 func TestGoogleNodesAreGatedByGoogleScopes(t *testing.T) {
-	google := access.Principal{Scopes: []string{"google:write"}}
-	calendar := access.Principal{Scopes: []string{"calendar:write"}}
-	if !google.CanRead("google") || !google.CanWrite("google") {
+	google := access.Principal{Scopes: []string{"@neoworks/google:write"}}
+	calendar := access.Principal{Scopes: []string{"@neoworks/calendar:write"}}
+	if !google.CanRead("@neoworks/google") || !google.CanWrite("@neoworks/google") {
 		t.Error("google scopes should cover google nodes")
 	}
-	if calendar.CanRead("google") {
+	if calendar.CanRead("@neoworks/google") {
 		t.Error("calendar scopes must not cover google nodes")
 	}
-	if google.CanRead("calendar") {
+	if google.CanRead("@neoworks/calendar") {
 		t.Error("google scopes must not cover calendar nodes")
 	}
-	if got := google.ReadableCollections(); !slices.Equal(got, []string{"google"}) {
+	if got := google.ReadableCollections(); !slices.Equal(got, []string{"@neoworks/google"}) {
 		t.Errorf("readable collections: %v", got)
 	}
 }

@@ -8,13 +8,11 @@ import (
 	"github.com/surrealdb/surrealdb.go/pkg/models"
 )
 
-type FacetContent struct {
-	Facet      int    `json:"facet"`
-	Ciphertext string `json:"ciphertext"`
-}
-
 // Node is one encrypted tree entry as clients see it. Everything the server
-// stores is ciphertext, a wrapped key or a signature; none of it is interpreted.
+// stores is ciphertext, a wrapped key or a signature; none of it is decrypted.
+// Content is base64url of one message holding a LEN field per facet tag whose
+// body is that facet's ciphertext. A shortcut names its target item and the
+// highest role it passes on, and carries no content or blob.
 type Node struct {
 	ID            string          `json:"id"`
 	ParentID      *string         `json:"parentId"`
@@ -23,8 +21,10 @@ type Node struct {
 	Kind          string          `json:"kind"`
 	Epoch         int             `json:"epoch"`
 	WrappedKey    *string         `json:"wrappedKey"`
-	Content       []FacetContent  `json:"content"`
+	Content       string          `json:"content"`
 	Blob          json.RawMessage `json:"blob"`
+	TargetID      *string         `json:"targetId"`
+	TargetRole    *string         `json:"targetRole"`
 	Deleted       bool            `json:"deleted"`
 	BaseSeq       int64           `json:"baseSeq"`
 	Seq           int64           `json:"seq"`
@@ -35,6 +35,11 @@ type Node struct {
 	NeedsRotation bool            `json:"needsRotation"`
 	CreatedAt     time.Time       `json:"createdAt"`
 	UpdatedAt     time.Time       `json:"updatedAt"`
+}
+
+// IsShortcut reports whether the node stands for another item.
+func (node Node) IsShortcut() bool {
+	return node.TargetID != nil
 }
 
 // AccessGrant is one principal's access to a node together with the key
@@ -66,8 +71,10 @@ type NodeVersion struct {
 	Kind       string          `json:"kind"`
 	Epoch      int             `json:"epoch"`
 	WrappedKey *string         `json:"wrappedKey"`
-	Content    []FacetContent  `json:"content"`
+	Content    string          `json:"content"`
 	Blob       json.RawMessage `json:"blob"`
+	TargetID   *string         `json:"targetId"`
+	TargetRole *string         `json:"targetRole"`
 	Deleted    bool            `json:"deleted"`
 	BaseSeq    int64           `json:"baseSeq"`
 	Seq        int64           `json:"seq"`
@@ -87,10 +94,12 @@ type dbNode struct {
 	Kind          string           `json:"kind"`
 	Epoch         int              `json:"epoch"`
 	WrappedKey    *string          `json:"wrapped_key"`
-	Content       []FacetContent   `json:"content"`
+	Content       string           `json:"content"`
 	BlobJSON      *string          `json:"blob_json"`
 	BlobSize      int64            `json:"blob_size"`
 	BlobObjects   []string         `json:"blob_objects"`
+	TargetID      *string          `json:"target_id"`
+	TargetRole    *string          `json:"target_role"`
 	Deleted       bool             `json:"deleted"`
 	DeletedAt     *time.Time       `json:"deleted_at"`
 	BaseSeq       int64            `json:"base_seq"`
@@ -113,8 +122,10 @@ func (row dbNode) toNode() Node {
 		Kind:          row.Kind,
 		Epoch:         row.Epoch,
 		WrappedKey:    row.WrappedKey,
-		Content:       contentOrEmpty(row.Content),
+		Content:       row.Content,
 		Blob:          rawBlob(row.BlobJSON),
+		TargetID:      row.TargetID,
+		TargetRole:    row.TargetRole,
 		Deleted:       row.Deleted,
 		BaseSeq:       row.BaseSeq,
 		Seq:           row.Seq,
@@ -129,22 +140,24 @@ func (row dbNode) toNode() Node {
 }
 
 type dbNodeVersion struct {
-	NodeID     string         `json:"node_id"`
-	ParentID   *string        `json:"parent_id"`
-	Collection string         `json:"collection"`
-	Kind       string         `json:"kind"`
-	Epoch      int            `json:"epoch"`
-	WrappedKey *string        `json:"wrapped_key"`
-	Content    []FacetContent `json:"content"`
-	BlobJSON   *string        `json:"blob_json"`
-	Deleted    bool           `json:"deleted"`
-	BaseSeq    int64          `json:"base_seq"`
-	Seq        int64          `json:"seq"`
-	AuthorType string         `json:"author_type"`
-	AuthorID   string         `json:"author_id"`
-	CertID     *string        `json:"cert_id"`
-	Signature  string         `json:"signature"`
-	CreatedAt  time.Time      `json:"created_at"`
+	NodeID     string    `json:"node_id"`
+	ParentID   *string   `json:"parent_id"`
+	Collection string    `json:"collection"`
+	Kind       string    `json:"kind"`
+	Epoch      int       `json:"epoch"`
+	WrappedKey *string   `json:"wrapped_key"`
+	Content    string    `json:"content"`
+	BlobJSON   *string   `json:"blob_json"`
+	TargetID   *string   `json:"target_id"`
+	TargetRole *string   `json:"target_role"`
+	Deleted    bool      `json:"deleted"`
+	BaseSeq    int64     `json:"base_seq"`
+	Seq        int64     `json:"seq"`
+	AuthorType string    `json:"author_type"`
+	AuthorID   string    `json:"author_id"`
+	CertID     *string   `json:"cert_id"`
+	Signature  string    `json:"signature"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 func (row dbNodeVersion) toVersion() NodeVersion {
@@ -155,8 +168,10 @@ func (row dbNodeVersion) toVersion() NodeVersion {
 		Kind:       row.Kind,
 		Epoch:      row.Epoch,
 		WrappedKey: row.WrappedKey,
-		Content:    contentOrEmpty(row.Content),
+		Content:    row.Content,
 		Blob:       rawBlob(row.BlobJSON),
+		TargetID:   row.TargetID,
+		TargetRole: row.TargetRole,
 		Deleted:    row.Deleted,
 		BaseSeq:    row.BaseSeq,
 		Seq:        row.Seq,
@@ -204,13 +219,6 @@ func (row dbAccessGrant) toGrant() AccessGrant {
 		CreatedAt:     row.CreatedAt,
 		RevokedAt:     row.RevokedAt,
 	}
-}
-
-func contentOrEmpty(content []FacetContent) []FacetContent {
-	if content == nil {
-		return []FacetContent{}
-	}
-	return content
 }
 
 func rawBlob(blob *string) json.RawMessage {

@@ -18,6 +18,13 @@ DEFINE FUNCTION fn::next_seq() {
 -- strings. `ancestors` is the precomputed path of ancestor ids, root first,
 -- maintained by the server on write and on re-parenting.
 --
+-- `collection` is the registry path `@scope/name` of the schema the content
+-- follows. `content` is base64url of one message with a LEN field per facet tag
+-- holding that facet's ciphertext; roots and shortcuts have none. A shortcut is
+-- an item standing for `target_id`, an item of the same collection: its wrapped
+-- key is the target's key and whoever can open it holds at most `target_role`
+-- on the target.
+--
 -- `seq` is always taken from the change counter when a node is created, whoever
 -- creates it: a value supplied on create is ignored. Updates set it explicitly.
 DEFINE TABLE node SCHEMAFULL;
@@ -25,15 +32,16 @@ DEFINE FIELD owner_id       ON node TYPE string READONLY;
 DEFINE FIELD parent_id      ON node TYPE option<string>;
 DEFINE FIELD ancestors      ON node TYPE array<string> DEFAULT [];
 DEFINE FIELD collection     ON node TYPE string READONLY
-    ASSERT $value IN ["calendar", "contacts", "photos", "files", "google"];
+    ASSERT string::matches($value, "^@[a-z0-9][a-z0-9._-]{0,63}/[a-z0-9][a-z0-9._-]{0,63}$");
 DEFINE FIELD kind           ON node TYPE string READONLY
     ASSERT $value IN ["root", "container", "item"];
 DEFINE FIELD epoch          ON node TYPE int;
 -- NONE only for roots
 DEFINE FIELD wrapped_key    ON node TYPE option<string>;
-DEFINE FIELD content        ON node TYPE array<object> DEFAULT [];
-DEFINE FIELD content[*].facet      ON node TYPE int;
-DEFINE FIELD content[*].ciphertext ON node TYPE string;
+DEFINE FIELD content        ON node TYPE string DEFAULT "";
+DEFINE FIELD target_id      ON node TYPE option<string> READONLY;
+DEFINE FIELD target_role    ON node TYPE option<string> READONLY
+    ASSERT $value = NONE OR $value IN ["read", "write"];
 -- The blob reference as an object, and as the exact compact JSON the author
 -- signed (an object loses key order, so the string is what is served).
 DEFINE FIELD blob           ON node TYPE option<object> FLEXIBLE;
@@ -65,6 +73,7 @@ DEFINE INDEX idx_node_ancestors  ON node FIELDS ancestors;
 DEFINE INDEX idx_node_deleted_at ON node FIELDS deleted_at;
 DEFINE INDEX idx_node_cert       ON node FIELDS cert_id;
 DEFINE INDEX idx_node_objects    ON node FIELDS blob_objects;
+DEFINE INDEX idx_node_target     ON node FIELDS target_id;
 
 -- ── node_version: append-only history ─────────────────────────────────────────
 -- A full snapshot of every accepted write, including everything its signature
@@ -76,9 +85,9 @@ DEFINE FIELD collection   ON node_version TYPE string READONLY;
 DEFINE FIELD kind         ON node_version TYPE string READONLY;
 DEFINE FIELD epoch        ON node_version TYPE int READONLY;
 DEFINE FIELD wrapped_key  ON node_version TYPE option<string> READONLY;
-DEFINE FIELD content      ON node_version TYPE array<object> READONLY;
-DEFINE FIELD content[*].facet      ON node_version TYPE int;
-DEFINE FIELD content[*].ciphertext ON node_version TYPE string;
+DEFINE FIELD content      ON node_version TYPE string READONLY;
+DEFINE FIELD target_id    ON node_version TYPE option<string> READONLY;
+DEFINE FIELD target_role  ON node_version TYPE option<string> READONLY;
 DEFINE FIELD blob_json    ON node_version TYPE option<string> READONLY;
 DEFINE FIELD blob_objects ON node_version TYPE array<string> READONLY;
 DEFINE FIELD deleted      ON node_version TYPE bool READONLY;
@@ -197,4 +206,26 @@ DEFINE FUNCTION fn::flag_for_rotation($node_id: string, $whole_node: bool) {
     } ELSE {
         UPDATE type::record('node', $node_id) SET needs_rotation = true, seq = fn::next_seq();
     };
+};
+
+-- Whether the principal holds one of $roles at $node: as the user who owns it
+-- (owners hold write; $roles is empty when the token's scopes forbid the
+-- access), by a whole-node grant on an ancestor, or by any grant on the node
+-- itself. $user_id is empty for installs, which own nothing.
+DEFINE FUNCTION fn::holds_role_at($principal_type: string, $principal_id: string, $user_id: string,
+        $node: object, $roles: array<string>) {
+    LET $owns = $user_id != "" AND $node.owner_id = $user_id AND array::len($roles) > 0;
+    RETURN $owns OR array::len((SELECT VALUE id FROM access_grant
+        WHERE principal_type = $principal_type AND principal_id = $principal_id
+        AND revoked_at = NONE AND role IN $roles
+        AND ((facets = NONE AND node_id IN $node.ancestors) OR node_id = record::id($node.id)))) > 0;
+};
+
+-- Whether the principal holds one of $roles on the item $target_id through a
+-- live shortcut: one that passes on such a role, at a place where the principal
+-- holds it too.
+DEFINE FUNCTION fn::reaches_through_shortcut($principal_type: string, $principal_id: string, $user_id: string,
+        $target_id: string, $roles: array<string>) {
+    LET $shortcuts = (SELECT * FROM node WHERE target_id = $target_id AND deleted = false AND target_role IN $roles);
+    RETURN array::any($shortcuts, |$shortcut| fn::holds_role_at($principal_type, $principal_id, $user_id, $shortcut, $roles));
 };

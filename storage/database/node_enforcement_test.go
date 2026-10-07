@@ -10,16 +10,17 @@ import (
 	"github.com/neoworks/auth/access"
 	"github.com/neoworks/auth/oauth"
 	"github.com/neoworks/auth/storage/database"
+	"github.com/neoworks/auth/storage/database/dbtest"
 	"github.com/surrealdb/surrealdb.go/pkg/models"
 )
 
 func TestInstallActsOnlyThroughItsGrantAndCertificate(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
-	root := f.createRoot(owner, "calendar")
-	app, certID := f.createInstall(owner, "calendar:read", "calendar:write")
+	root := f.createRoot(owner, "@neoworks/calendar")
+	app, certID := f.createInstall(owner, "@neoworks/calendar:read", "@neoworks/calendar:write")
 
-	child := newNode(app, owner.UserID, "calendar", database.KindItem, &root.ID)
+	child := newNode(app, owner.UserID, "@neoworks/calendar", database.KindItem, &root.ID)
 	child.CertID = &certID
 	if outcome := f.push(app, child); outcome.Status != database.StatusForbidden {
 		t.Fatalf("install without grant: got %s want forbidden", outcome.Status)
@@ -31,8 +32,8 @@ func TestInstallActsOnlyThroughItsGrantAndCertificate(t *testing.T) {
 		t.Fatalf("install with grant: got %s want ok", outcome.Status)
 	}
 
-	_, otherCert := f.createInstall(owner, "calendar:write")
-	forged := newNode(app, owner.UserID, "calendar", database.KindItem, &root.ID)
+	_, otherCert := f.createInstall(owner, "@neoworks/calendar:write")
+	forged := newNode(app, owner.UserID, "@neoworks/calendar", database.KindItem, &root.ID)
 	forged.CertID = &otherCert
 	if outcome := f.push(app, forged); outcome.Status != database.StatusForbidden {
 		t.Fatalf("another install's certificate: got %s want forbidden", outcome.Status)
@@ -42,12 +43,12 @@ func TestInstallActsOnlyThroughItsGrantAndCertificate(t *testing.T) {
 func TestInstallTokenScopeCapsItsWriteGrant(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
-	root := f.createRoot(owner, "calendar")
-	app, certID := f.createInstall(owner, "calendar:read")
+	root := f.createRoot(owner, "@neoworks/calendar")
+	app, certID := f.createInstall(owner, "@neoworks/calendar:read")
 	shared := writeGrant(access.PrincipalTypeInstall, app.InstallID, 1)
 	f.grant(owner, root.ID, shared)
 
-	child := newNode(app, owner.UserID, "calendar", database.KindItem, &root.ID)
+	child := newNode(app, owner.UserID, "@neoworks/calendar", database.KindItem, &root.ID)
 	child.CertID = &certID
 	if outcome := f.push(app, child); outcome.Status != database.StatusForbidden {
 		t.Fatalf("read-scoped install with write grant: got %s want forbidden", outcome.Status)
@@ -61,15 +62,15 @@ func TestWriterCannotClaimAnotherOwnerOrCollection(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	writer := f.createUser()
-	root := f.createRoot(owner, "calendar")
+	root := f.createRoot(owner, "@neoworks/calendar")
 	shared := writeGrant(access.PrincipalTypeUser, writer.UserID, 1)
 	f.grant(owner, root.ID, shared)
 
-	ownsItself := newNode(writer, writer.UserID, "calendar", database.KindItem, &root.ID)
+	ownsItself := newNode(writer, writer.UserID, "@neoworks/calendar", database.KindItem, &root.ID)
 	if outcome := f.push(writer, ownsItself); outcome.Status != database.StatusForbidden {
 		t.Fatalf("child claiming a different owner: got %s want forbidden", outcome.Status)
 	}
-	wrongCollection := newNode(writer, owner.UserID, "photos", database.KindItem, &root.ID)
+	wrongCollection := newNode(writer, owner.UserID, "@neoworks/photos", database.KindItem, &root.ID)
 	if outcome := f.push(writer, wrongCollection); outcome.Status != database.StatusForbidden {
 		t.Fatalf("child in another collection: got %s want forbidden", outcome.Status)
 	}
@@ -79,13 +80,13 @@ func TestOnlyTheUserCanCreateTheirOwnRoot(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	other := f.createUser()
-	app, certID := f.createInstall(owner, "calendar:write")
+	app, certID := f.createInstall(owner, "@neoworks/calendar:write")
 
-	foreign := newNode(other, owner.UserID, "calendar", database.KindRoot, nil)
+	foreign := newNode(other, owner.UserID, "@neoworks/calendar", database.KindRoot, nil)
 	if outcome := f.push(other, foreign); outcome.Status != database.StatusForbidden {
 		t.Fatalf("root for another user: got %s want forbidden", outcome.Status)
 	}
-	byInstall := newNode(app, owner.UserID, "calendar", database.KindRoot, nil)
+	byInstall := newNode(app, owner.UserID, "@neoworks/calendar", database.KindRoot, nil)
 	byInstall.CertID = &certID
 	if outcome := f.push(app, byInstall); outcome.Status != database.StatusForbidden {
 		t.Fatalf("root by install: got %s want forbidden", outcome.Status)
@@ -95,10 +96,10 @@ func TestOnlyTheUserCanCreateTheirOwnRoot(t *testing.T) {
 func TestMovingIntoOwnSubtreeIsRejected(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
-	root := f.createRoot(owner, "calendar")
-	outer := newNode(owner, owner.UserID, "calendar", database.KindContainer, &root.ID)
+	root := f.createRoot(owner, "@neoworks/calendar")
+	outer := newNode(owner, owner.UserID, "@neoworks/calendar", database.KindContainer, &root.ID)
 	f.pushOK(owner, outer)
-	inner := newNode(owner, owner.UserID, "calendar", database.KindContainer, &outer.ID)
+	inner := newNode(owner, owner.UserID, "@neoworks/calendar", database.KindContainer, &outer.ID)
 	f.pushOK(owner, inner)
 
 	moved := outer
@@ -112,11 +113,11 @@ func TestMovingIntoOwnSubtreeIsRejected(t *testing.T) {
 func TestItemsCannotHaveChildren(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
-	root := f.createRoot(owner, "calendar")
-	item := newNode(owner, owner.UserID, "calendar", database.KindItem, &root.ID)
+	root := f.createRoot(owner, "@neoworks/calendar")
+	item := newNode(owner, owner.UserID, "@neoworks/calendar", database.KindItem, &root.ID)
 	f.pushOK(owner, item)
 
-	child := newNode(owner, owner.UserID, "calendar", database.KindItem, &item.ID)
+	child := newNode(owner, owner.UserID, "@neoworks/calendar", database.KindItem, &item.ID)
 	if outcome := f.push(owner, child); outcome.Status != database.StatusForbidden {
 		t.Fatalf("child of an item: got %s want forbidden", outcome.Status)
 	}
@@ -126,11 +127,11 @@ func TestStrangerCannotReadHistoryOrCertificate(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	stranger := f.createUser()
-	root := f.createRoot(owner, "calendar")
-	app, certID := f.createInstall(owner, "calendar:write")
+	root := f.createRoot(owner, "@neoworks/calendar")
+	app, certID := f.createInstall(owner, "@neoworks/calendar:write")
 	shared := writeGrant(access.PrincipalTypeInstall, app.InstallID, 1)
 	f.grant(owner, root.ID, shared)
-	item := newNode(app, owner.UserID, "calendar", database.KindItem, &root.ID)
+	item := newNode(app, owner.UserID, "@neoworks/calendar", database.KindItem, &root.ID)
 	item.CertID = &certID
 	f.pushOK(app, item)
 
@@ -150,14 +151,14 @@ func TestStrangerCannotReadHistoryOrCertificate(t *testing.T) {
 func TestTombstonePurgeRaisesHorizonAnd410(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
-	root := f.createRoot(owner, "calendar")
-	keep := newNode(owner, owner.UserID, "calendar", database.KindItem, &root.ID)
+	root := f.createRoot(owner, "@neoworks/calendar")
+	keep := newNode(owner, owner.UserID, "@neoworks/calendar", database.KindItem, &root.ID)
 	f.pushOK(owner, keep)
-	doomed := newNode(owner, owner.UserID, "calendar", database.KindItem, &root.ID)
+	doomed := newNode(owner, owner.UserID, "@neoworks/calendar", database.KindItem, &root.ID)
 	seq := f.pushOK(owner, doomed)
 	doomed.BaseSeq = seq
 	doomed.Deleted = true
-	doomed.Content = nil
+	doomed.Content = ""
 	deletedSeq := f.pushOK(owner, doomed)
 
 	staleCursor := deletedSeq - 1
@@ -188,9 +189,9 @@ func TestTombstonePurgeRaisesHorizonAnd410(t *testing.T) {
 func TestPurgeReportsOnlyUnreferencedObjects(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
-	root := f.createRoot(owner, "files")
+	root := f.createRoot(owner, "@neoworks/files")
 	objectID := uuid.NewString()
-	file := newNode(owner, owner.UserID, "files", database.KindItem, &root.ID)
+	file := newNode(owner, owner.UserID, "@neoworks/files", database.KindItem, &root.ID)
 	file.Blob = []byte(`{"objectId":"` + objectID + `","chunks":1,"size":50}`)
 	seq := f.pushOK(owner, file)
 	file.BaseSeq = seq
@@ -210,8 +211,8 @@ func TestRevokingAnInstallStopsItsTokensAndFlagsRotation(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 	owner := f.createUser()
-	root := f.createRoot(owner, "calendar")
-	app, _ := f.createInstall(owner, "calendar:write")
+	root := f.createRoot(owner, "@neoworks/calendar")
+	app, _ := f.createInstall(owner, "@neoworks/calendar:write")
 	shared := readGrant(access.PrincipalTypeInstall, app.InstallID, 1)
 	f.grant(owner, root.ID, shared)
 
@@ -220,7 +221,7 @@ func TestRevokingAnInstallStopsItsTokensAndFlagsRotation(t *testing.T) {
 		User:      &models.RecordID{Table: "user", ID: owner.UserID},
 		Client:    &models.RecordID{Table: "client", ID: "neoworks-calendar"},
 		Install:   &models.RecordID{Table: "install", ID: app.InstallID},
-		Scopes:    []string{"calendar:write"},
+		Scopes:    []string{"@neoworks/calendar:write"},
 		ExpiresAt: time.Now().Add(time.Hour),
 		CreatedAt: time.Now(),
 	}
@@ -256,7 +257,7 @@ func TestRotationClearsNeedsRotationWhenEpochAdvances(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	reader := f.createUser()
-	root := f.createRoot(owner, "calendar")
+	root := f.createRoot(owner, "@neoworks/calendar")
 	shared := readGrant(access.PrincipalTypeUser, reader.UserID, 1)
 	f.grant(owner, root.ID, shared)
 	f.revoke(owner, root.ID, access.PrincipalTypeUser, reader.UserID)
@@ -274,12 +275,12 @@ func TestLinkPullServesOnlyTheLinkedSubtree(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 	owner := f.createUser()
-	root := f.createRoot(owner, "photos")
-	album := newNode(owner, owner.UserID, "photos", database.KindContainer, &root.ID)
+	root := f.createRoot(owner, "@neoworks/photos")
+	album := newNode(owner, owner.UserID, "@neoworks/photos", database.KindContainer, &root.ID)
 	f.pushOK(owner, album)
-	photo := newNode(owner, owner.UserID, "photos", database.KindItem, &album.ID)
+	photo := newNode(owner, owner.UserID, "@neoworks/photos", database.KindItem, &album.ID)
 	f.pushOK(owner, photo)
-	other := newNode(owner, owner.UserID, "photos", database.KindContainer, &root.ID)
+	other := newNode(owner, owner.UserID, "@neoworks/photos", database.KindContainer, &root.ID)
 	f.pushOK(owner, other)
 
 	link, err := f.store.CreateLink(ctx, owner, album.ID)
@@ -311,23 +312,23 @@ func TestABlobObjectBelongsToOneOwner(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	other := f.createUser()
-	ownerRoot := f.createRoot(owner, "files")
-	otherRoot := f.createRoot(other, "files")
+	ownerRoot := f.createRoot(owner, "@neoworks/files")
+	otherRoot := f.createRoot(other, "@neoworks/files")
 	objectID := uuid.NewString()
 	blob := []byte(`{"objectId":"` + objectID + `","chunks":1,"size":10}`)
 
-	mine := newNode(owner, owner.UserID, "files", database.KindItem, &ownerRoot.ID)
+	mine := newNode(owner, owner.UserID, "@neoworks/files", database.KindItem, &ownerRoot.ID)
 	mine.Blob = blob
 	seq := f.pushOK(owner, mine)
 
-	stolen := newNode(other, other.UserID, "files", database.KindItem, &otherRoot.ID)
+	stolen := newNode(other, other.UserID, "@neoworks/files", database.KindItem, &otherRoot.ID)
 	stolen.Blob = blob
 	if outcome := f.push(other, stolen); outcome.Status != database.StatusForbidden {
 		t.Fatalf("claiming another node's object: got %s want forbidden", outcome.Status)
 	}
 
 	mine.BaseSeq = seq
-	mine.Content = []database.FacetContent{{Facet: 0, Ciphertext: "renamed"}}
+	mine.Content = dbtest.Content("renamed")
 	if outcome := f.push(owner, mine); outcome.Status != database.StatusOK {
 		t.Fatalf("rewriting a node with its own object: got %s want ok", outcome.Status)
 	}
@@ -336,15 +337,15 @@ func TestABlobObjectBelongsToOneOwner(t *testing.T) {
 func TestReferenceNodesShareTheirTargetsBlobObject(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
-	root := f.createRoot(owner, "photos")
-	album := newNode(owner, owner.UserID, "photos", database.KindContainer, &root.ID)
+	root := f.createRoot(owner, "@neoworks/photos")
+	album := newNode(owner, owner.UserID, "@neoworks/photos", database.KindContainer, &root.ID)
 	f.pushOK(owner, album)
 	objectID := uuid.NewString()
-	original := newNode(owner, owner.UserID, "photos", database.KindItem, &root.ID)
+	original := newNode(owner, owner.UserID, "@neoworks/photos", database.KindItem, &root.ID)
 	original.Blob = []byte(`{"objectId":"` + objectID + `","chunks":1,"size":50}`)
 	f.pushOK(owner, original)
 
-	reference := newNode(owner, owner.UserID, "photos", database.KindItem, &album.ID)
+	reference := newNode(owner, owner.UserID, "@neoworks/photos", database.KindItem, &album.ID)
 	reference.Blob = []byte(`{"objectId":"` + objectID + `","chunks":1,"size":0}`)
 	if outcome := f.push(owner, reference); outcome.Status != database.StatusOK {
 		t.Fatalf("reference to the owner's own object: got %s want ok", outcome.Status)

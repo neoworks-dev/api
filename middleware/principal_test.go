@@ -43,7 +43,7 @@ func claimsFor(subject, clientID, installID string) *oauth.Claims {
 		RegisteredClaims: jwt.RegisteredClaims{Subject: subject},
 		ClientID:         clientID,
 		InstallID:        installID,
-		Scope:            []string{"calendar:read"},
+		Scope:            []string{"@neoworks/calendar:read"},
 	}
 }
 

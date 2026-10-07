@@ -159,7 +159,7 @@ func TestRenewalIsRefusedWithAnExpiredRenewalCertificate(t *testing.T) {
 func TestRenewalIsRefusedWhenTheRenewedCertificateWidensScopes(t *testing.T) {
 	setup, device := renewalSetup(t)
 	err := device.tryRenew(t, setup.f, setup.install, func(certificate *accesslog.Certificate) {
-		certificate.Scopes = append(certificate.Scopes, "contacts:read")
+		certificate.Scopes = append(certificate.Scopes, "@neoworks/contacts:read")
 	})
 	expectRefusal(t, err, database.ErrForbidden)
 }

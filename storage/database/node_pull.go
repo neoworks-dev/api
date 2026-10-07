@@ -6,6 +6,7 @@ import (
 
 	"github.com/neoworks/auth/access"
 	"github.com/neoworks/auth/accesslog"
+	"github.com/surrealdb/surrealdb.go/pkg/models"
 )
 
 const (
@@ -31,12 +32,13 @@ type dbPullSnapshot struct {
 }
 
 // Pull returns the changes after cursor that the principal may see: nodes with
-// an active grant on the node itself or a whole-node grant on an ancestor,
-// restricted to the collections the token's scopes allow reading, and the grants
-// addressed to the principal, made by it, or on nodes it owns, and the access
-// log entries of the visible nodes. A user also sees every node it owns. A cursor of 0 is a full
-// sync. A non-zero cursor older than the purge horizon of any owner whose nodes
-// the principal can reach gets a PurgedError.
+// an active grant on the node itself or a whole-node grant on an ancestor, and
+// the targets of the live shortcuts among those, restricted to the collections
+// the token's scopes allow reading; the grants addressed to the principal, made
+// by it, or on nodes it owns; and the access log entries of the visible nodes.
+// A user also sees every node it owns. A cursor of 0 is a full sync. A non-zero
+// cursor older than the purge horizon of any owner whose nodes the principal can
+// reach gets a PurgedError.
 func (s *SurrealStore) Pull(ctx context.Context, principal access.Principal, cursor int64, limit int) (*PullPage, error) {
 	limit = clampLimit(limit)
 	snapshot, err := queryReturned[dbPullSnapshot](ctx, s.DB, pullStatement, pullParams(principal, cursor, limit))
@@ -46,7 +48,47 @@ func (s *SurrealStore) Pull(ctx context.Context, principal access.Principal, cur
 	if horizon := maxHorizon(snapshot.Horizons); cursor != 0 && cursor < horizon {
 		return nil, &PurgedError{Horizon: horizon}
 	}
-	return assemblePage(snapshot, limit), nil
+	page := assemblePage(snapshot, limit)
+	if err := s.addShortcutTargets(ctx, page); err != nil {
+		return nil, err
+	}
+	return page, nil
+}
+
+// addShortcutTargets adds the target of every live shortcut in the page that the
+// page does not already hold. Seeing a shortcut is what makes its target
+// readable, and a target that last changed before the cursor would otherwise
+// never reach a principal that just gained the shortcut.
+func (s *SurrealStore) addShortcutTargets(ctx context.Context, page *PullPage) error {
+	missing := missingShortcutTargets(page.Nodes)
+	if len(missing) == 0 {
+		return nil
+	}
+	records := make([]models.RecordID, 0, len(missing))
+	for _, nodeID := range missing {
+		records = append(records, models.NewRecordID("node", nodeID))
+	}
+	rows, err := queryRows[dbNode](ctx, s.DB, "SELECT * FROM $records", map[string]any{"records": records})
+	if err != nil {
+		return fmt.Errorf("pull shortcut targets: %w", err)
+	}
+	page.Nodes = append(page.Nodes, nodesFromRows(rows)...)
+	return nil
+}
+
+func missingShortcutTargets(nodes []Node) []string {
+	present := map[string]bool{}
+	for _, node := range nodes {
+		present[node.ID] = true
+	}
+	missing := []string{}
+	for _, node := range nodes {
+		if node.IsShortcut() && !node.Deleted && !present[*node.TargetID] {
+			missing = append(missing, *node.TargetID)
+			present[*node.TargetID] = true
+		}
+	}
+	return missing
 }
 
 func clampLimit(limit int) int {
@@ -146,13 +188,17 @@ LET $partial = (SELECT VALUE node_id FROM access_grant
 	WHERE principal_type = $principal_type AND principal_id = $principal_id
 	AND revoked_at = NONE AND facets != NONE);
 LET $reachable = array::concat($whole, $partial);
+LET $targets = array::distinct((SELECT VALUE target_id FROM node
+	WHERE target_id != NONE AND deleted = false AND collection IN $read_collections
+	AND (record::id(id) IN $reachable OR ancestors CONTAINSANY $whole OR owner_id = $owner_filter)));
 LET $owners = array::append(
-	array::distinct(array::map($reachable, |$node_id| type::record('node', $node_id).owner_id)),
+	array::distinct(array::map(array::concat($reachable, $targets), |$node_id| type::record('node', $node_id).owner_id)),
 	$owner_filter);
 LET $horizons = (SELECT VALUE seq FROM purge_horizon WHERE user_id IN $owners);
 LET $nodes = (SELECT * FROM node
 	WHERE seq > $cursor AND collection IN $read_collections
-	AND (record::id(id) IN $reachable OR ancestors CONTAINSANY $whole OR owner_id = $owner_filter)
+	AND (record::id(id) IN $reachable OR ancestors CONTAINSANY $whole OR owner_id = $owner_filter
+		OR record::id(id) IN $targets)
 	ORDER BY seq ASC LIMIT $fetch);
 LET $grants = (SELECT * FROM access_grant
 	WHERE seq > $cursor AND collection IN $read_collections
@@ -161,7 +207,8 @@ LET $grants = (SELECT * FROM access_grant
 	ORDER BY seq ASC LIMIT $fetch);
 LET $log = (SELECT * FROM access_log
 	WHERE seq > $cursor AND collection IN $read_collections
-	AND (node_id IN $reachable OR node_ancestors CONTAINSANY $whole OR owner_id = $owner_filter)
+	AND (node_id IN $reachable OR node_ancestors CONTAINSANY $whole OR owner_id = $owner_filter
+		OR node_id IN $targets)
 	ORDER BY seq ASC LIMIT $fetch);
 RETURN { head: $head, horizons: $horizons, nodes: $nodes, grants: $grants, log: $log };
 COMMIT TRANSACTION;`
@@ -185,7 +232,11 @@ func (s *SurrealStore) PullLink(ctx context.Context, linkID string, cursor int64
 	if horizon := maxHorizon(snapshot.Horizons); cursor != 0 && cursor < horizon {
 		return nil, &PurgedError{Horizon: horizon}
 	}
-	return assemblePage(snapshot, limit), nil
+	page := assemblePage(snapshot, limit)
+	if err := s.addShortcutTargets(ctx, page); err != nil {
+		return nil, err
+	}
+	return page, nil
 }
 
 const linkPullStatement = `
@@ -193,8 +244,10 @@ BEGIN TRANSACTION;
 LET $head = (SELECT VALUE seq FROM ONLY feed_state:main);
 LET $owner_id = (SELECT VALUE owner_id FROM ONLY type::record('node', $node_id));
 LET $horizons = (SELECT VALUE seq FROM purge_horizon WHERE user_id = $owner_id);
+LET $targets = array::distinct((SELECT VALUE target_id FROM node
+	WHERE target_id != NONE AND deleted = false AND (record::id(id) = $node_id OR $node_id IN ancestors)));
 LET $nodes = (SELECT * FROM node
-	WHERE seq > $cursor AND (record::id(id) = $node_id OR $node_id IN ancestors)
+	WHERE seq > $cursor AND (record::id(id) = $node_id OR $node_id IN ancestors OR record::id(id) IN $targets)
 	ORDER BY seq ASC LIMIT $fetch);
 RETURN { head: $head, horizons: $horizons, nodes: $nodes, grants: [], log: [] };
 COMMIT TRANSACTION;`

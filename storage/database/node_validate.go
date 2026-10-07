@@ -10,10 +10,9 @@ import (
 )
 
 const (
-	maxFacetsPerNode = 64
-	KindRoot         = "root"
-	KindContainer    = "container"
-	KindItem         = "item"
+	KindRoot      = "root"
+	KindContainer = "container"
+	KindItem      = "item"
 )
 
 // ValidatedNode is a pushed node whose shape has been checked, together with
@@ -36,7 +35,10 @@ func ValidateNodeInput(node Node, principal access.Principal) (*ValidatedNode, e
 	if err := validateNodeKeys(node); err != nil {
 		return nil, err
 	}
-	if err := validateFacets(node.Content); err != nil {
+	if err := validateContent(node); err != nil {
+		return nil, err
+	}
+	if err := validateShortcut(node); err != nil {
 		return nil, err
 	}
 	if err := validateAuthor(node, principal); err != nil {
@@ -52,8 +54,8 @@ func validateNodeIdentity(node Node) error {
 	if !utils.IsLowercaseUUIDv4(node.OwnerID) {
 		return errors.New("ownerId must be a lowercase UUIDv4")
 	}
-	if !containsString(access.Collections, node.Collection) {
-		return fmt.Errorf("unknown collection %q", node.Collection)
+	if !access.IsValidCollection(node.Collection) {
+		return fmt.Errorf("collection %q is not a registry path @scope/name", node.Collection)
 	}
 	return validateNodeParent(node)
 }
@@ -102,21 +104,44 @@ func validateNodeKeys(node Node) error {
 	return nil
 }
 
-func validateFacets(content []FacetContent) error {
-	if len(content) > maxFacetsPerNode {
-		return fmt.Errorf("a node has at most %d facets", maxFacetsPerNode)
+func validateContent(node Node) error {
+	tags, err := ContentFacetTags(node.Content)
+	if err != nil {
+		return err
 	}
-	seenFacets := map[int]bool{}
-	for _, facet := range content {
-		if facet.Facet < 0 || seenFacets[facet.Facet] {
-			return errors.New("facets must be unique and not negative")
-		}
-		if facet.Ciphertext == "" {
-			return errors.New("facet ciphertext is required")
-		}
-		seenFacets[facet.Facet] = true
+	if node.Kind == KindRoot && len(tags) > 0 {
+		return errors.New("a root carries no content")
 	}
 	return nil
+}
+
+// validateShortcut checks the parts of a shortcut that need no database: an
+// item naming another item and the role it passes on, with no content or blob
+// of its own.
+func validateShortcut(node Node) error {
+	if !node.IsShortcut() {
+		if node.TargetRole != nil {
+			return errors.New("targetRole is only for shortcuts")
+		}
+		return nil
+	}
+	if node.Kind != KindItem {
+		return errors.New("a shortcut is an item")
+	}
+	if !utils.IsLowercaseUUIDv4(*node.TargetID) || *node.TargetID == node.ID {
+		return errors.New("targetId must be the UUIDv4 of another node")
+	}
+	if node.TargetRole == nil || !access.ValidRole(*node.TargetRole) {
+		return errors.New("targetRole must be read or write")
+	}
+	if node.Content != "" || !blobAbsent(node.Blob) {
+		return errors.New("a shortcut carries no content or blob")
+	}
+	return nil
+}
+
+func blobAbsent(blob json.RawMessage) bool {
+	return len(blob) == 0 || string(blob) == "null"
 }
 
 func validateAuthor(node Node, principal access.Principal) error {
@@ -135,7 +160,7 @@ func validateAuthor(node Node, principal access.Principal) error {
 
 func withBlobFacts(node Node) (*ValidatedNode, error) {
 	validated := &ValidatedNode{Node: node, BlobObjects: []string{}}
-	if len(node.Blob) == 0 || string(node.Blob) == "null" {
+	if blobAbsent(node.Blob) {
 		validated.Node.Blob = nil
 		return validated, nil
 	}

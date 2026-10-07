@@ -20,6 +20,14 @@ func RoleAtLeast(role, minimum string) bool {
 	return roleRank[role] >= roleRank[minimum] && roleRank[role] > 0
 }
 
+// LowerRole returns whichever of the two roles grants less.
+func LowerRole(role, other string) string {
+	if RoleAtLeast(role, other) {
+		return other
+	}
+	return role
+}
+
 // RolesAtLeast lists the stored roles that satisfy minimum.
 func RolesAtLeast(minimum string) []string {
 	roles := []string{}

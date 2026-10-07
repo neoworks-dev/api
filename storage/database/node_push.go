@@ -55,12 +55,16 @@ func (s *SurrealStore) PushNode(ctx context.Context, principal access.Principal,
 	if len(writerRoles) == 0 {
 		return &PushOutcome{ID: node.ID, Status: StatusForbidden}, nil
 	}
+	targetRoles := shortcutTargetRoles(principal, node)
+	if node.IsShortcut() && len(targetRoles) == 0 {
+		return &PushOutcome{ID: node.ID, Status: StatusForbidden}, nil
+	}
 	if principal.IsInstall() && !s.certificateBelongsToInstall(ctx, *node.CertID, principal.InstallID) {
 		return &PushOutcome{ID: node.ID, Status: StatusForbidden}, nil
 	}
 
 	statement := pushStatement(validated)
-	params := pushParams(principal, validated, writerRoles)
+	params := pushParams(principal, validated, writerRoles, targetRoles)
 
 	raw, err := runWithRetry(ctx, func() (*dbPushOutcome, error) {
 		return queryReturned[dbPushOutcome](ctx, s.DB, statement, params)
@@ -69,6 +73,15 @@ func (s *SurrealStore) PushNode(ctx context.Context, principal access.Principal,
 		return nil, fmt.Errorf("push node: %w", err)
 	}
 	return outcomeFromRow(node.ID, raw), nil
+}
+
+// shortcutTargetRoles are the roles on its target a shortcut's writer must hold
+// to pass on the shortcut's role, capped by the token's scopes.
+func shortcutTargetRoles(principal access.Principal, node Node) []string {
+	if !node.IsShortcut() {
+		return []string{}
+	}
+	return principal.RolesUsable(node.Collection, *node.TargetRole)
 }
 
 func outcomeFromRow(nodeID string, row *dbPushOutcome) *PushOutcome {
@@ -122,40 +135,64 @@ func sleepBeforeRetry(ctx context.Context, attempt int) error {
 	}
 }
 
-func pushParams(principal access.Principal, validated *ValidatedNode, writerRoles []string) map[string]any {
+// actingUserID is the user whose own nodes the principal writes without a
+// grant; empty for installs.
+func actingUserID(principal access.Principal) string {
+	if principal.IsInstall() {
+		return ""
+	}
+	return principal.UserID
+}
+
+func pushParams(principal access.Principal, validated *ValidatedNode, writerRoles, targetRoles []string) map[string]any {
 	node := validated.Node
 	isOwner := !principal.IsInstall() && node.OwnerID == principal.UserID
+	scope, name, _ := access.ParseCollection(node.Collection)
 	params := map[string]any{
-		"node":            models.NewRecordID("node", node.ID),
-		"node_id":         node.ID,
-		"owner_id":        node.OwnerID,
-		"has_parent":      node.ParentID != nil,
-		"collection":      node.Collection,
-		"kind":            node.Kind,
-		"epoch":           node.Epoch,
-		"content":         contentOrEmpty(node.Content),
-		"blob_size":       validated.BlobSize,
-		"blob_objects":    validated.BlobObjects,
-		"deleted":         node.Deleted,
-		"base_seq":        node.BaseSeq,
-		"author_type":     node.AuthorType,
-		"author_id":       node.AuthorID,
-		"signature":       node.Signature,
-		"principal_type":  principal.Type(),
-		"principal_id":    principal.ID(),
-		"writer_roles":    writerRoles,
-		"may_create_root": isOwner,
-		"owner_may_write": isOwner,
+		"node":             models.NewRecordID("node", node.ID),
+		"node_id":          node.ID,
+		"owner_id":         node.OwnerID,
+		"has_parent":       node.ParentID != nil,
+		"collection":       node.Collection,
+		"collection_scope": scope,
+		"collection_name":  name,
+		"kind":             node.Kind,
+		"epoch":            node.Epoch,
+		"content":          node.Content,
+		"blob_size":        validated.BlobSize,
+		"blob_objects":     validated.BlobObjects,
+		"is_shortcut":      node.IsShortcut(),
+		"target_roles":     targetRoles,
+		"deleted":          node.Deleted,
+		"base_seq":         node.BaseSeq,
+		"author_type":      node.AuthorType,
+		"author_id":        node.AuthorID,
+		"signature":        node.Signature,
+		"principal_type":   principal.Type(),
+		"principal_id":     principal.ID(),
+		"user_id":          actingUserID(principal),
+		"writer_roles":     writerRoles,
+		"may_create_root":  isOwner,
+		"owner_may_write":  isOwner,
 	}
 	addOptionalPushParams(params, validated)
 	return params
 }
 
+// addOptionalPushParams binds the optional values. A shortcut's target is bound
+// even when absent, as empty strings, because the transaction compares it.
 func addOptionalPushParams(params map[string]any, validated *ValidatedNode) {
 	node := validated.Node
+	params["target"] = models.NewRecordID("node", node.ID)
+	params["target_id"] = ""
+	params["target_role"] = ""
+	if node.IsShortcut() {
+		params["target"] = models.NewRecordID("node", *node.TargetID)
+		params["target_id"] = *node.TargetID
+		params["target_role"] = *node.TargetRole
+	}
 	if node.ParentID != nil {
 		params["parent"] = models.NewRecordID("node", *node.ParentID)
-		params["parent_id"] = *node.ParentID
 		params["parent_id"] = *node.ParentID
 	}
 	if node.WrappedKey != nil {
@@ -193,8 +230,26 @@ func pushStatement(validated *ValidatedNode) string {
 		"signature = $signature",
 		"needs_rotation = IF $existing != NONE AND $epoch <= $existing.epoch { $existing.needs_rotation } ELSE { false }",
 	}
-	immutable := []string{"owner_id = $owner_id", "collection = $collection", "kind = $kind"}
-	return pushPreamble + pushWrite(strings.Join(shared, ", "), strings.Join(immutable, ", "), node.WrappedKey != nil, validated.BlobJSON != nil, node.CertID != nil)
+	immutable := []string{
+		"owner_id = $owner_id", "collection = $collection", "kind = $kind",
+		"target_id = " + optionalValue(node.IsShortcut(), "$target_id"),
+		"target_role = " + optionalValue(node.IsShortcut(), "$target_role"),
+	}
+	written := pushWrite(strings.Join(shared, ", "), strings.Join(immutable, ", "), versionFields(validated))
+	return pushPreamble + written
+}
+
+// versionFields are the node_version assignments besides the ones every
+// version has.
+func versionFields(validated *ValidatedNode) string {
+	node := validated.Node
+	return strings.Join([]string{
+		"wrapped_key = " + optionalValue(node.WrappedKey != nil, "$wrapped_key"),
+		"blob_json = " + optionalValue(validated.BlobJSON != nil, "$blob_json"),
+		"target_id = " + optionalValue(node.IsShortcut(), "$target_id"),
+		"target_role = " + optionalValue(node.IsShortcut(), "$target_role"),
+		"cert_id = " + optionalValue(node.CertID != nil, "$cert_id"),
+	}, ", ")
 }
 
 func optionalValue(present bool, parameter string) string {
@@ -204,6 +259,11 @@ func optionalValue(present bool, parameter string) string {
 	return "NONE"
 }
 
+// pushPreamble decides the verdict. A new root needs its collection published
+// in the registry with a node descriptor. A new shortcut needs a live,
+// non-shortcut item of its collection as target, on which the writer holds the
+// role the shortcut passes on; a shortcut's target never changes. A holder of a
+// write shortcut may write its target.
 const pushPreamble = `
 BEGIN TRANSACTION;
 LET $existing = (SELECT * FROM ONLY $node);
@@ -215,7 +275,8 @@ LET $self_scope = IF $existing != NONE { [$node_id] } ELSE { [] };
 LET $may_write_here = $owner_may_write OR array::len((SELECT VALUE id FROM access_grant
 	WHERE principal_type = $principal_type AND principal_id = $principal_id
 	AND revoked_at = NONE AND role IN $writer_roles
-	AND ((facets = NONE AND node_id IN $location_ancestors) OR node_id IN $self_scope))) > 0;
+	AND ((facets = NONE AND node_id IN $location_ancestors) OR node_id IN $self_scope))) > 0
+	OR ($existing != NONE AND fn::reaches_through_shortcut($principal_type, $principal_id, $user_id, $node_id, $writer_roles));
 LET $may_write_new_parent = $owner_may_write OR array::len((SELECT VALUE id FROM access_grant
 	WHERE principal_type = $principal_type AND principal_id = $principal_id
 	AND revoked_at = NONE AND role IN $writer_roles
@@ -229,9 +290,22 @@ LET $move_ok = !$reparenting OR ($parent_id != $node_id
 LET $objects_free = array::len((SELECT VALUE id FROM node
 	WHERE blob_objects CONTAINSANY $blob_objects AND record::id(id) != $node_id
 	AND owner_id != $owner_id)) = 0;
-LET $structure_ok = $parent_ok AND $objects_free AND (IF $existing != NONE {
+LET $collection_published = $has_parent OR $existing != NONE OR array::len((SELECT VALUE id FROM registry_schema_version
+	WHERE schema.scope = $collection_scope AND schema.name = $collection_name AND descriptor_hash != NONE)) > 0;
+LET $target_row = IF $is_shortcut AND $existing = NONE { (SELECT * FROM ONLY $target) } ELSE { NONE };
+LET $target_ok = !$is_shortcut OR $existing != NONE OR ($target_row != NONE
+	AND $target_row.collection = $collection AND $target_row.kind = 'item'
+	AND $target_row.target_id = NONE AND $target_row.deleted = false
+	AND (fn::holds_role_at($principal_type, $principal_id, $user_id, $target_row, $target_roles)
+		OR fn::reaches_through_shortcut($principal_type, $principal_id, $user_id, $target_id, $target_roles)));
+LET $same_target = IF $is_shortcut {
+	$existing.target_id = $target_id AND $existing.target_role = $target_role
+} ELSE {
+	$existing.target_id = NONE
+};
+LET $structure_ok = $parent_ok AND $objects_free AND $collection_published AND $target_ok AND (IF $existing != NONE {
 	$existing.owner_id = $owner_id AND $existing.collection = $collection
-	AND $existing.kind = $kind AND $move_ok
+	AND $existing.kind = $kind AND $same_target AND $move_ok
 } ELSE {
 	!$has_parent OR $parent_row.deleted = false
 });
@@ -252,7 +326,7 @@ LET $verdict = IF !$authorized OR !$structure_ok {
 };
 `
 
-func pushWrite(shared, immutable string, hasWrappedKey, hasBlob, hasCert bool) string {
+func pushWrite(shared, immutable, versionOptional string) string {
 	return `
 LET $written_seq = IF $verdict = 'ok' {
 	IF $existing = NONE {
@@ -263,11 +337,9 @@ LET $written_seq = IF $verdict = 'ok' {
 	LET $seq = (SELECT VALUE seq FROM ONLY $node);
 	CREATE node_version SET
 		node_id = $node_id, parent_id = $target_parent_id, collection = $collection, kind = $kind,
-		epoch = $epoch, wrapped_key = ` + optionalValue(hasWrappedKey, "$wrapped_key") + `,
-		content = $content, blob_json = ` + optionalValue(hasBlob, "$blob_json") + `,
-		blob_objects = $blob_objects, deleted = $deleted, base_seq = $base_seq, seq = $seq,
-		author_type = $author_type, author_id = $author_id,
-		cert_id = ` + optionalValue(hasCert, "$cert_id") + `, signature = $signature;
+		epoch = $epoch, content = $content, blob_objects = $blob_objects, deleted = $deleted,
+		base_seq = $base_seq, seq = $seq, author_type = $author_type, author_id = $author_id,
+		signature = $signature, ` + versionOptional + `;
 	IF $reparenting {
 		UPDATE node SET
 			ancestors = array::concat($new_ancestors, array::slice(ancestors, array::len($existing.ancestors))),

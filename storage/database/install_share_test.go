@@ -13,7 +13,7 @@ import (
 	"github.com/neoworks/auth/storage/database/dbtest"
 )
 
-var shareScopes = []string{"calendar:read", "calendar:write", "calendar:share"}
+var shareScopes = []string{"@neoworks/calendar:read", "@neoworks/calendar:write", "@neoworks/calendar:share"}
 
 // sharingSetup is an owner with a calendar root and an install the owner
 // granted write on it.
@@ -30,7 +30,7 @@ func newSharingSetup(t *testing.T, options dbtest.CertificateOptions) *sharingSe
 	f := newFixture(t)
 	owner := f.createUser()
 	friend := f.createUser()
-	root := f.createRoot(owner, "calendar")
+	root := f.createRoot(owner, "@neoworks/calendar")
 	if options.ExpiresAt.IsZero() {
 		options.ExpiresAt = time.Now().Add(30 * 24 * time.Hour)
 	}
@@ -83,7 +83,7 @@ func TestInstallWithShareScopeGrantsAndRevokesForTheOwner(t *testing.T) {
 }
 
 func TestInstallShareIsRefusedWithoutTheShareScopeInTheCertificate(t *testing.T) {
-	setup := newSharingSetup(t, dbtest.CertificateOptions{Scopes: []string{"calendar:read", "calendar:write"}})
+	setup := newSharingSetup(t, dbtest.CertificateOptions{Scopes: []string{"@neoworks/calendar:read", "@neoworks/calendar:write"}})
 	setup.install.Principal.Scopes = shareScopes
 	_, err := setup.shareWith(setup.friendGrant(access.RoleRead))
 	expectRefusal(t, err, database.ErrForbidden)
@@ -91,7 +91,7 @@ func TestInstallShareIsRefusedWithoutTheShareScopeInTheCertificate(t *testing.T)
 
 func TestInstallShareIsRefusedWithoutTheShareScopeOnTheToken(t *testing.T) {
 	setup := newSharingSetup(t, dbtest.CertificateOptions{})
-	setup.install.Principal.Scopes = []string{"calendar:read", "calendar:write"}
+	setup.install.Principal.Scopes = []string{"@neoworks/calendar:read", "@neoworks/calendar:write"}
 	_, err := setup.shareWith(setup.friendGrant(access.RoleRead))
 	expectRefusal(t, err, database.ErrForbidden)
 }
@@ -114,7 +114,7 @@ func TestInstallShareIsRefusedWhenTheUserDidNotSignTheCertificate(t *testing.T) 
 
 func TestInstallShareIsRefusedOnNodesTheCertificateUserDoesNotOwn(t *testing.T) {
 	setup := newSharingSetup(t, dbtest.CertificateOptions{})
-	friendRoot := setup.f.createRoot(setup.friend, "calendar")
+	friendRoot := setup.f.createRoot(setup.friend, "@neoworks/calendar")
 	setup.f.grant(setup.friend, friendRoot.ID, writeGrant(access.PrincipalTypeUser, setup.owner.UserID, 1))
 	setup.f.grant(setup.owner, friendRoot.ID, writeGrant(access.PrincipalTypeInstall, setup.install.Principal.InstallID, 1))
 	request := setup.install.GrantRequest(t, setup.f.store, friendRoot.ID, setup.friendGrant(access.RoleRead))
@@ -123,8 +123,8 @@ func TestInstallShareIsRefusedOnNodesTheCertificateUserDoesNotOwn(t *testing.T) 
 }
 
 func TestInstallShareIsRefusedAboveTheInstallsOwnRole(t *testing.T) {
-	setup := newSharingSetup(t, dbtest.CertificateOptions{Scopes: []string{"calendar:read", "calendar:share"}})
-	setup.install.Principal.Scopes = []string{"calendar:read", "calendar:share"}
+	setup := newSharingSetup(t, dbtest.CertificateOptions{Scopes: []string{"@neoworks/calendar:read", "@neoworks/calendar:share"}})
+	setup.install.Principal.Scopes = []string{"@neoworks/calendar:read", "@neoworks/calendar:share"}
 	_, err := setup.shareWith(setup.friendGrant(access.RoleWrite))
 	expectRefusal(t, err, database.ErrForbidden)
 }
@@ -133,7 +133,7 @@ func TestInstallShareIsRefusedAboveTheGrantedRole(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	friend := f.createUser()
-	root := f.createRoot(owner, "calendar")
+	root := f.createRoot(owner, "@neoworks/calendar")
 	install := f.accountOf(owner).NewInstall(t, f.store, dbtest.CertificateOptions{
 		Scopes: shareScopes, ExpiresAt: time.Now().Add(time.Hour),
 	})
@@ -149,7 +149,7 @@ func TestInstallShareIsRefusedForFacetsOutsideTheInstallsGrant(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	friend := f.createUser()
-	root := f.createRoot(owner, "calendar")
+	root := f.createRoot(owner, "@neoworks/calendar")
 	install := f.accountOf(owner).NewInstall(t, f.store, dbtest.CertificateOptions{
 		Scopes: shareScopes, ExpiresAt: time.Now().Add(time.Hour),
 	})

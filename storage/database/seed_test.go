@@ -9,10 +9,10 @@ import (
 func TestFirstPartyClientsAreSeeded(t *testing.T) {
 	f := newFixture(t)
 	wanted := map[string][]string{
-		"neoworks-calendar":      {"calendar:read", "calendar:write", "calendar:share"},
-		"neoworks-contacts":      {"contacts:read", "contacts:write", "contacts:share"},
-		"neoworks-photos":        {"photos:read", "photos:write", "photos:share"},
-		"neoworks-files":         {"files:read", "files:write", "files:share"},
+		"neoworks-calendar":      {"@neoworks/calendar:read", "@neoworks/calendar:write", "@neoworks/calendar:share"},
+		"neoworks-contacts":      {"@neoworks/contacts:read", "@neoworks/contacts:write", "@neoworks/contacts:share"},
+		"neoworks-photos":        {"@neoworks/photos:read", "@neoworks/photos:write", "@neoworks/photos:share"},
+		"neoworks-files":         {"@neoworks/files:read", "@neoworks/files:write", "@neoworks/files:share"},
 		"neoworks-authenticator": {"openid"},
 		"openschema":             {"openid", "schemas:publish"},
 	}

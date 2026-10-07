@@ -10,14 +10,15 @@ import (
 	"github.com/neoworks/auth/access"
 	"github.com/neoworks/auth/accesslog"
 	"github.com/neoworks/auth/storage/database"
+	"github.com/neoworks/auth/storage/database/dbtest"
 )
 
 func TestOwnerCreatesRootAndChildAndPullsBoth(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
-	root := f.createRoot(owner, "calendar")
+	root := f.createRoot(owner, "@neoworks/calendar")
 
-	child := newNode(owner, owner.UserID, "calendar", database.KindItem, &root.ID)
+	child := newNode(owner, owner.UserID, "@neoworks/calendar", database.KindItem, &root.ID)
 	f.pushOK(owner, child)
 
 	page := f.pull(owner, 0, 100)
@@ -34,9 +35,9 @@ func TestPushRequiresWriteOnSelfOrAncestor(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	stranger := f.createUser()
-	root := f.createRoot(owner, "calendar")
+	root := f.createRoot(owner, "@neoworks/calendar")
 
-	child := newNode(stranger, owner.UserID, "calendar", database.KindItem, &root.ID)
+	child := newNode(stranger, owner.UserID, "@neoworks/calendar", database.KindItem, &root.ID)
 	if outcome := f.push(stranger, child); outcome.Status != database.StatusForbidden {
 		t.Fatalf("stranger push: got %s want forbidden", outcome.Status)
 	}
@@ -56,15 +57,15 @@ func TestPushRequiresWriteOnSelfOrAncestor(t *testing.T) {
 func TestTokenScopeCapsGrantRole(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
-	root := f.createRoot(owner, "calendar")
+	root := f.createRoot(owner, "@neoworks/calendar")
 
-	readScoped := userPrincipal(owner.UserID, "calendar:read")
-	child := newNode(readScoped, owner.UserID, "calendar", database.KindItem, &root.ID)
+	readScoped := userPrincipal(owner.UserID, "@neoworks/calendar:read")
+	child := newNode(readScoped, owner.UserID, "@neoworks/calendar", database.KindItem, &root.ID)
 	if outcome := f.push(readScoped, child); outcome.Status != database.StatusForbidden {
 		t.Fatalf("read-scoped push: got %s want forbidden", outcome.Status)
 	}
 
-	otherCollection := userPrincipal(owner.UserID, "photos:write")
+	otherCollection := userPrincipal(owner.UserID, "@neoworks/photos:write")
 	if page := f.pull(otherCollection, 0, 10); len(page.Nodes) != 0 {
 		t.Fatalf("photos-scoped token pulled %d calendar nodes", len(page.Nodes))
 	}
@@ -73,9 +74,9 @@ func TestTokenScopeCapsGrantRole(t *testing.T) {
 func TestBaseSeqConflictReturnsCurrent(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
-	root := f.createRoot(owner, "calendar")
+	root := f.createRoot(owner, "@neoworks/calendar")
 
-	item := newNode(owner, owner.UserID, "calendar", database.KindItem, &root.ID)
+	item := newNode(owner, owner.UserID, "@neoworks/calendar", database.KindItem, &root.ID)
 	firstSeq := f.pushOK(owner, item)
 
 	stale := item
@@ -87,7 +88,7 @@ func TestBaseSeqConflictReturnsCurrent(t *testing.T) {
 
 	next := item
 	next.BaseSeq = firstSeq
-	next.Content = []database.FacetContent{{Facet: 0, Ciphertext: "ct2"}}
+	next.Content = dbtest.Content("ct2")
 	secondSeq := f.pushOK(owner, next)
 	if secondSeq <= firstSeq {
 		t.Fatalf("seq did not advance: %d then %d", firstSeq, secondSeq)
@@ -97,8 +98,8 @@ func TestBaseSeqConflictReturnsCurrent(t *testing.T) {
 func TestVersionsKeepEveryAcceptedWrite(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
-	root := f.createRoot(owner, "calendar")
-	item := newNode(owner, owner.UserID, "calendar", database.KindItem, &root.ID)
+	root := f.createRoot(owner, "@neoworks/calendar")
+	item := newNode(owner, owner.UserID, "@neoworks/calendar", database.KindItem, &root.ID)
 	seq := f.pushOK(owner, item)
 	item.BaseSeq = seq
 	f.pushOK(owner, item)
@@ -116,10 +117,10 @@ func TestSubtreeGrantCoversDescendantsButFacetGrantDoesNot(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	reader := f.createUser()
-	root := f.createRoot(owner, "calendar")
-	container := newNode(owner, owner.UserID, "calendar", database.KindContainer, &root.ID)
+	root := f.createRoot(owner, "@neoworks/calendar")
+	container := newNode(owner, owner.UserID, "@neoworks/calendar", database.KindContainer, &root.ID)
 	f.pushOK(owner, container)
-	item := newNode(owner, owner.UserID, "calendar", database.KindItem, &container.ID)
+	item := newNode(owner, owner.UserID, "@neoworks/calendar", database.KindItem, &container.ID)
 	f.pushOK(owner, item)
 
 	facetGrant := readGrant(access.PrincipalTypeUser, reader.UserID, 1)
@@ -142,8 +143,8 @@ func TestNewGrantReDeliversExistingNodesToAnAlreadySyncedGrantee(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	reader := f.createUser()
-	root := f.createRoot(owner, "calendar")
-	item := newNode(owner, owner.UserID, "calendar", database.KindItem, &root.ID)
+	root := f.createRoot(owner, "@neoworks/calendar")
+	item := newNode(owner, owner.UserID, "@neoworks/calendar", database.KindItem, &root.ID)
 	f.pushOK(owner, item)
 
 	cursor := f.pull(reader, 0, 100).Cursor
@@ -161,7 +162,7 @@ func TestOnlyTheOwnerGrantsToOtherUsers(t *testing.T) {
 	owner := f.createUser()
 	writer := f.createUser()
 	third := f.createUser()
-	root := f.createRoot(owner, "calendar")
+	root := f.createRoot(owner, "@neoworks/calendar")
 	f.grant(owner, root.ID, writeGrant(access.PrincipalTypeUser, writer.UserID, 1))
 
 	if _, err := f.tryGrant(writer, root.ID, readGrant(access.PrincipalTypeUser, third.UserID, 1)); !errors.Is(err, database.ErrForbidden) {
@@ -180,10 +181,10 @@ func TestRevokeRules(t *testing.T) {
 	owner := f.createUser()
 	writer := f.createUser()
 	other := f.createUser()
-	root := f.createRoot(owner, "calendar")
+	root := f.createRoot(owner, "@neoworks/calendar")
 	f.grant(owner, root.ID, writeGrant(access.PrincipalTypeUser, writer.UserID, 1))
 	f.grant(owner, root.ID, readGrant(access.PrincipalTypeUser, other.UserID, 1))
-	app, _ := f.createInstall(writer, "calendar:write")
+	app, _ := f.createInstall(writer, "@neoworks/calendar:write")
 	f.grant(writer, root.ID, writeGrant(access.PrincipalTypeInstall, app.InstallID, 1))
 
 	if err := f.tryRevoke(writer, root.ID, access.PrincipalTypeUser, other.UserID); !errors.Is(err, database.ErrForbidden) {
@@ -201,7 +202,7 @@ func TestGrantMustMatchNodeEpoch(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	reader := f.createUser()
-	root := f.createRoot(owner, "calendar")
+	root := f.createRoot(owner, "@neoworks/calendar")
 
 	_, err := f.tryGrant(owner, root.ID, readGrant(access.PrincipalTypeUser, reader.UserID, 2))
 	if !errors.Is(err, database.ErrStaleEpoch) {
@@ -213,7 +214,7 @@ func TestRevokedGrantStopsAccessAndFlagsRotation(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	reader := f.createUser()
-	root := f.createRoot(owner, "calendar")
+	root := f.createRoot(owner, "@neoworks/calendar")
 	f.grant(owner, root.ID, readGrant(access.PrincipalTypeUser, reader.UserID, 1))
 	if len(f.pull(reader, 0, 10).Nodes) != 1 {
 		t.Fatal("reader should see the root")
@@ -237,7 +238,7 @@ func TestOwnersGrantToThemselvesIsEntryZero(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	stranger := f.createUser()
-	root := newNode(owner, owner.UserID, "calendar", database.KindRoot, nil)
+	root := newNode(owner, owner.UserID, "@neoworks/calendar", database.KindRoot, nil)
 	f.pushOK(owner, root)
 
 	if _, err := f.tryGrant(stranger, root.ID, writeGrant(access.PrincipalTypeUser, stranger.UserID, 1)); !errors.Is(err, database.ErrNotFound) {
@@ -258,7 +259,7 @@ func TestAccessLogChainsEntriesAndRejectsAMovedHead(t *testing.T) {
 	owner := f.createUser()
 	reader := f.createUser()
 	other := f.createUser()
-	root := f.createRoot(owner, "calendar")
+	root := f.createRoot(owner, "@neoworks/calendar")
 	account := f.accountOf(owner)
 
 	first := f.grant(owner, root.ID, readGrant(access.PrincipalTypeUser, reader.UserID, 1))
@@ -289,7 +290,7 @@ func TestEntriesMustBeSignedByTheActingUserAndDescribeTheGrant(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	reader := f.createUser()
-	root := f.createRoot(owner, "calendar")
+	root := f.createRoot(owner, "@neoworks/calendar")
 	ctx := t.Context()
 	input := readGrant(access.PrincipalTypeUser, reader.UserID, 1)
 
@@ -317,8 +318,8 @@ func TestInstallsCannotSubmitTheUsersSignedEntries(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	reader := f.createUser()
-	root := f.createRoot(owner, "calendar")
-	app, _ := f.createInstall(owner, "calendar:write")
+	root := f.createRoot(owner, "@neoworks/calendar")
+	app, _ := f.createInstall(owner, "@neoworks/calendar:write")
 	f.grant(owner, root.ID, writeGrant(access.PrincipalTypeInstall, app.InstallID, 1))
 
 	request := f.accountOf(owner).GrantRequest(t, f.store, root.ID, readGrant(access.PrincipalTypeUser, reader.UserID, 1))
@@ -331,10 +332,10 @@ func TestUsersPassSharesToTheirOwnInstallsWithAtMostTheirRole(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	reader := f.createUser()
-	root := f.createRoot(owner, "calendar")
+	root := f.createRoot(owner, "@neoworks/calendar")
 	f.grant(owner, root.ID, readGrant(access.PrincipalTypeUser, reader.UserID, 1))
-	app, _ := f.createInstall(reader, "calendar:write")
-	foreign, _ := f.createInstall(owner, "calendar:write")
+	app, _ := f.createInstall(reader, "@neoworks/calendar:write")
+	foreign, _ := f.createInstall(owner, "@neoworks/calendar:write")
 
 	if _, err := f.tryGrant(reader, root.ID, writeGrant(access.PrincipalTypeInstall, app.InstallID, 1)); !errors.Is(err, database.ErrForbidden) {
 		t.Fatalf("a reader granting write to their install: got %v want forbidden", err)
@@ -352,13 +353,13 @@ func TestFacetSharesCanOnlyBePassedOnAsASubset(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	reader := f.createUser()
-	root := f.createRoot(owner, "calendar")
-	item := newNode(owner, owner.UserID, "calendar", database.KindItem, &root.ID)
+	root := f.createRoot(owner, "@neoworks/calendar")
+	item := newNode(owner, owner.UserID, "@neoworks/calendar", database.KindItem, &root.ID)
 	f.pushOK(owner, item)
 	shared := readGrant(access.PrincipalTypeUser, reader.UserID, 1)
 	shared.Facets = []int{1}
 	f.grant(owner, item.ID, shared)
-	app, _ := f.createInstall(reader, "calendar:read")
+	app, _ := f.createInstall(reader, "@neoworks/calendar:read")
 
 	whole := readGrant(access.PrincipalTypeInstall, app.InstallID, 1)
 	if _, err := f.tryGrant(reader, item.ID, whole); !errors.Is(err, database.ErrForbidden) {
@@ -377,17 +378,17 @@ func TestFacetSharesCanOnlyBePassedOnAsASubset(t *testing.T) {
 func TestOwnerWritesWithoutAGrantButNotThroughAnInstallWithoutOne(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
-	root := newNode(owner, owner.UserID, "calendar", database.KindRoot, nil)
+	root := newNode(owner, owner.UserID, "@neoworks/calendar", database.KindRoot, nil)
 	f.pushOK(owner, root)
-	item := newNode(owner, owner.UserID, "calendar", database.KindItem, &root.ID)
+	item := newNode(owner, owner.UserID, "@neoworks/calendar", database.KindItem, &root.ID)
 	if outcome := f.push(owner, item); outcome.Status != database.StatusOK {
 		t.Fatalf("the owner writes in their own tree without any grant: got %s", outcome.Status)
 	}
 	if page := f.pull(owner, 0, 10); len(page.Nodes) != 2 {
 		t.Fatalf("the owner pulls their own nodes without a grant, got %d", len(page.Nodes))
 	}
-	app, certID := f.createInstall(owner, "calendar:write")
-	byInstall := newNode(app, owner.UserID, "calendar", database.KindItem, &root.ID)
+	app, certID := f.createInstall(owner, "@neoworks/calendar:write")
+	byInstall := newNode(app, owner.UserID, "@neoworks/calendar", database.KindItem, &root.ID)
 	byInstall.CertID = &certID
 	if outcome := f.push(app, byInstall); outcome.Status != database.StatusForbidden {
 		t.Fatalf("an install has no implicit access: got %s want forbidden", outcome.Status)
@@ -397,9 +398,9 @@ func TestOwnerWritesWithoutAGrantButNotThroughAnInstallWithoutOne(t *testing.T) 
 func TestPaginationAdvancesCursorWithoutSkipping(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
-	root := f.createRoot(owner, "calendar")
+	root := f.createRoot(owner, "@neoworks/calendar")
 	for index := 0; index < 5; index++ {
-		f.pushOK(owner, newNode(owner, owner.UserID, "calendar", database.KindItem, &root.ID))
+		f.pushOK(owner, newNode(owner, owner.UserID, "@neoworks/calendar", database.KindItem, &root.ID))
 	}
 
 	seen := map[string]bool{}
@@ -426,12 +427,12 @@ func TestMovingAContainerMovesItsSubtreeAccess(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	reader := f.createUser()
-	root := f.createRoot(owner, "calendar")
-	shared := newNode(owner, owner.UserID, "calendar", database.KindContainer, &root.ID)
+	root := f.createRoot(owner, "@neoworks/calendar")
+	shared := newNode(owner, owner.UserID, "@neoworks/calendar", database.KindContainer, &root.ID)
 	f.pushOK(owner, shared)
-	private := newNode(owner, owner.UserID, "calendar", database.KindContainer, &root.ID)
+	private := newNode(owner, owner.UserID, "@neoworks/calendar", database.KindContainer, &root.ID)
 	f.pushOK(owner, private)
-	item := newNode(owner, owner.UserID, "calendar", database.KindItem, &private.ID)
+	item := newNode(owner, owner.UserID, "@neoworks/calendar", database.KindItem, &private.ID)
 	f.pushOK(owner, item)
 
 	f.grant(owner, shared.ID, readGrant(access.PrincipalTypeUser, reader.UserID, 1))
@@ -459,8 +460,8 @@ func TestDirectInsertsGetSeqFromTheCounter(t *testing.T) {
 	ctx := context.Background()
 	rootRow := func(owner string) map[string]any {
 		return map[string]any{
-			"id": uuid.NewString(), "owner_id": owner, "collection": "calendar", "kind": "root", "epoch": 1,
-			"content": []map[string]any{{"facet": 0, "ciphertext": "ct"}}, "base_seq": 0, "seq": 1,
+			"id": uuid.NewString(), "owner_id": owner, "collection": "@neoworks/calendar", "kind": "root", "epoch": 1,
+			"content": "", "base_seq": 0, "seq": 1,
 			"author_type": "user", "author_id": owner, "signature": "sig",
 		}
 	}
@@ -480,11 +481,11 @@ func TestDirectInsertsGetSeqFromTheCounter(t *testing.T) {
 		t.Fatalf("insert grants: %v", err)
 	}
 
-	page := f.pull(userPrincipal(first, "calendar:read"), 0, 10)
+	page := f.pull(userPrincipal(first, "@neoworks/calendar:read"), 0, 10)
 	if len(page.Nodes) != 1 || len(page.Grants) != 1 {
 		t.Fatalf("directly inserted root and grant should be pulled: %d nodes %d grants", len(page.Nodes), len(page.Grants))
 	}
-	other := f.pull(userPrincipal(second, "calendar:read"), 0, 10)
+	other := f.pull(userPrincipal(second, "@neoworks/calendar:read"), 0, 10)
 	if page.Nodes[0].Seq == other.Nodes[0].Seq || page.Nodes[0].Seq == 1 && other.Nodes[0].Seq == 1 {
 		t.Fatalf("supplied seq must be replaced by the counter: %d and %d", page.Nodes[0].Seq, other.Nodes[0].Seq)
 	}
@@ -493,20 +494,20 @@ func TestDirectInsertsGetSeqFromTheCounter(t *testing.T) {
 func TestGoogleNodesAreGatedByGoogleScopes(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
-	root := f.createRoot(owner, "google")
+	root := f.createRoot(owner, "@neoworks/google")
 
 	if page := f.pull(owner, 0, 10); !nodeIDs(page.Nodes)[root.ID] {
 		t.Fatal("a google-scoped token should pull the google root")
 	}
-	calendarOnly := userPrincipal(owner.UserID, "calendar:read", "calendar:write")
+	calendarOnly := userPrincipal(owner.UserID, "@neoworks/calendar:read", "@neoworks/calendar:write")
 	if page := f.pull(calendarOnly, 0, 10); len(page.Nodes) != 0 {
 		t.Fatalf("a calendar-scoped token pulled %d google nodes", len(page.Nodes))
 	}
-	child := newNode(calendarOnly, owner.UserID, "google", database.KindItem, &root.ID)
+	child := newNode(calendarOnly, owner.UserID, "@neoworks/google", database.KindItem, &root.ID)
 	if outcome := f.push(calendarOnly, child); outcome.Status != database.StatusForbidden {
 		t.Fatalf("a calendar-scoped push into google: got %s want forbidden", outcome.Status)
 	}
-	readOnly := userPrincipal(owner.UserID, "google:read")
+	readOnly := userPrincipal(owner.UserID, "@neoworks/google:read")
 	if outcome := f.push(readOnly, child); outcome.Status != database.StatusForbidden {
 		t.Fatalf("a google:read push: got %s want forbidden", outcome.Status)
 	}
@@ -517,7 +518,7 @@ func TestPullReturnsTheAccessLogOfVisibleNodes(t *testing.T) {
 	owner := f.createUser()
 	reader := f.createUser()
 	stranger := f.createUser()
-	root := f.createRoot(owner, "calendar")
+	root := f.createRoot(owner, "@neoworks/calendar")
 	f.grant(owner, root.ID, readGrant(access.PrincipalTypeUser, reader.UserID, 1))
 
 	ownerPage := f.pull(owner, 0, 50)
@@ -544,9 +545,9 @@ func TestPullReturnsTheAccessLogOfVisibleNodes(t *testing.T) {
 func TestInstallGrantsMustNameTheInstallsOwnCertificate(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
-	root := f.createRoot(owner, "calendar")
-	app, _ := f.createInstall(owner, "calendar:read")
-	_, otherCertificate := f.createInstall(owner, "calendar:read")
+	root := f.createRoot(owner, "@neoworks/calendar")
+	app, _ := f.createInstall(owner, "@neoworks/calendar:read")
+	_, otherCertificate := f.createInstall(owner, "@neoworks/calendar:read")
 	account := f.accountOf(owner)
 
 	request := account.GrantRequest(t, f.store, root.ID, readGrant(access.PrincipalTypeInstall, app.InstallID, 1))

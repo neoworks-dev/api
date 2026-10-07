@@ -17,9 +17,9 @@ var encoding = base64.RawURLEncoding
 
 // DefaultScopes are the collection scopes test accounts act with.
 var DefaultScopes = []string{
-	"calendar:read", "calendar:write", "photos:read", "photos:write",
-	"files:read", "files:write", "google:read", "google:write",
-	"calendar:share", "photos:share", "files:share", "google:share",
+	"@neoworks/calendar:read", "@neoworks/calendar:write", "@neoworks/photos:read", "@neoworks/photos:write",
+	"@neoworks/files:read", "@neoworks/files:write", "@neoworks/google:read", "@neoworks/google:write",
+	"@neoworks/calendar:share", "@neoworks/photos:share", "@neoworks/files:share", "@neoworks/google:share",
 }
 
 // Account is a stored user together with the identity signing key its access log

@@ -18,7 +18,6 @@ func newNode(author access.Principal, ownerID, collection, kind string, parentID
 		Collection: collection,
 		Kind:       kind,
 		Epoch:      1,
-		Content:    []database.FacetContent{{Facet: 0, Ciphertext: "ct"}},
 		AuthorType: author.Type(),
 		AuthorID:   author.ID(),
 		Signature:  "sig",
@@ -26,12 +25,14 @@ func newNode(author access.Principal, ownerID, collection, kind string, parentID
 	if kind != database.KindRoot {
 		wrapped := "wrapped"
 		node.WrappedKey = &wrapped
+		node.Content = dbtest.Content("ct")
 	}
 	return node
 }
 
 func (f *fixture) push(author access.Principal, node database.Node) *database.PushOutcome {
 	f.t.Helper()
+	dbtest.PublishNodeSchemas(f.t, f.store)
 	validated, err := database.ValidateNodeInput(node, author)
 	if err != nil {
 		f.t.Fatalf("validate: %v", err)

@@ -59,8 +59,8 @@ func (input GrantInput) validateFacets() error {
 	}
 	seenFacets := map[int]bool{}
 	for _, facet := range input.Facets {
-		if facet < 0 || seenFacets[facet] {
-			return fmt.Errorf("%w: facets must be unique and not negative", ErrInvalidInput)
+		if facet < 1 || facet > maxFacetTag || seenFacets[facet] {
+			return fmt.Errorf("%w: facets must be unique facet tags", ErrInvalidInput)
 		}
 		seenFacets[facet] = true
 	}
