@@ -28,7 +28,7 @@ func newFixture(t *testing.T) fixture {
 
 func publishBody(version string) map[string]any {
 	return map[string]any{
-		"version": version, "description": "Orders and customers", "license": "MIT",
+		"version": version, "title": "Commerce", "description": "Orders and customers", "license": "MIT",
 		"repository": "https://example.com/commerce", "readme": "# Commerce", "targets": []string{"sql", "go"},
 		"files": []map[string]string{
 			{"path": "orders.schema", "contents": "namespace commerce"},
@@ -136,7 +136,17 @@ func TestPublishRejectsInvalidInput(t *testing.T) {
 	badVersion := publishBody("not a version")
 	escapingPath := publishBody("1.0.0")
 	escapingPath["files"] = []map[string]string{{"path": "../x.schema", "contents": "x"}}
-	for name, body := range map[string]map[string]any{"no files": noFiles, "bad version": badVersion, "escaping path": escapingPath} {
+	noTitle := publishBody("1.0.0")
+	delete(noTitle, "title")
+	blankDescription := publishBody("1.0.0")
+	blankDescription["description"] = "   "
+	badDescriptor := publishBody("1.0.0")
+	badDescriptor["descriptor"] = "not json"
+	cases := map[string]map[string]any{
+		"no files": noFiles, "bad version": badVersion, "escaping path": escapingPath,
+		"no title": noTitle, "blank description": blankDescription, "bad descriptor": badDescriptor,
+	}
+	for name, body := range cases {
 		if response := f.router.Do(t, owner, "POST", commercePath+"/versions", body, nil); response.Code != http.StatusBadRequest {
 			t.Errorf("%s: got %d want 400", name, response.Code)
 		}
@@ -179,5 +189,55 @@ func TestListAndSearchArePublic(t *testing.T) {
 	handlertest.Decode(t, f.router.DoAnonymous(t, "GET", "/api/v1/schemas?q=sessions"), &byWord)
 	if len(byWord.Schemas) != 1 || byWord.Schemas[0].Name != "identity" {
 		t.Fatalf("search by description: %+v", byWord.Schemas)
+	}
+}
+
+func TestLaterVersionsReplaceTheSchemaMetadata(t *testing.T) {
+	f := newFixture(t)
+	owner := handlertest.CreateUser(t, f.store, registry.PublishScope)
+	f.router.Do(t, owner, "POST", commercePath+"/versions", publishBody("1.0.0"), nil)
+	next := publishBody("1.1.0")
+	next["title"] = "Commerce Pro"
+	next["description"] = "Orders, customers and invoices"
+	f.router.Do(t, owner, "POST", commercePath+"/versions", next, nil)
+
+	var detail struct {
+		Schema database.RegistrySchema `json:"schema"`
+	}
+	handlertest.Decode(t, f.router.DoAnonymous(t, "GET", commercePath), &detail)
+	if detail.Schema.Title != "Commerce Pro" || detail.Schema.Description != "Orders, customers and invoices" {
+		t.Fatalf("metadata should follow the latest publish: %+v", detail.Schema)
+	}
+}
+
+func TestDescriptorIsServedByHash(t *testing.T) {
+	f := newFixture(t)
+	owner := handlertest.CreateUser(t, f.store, registry.PublishScope)
+	descriptor := "{\n  \"descriptorVersion\": 1\n}\n"
+	withDescriptor := publishBody("1.0.0")
+	withDescriptor["descriptor"] = descriptor
+	f.router.Do(t, owner, "POST", commercePath+"/versions", withDescriptor, nil)
+	f.router.Do(t, owner, "POST", commercePath+"/versions", publishBody("1.1.0"), nil)
+
+	hash := database.DescriptorHash([]byte(descriptor))
+	var detail struct {
+		Versions []database.RegistryVersion `json:"versions"`
+	}
+	handlertest.Decode(t, f.router.DoAnonymous(t, "GET", commercePath), &detail)
+	if detail.Versions[1].DescriptorHash != hash || detail.Versions[0].DescriptorHash != "" {
+		t.Fatalf("descriptor hashes: %+v", detail.Versions)
+	}
+
+	served := f.router.DoAnonymous(t, "GET", commercePath+"/descriptors/"+hash)
+	if served.Code != http.StatusOK || served.Body.String() != descriptor {
+		t.Fatalf("descriptor by hash: %d %q", served.Code, served.Body.String())
+	}
+	unknown := f.router.DoAnonymous(t, "GET", commercePath+"/descriptors/"+database.DescriptorHash([]byte("{}")))
+	if unknown.Code != http.StatusNotFound {
+		t.Fatalf("unpublished descriptor: got %d want 404", unknown.Code)
+	}
+	otherSchema := f.router.DoAnonymous(t, "GET", "/api/v1/schemas/acme/identity/descriptors/"+hash)
+	if otherSchema.Code != http.StatusNotFound {
+		t.Fatalf("descriptor of another schema: got %d want 404", otherSchema.Code)
 	}
 }

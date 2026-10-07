@@ -19,6 +19,7 @@ type RegistrySchema struct {
 	Scope          string    `json:"scope"`
 	Name           string    `json:"name"`
 	OwnerID        string    `json:"ownerId"`
+	Title          string    `json:"title"`
 	Description    string    `json:"description"`
 	Tags           []string  `json:"tags"`
 	License        string    `json:"license"`
@@ -39,15 +40,16 @@ type RegistryFile struct {
 }
 
 // RegistryVersion is an immutable release. Files is filled only when a single
-// version is read.
+// version is read. DescriptorHash is set when the version defines Neoworks nodes.
 type RegistryVersion struct {
-	Version    string         `json:"version"`
-	State      string         `json:"state"`
-	Readme     string         `json:"readme"`
-	Targets    []string       `json:"targets"`
-	ReleasedAt time.Time      `json:"releasedAt"`
-	CreatedAt  time.Time      `json:"createdAt"`
-	Files      []RegistryFile `json:"files,omitempty"`
+	Version        string         `json:"version"`
+	State          string         `json:"state"`
+	Readme         string         `json:"readme"`
+	Targets        []string       `json:"targets"`
+	DescriptorHash string         `json:"descriptorHash,omitempty"`
+	ReleasedAt     time.Time      `json:"releasedAt"`
+	CreatedAt      time.Time      `json:"createdAt"`
+	Files          []RegistryFile `json:"files,omitempty"`
 }
 
 type dbRegistrySchema struct {
@@ -55,6 +57,7 @@ type dbRegistrySchema struct {
 	Scope          string          `json:"scope"`
 	Name           string          `json:"name"`
 	Owner          models.RecordID `json:"owner"`
+	Title          string          `json:"title"`
 	Description    string          `json:"description"`
 	Tags           []string        `json:"tags"`
 	License        string          `json:"license"`
@@ -73,7 +76,7 @@ func (row dbRegistrySchema) toSchema() RegistrySchema {
 		tags = []string{}
 	}
 	return RegistrySchema{
-		Scope: row.Scope, Name: row.Name, OwnerID: ownerID, Description: row.Description,
+		Scope: row.Scope, Name: row.Name, OwnerID: ownerID, Title: row.Title, Description: row.Description,
 		Tags: tags, License: row.License, Repository: row.Repository, LatestVersion: row.LatestVersion,
 		Official: row.Official, DownloadsTotal: row.DownloadsTotal,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
@@ -81,13 +84,14 @@ func (row dbRegistrySchema) toSchema() RegistrySchema {
 }
 
 type dbRegistryVersion struct {
-	ID         models.RecordID `json:"id"`
-	Version    string          `json:"version"`
-	State      string          `json:"state"`
-	Readme     string          `json:"readme"`
-	Targets    []string        `json:"targets"`
-	ReleasedAt time.Time       `json:"released_at"`
-	CreatedAt  time.Time       `json:"created_at"`
+	ID             models.RecordID `json:"id"`
+	Version        string          `json:"version"`
+	State          string          `json:"state"`
+	Readme         string          `json:"readme"`
+	Targets        []string        `json:"targets"`
+	DescriptorHash *string         `json:"descriptor_hash"`
+	ReleasedAt     time.Time       `json:"released_at"`
+	CreatedAt      time.Time       `json:"created_at"`
 }
 
 func (row dbRegistryVersion) toVersion() RegistryVersion {
@@ -95,25 +99,33 @@ func (row dbRegistryVersion) toVersion() RegistryVersion {
 	if targets == nil {
 		targets = []string{}
 	}
-	return RegistryVersion{
+	version := RegistryVersion{
 		Version: row.Version, State: row.State, Readme: row.Readme, Targets: targets,
 		ReleasedAt: row.ReleasedAt, CreatedAt: row.CreatedAt,
 	}
+	if row.DescriptorHash != nil {
+		version.DescriptorHash = *row.DescriptorHash
+	}
+	return version
 }
+
+// Version reads leave out the descriptor itself; it is served on its own by hash.
+const registryVersionFields = "id, version, state, readme, targets, descriptor_hash, released_at, created_at"
 
 const (
 	registryListStatement   = "SELECT * FROM registry_schema ORDER BY updated_at DESC LIMIT $limit"
-	registrySearchStatement = `SELECT *, search::score(0) + search::score(1) AS relevance
-		FROM registry_schema WHERE name @0@ $query OR description @1@ $query
+	registrySearchStatement = `SELECT *, search::score(0) + search::score(1) + search::score(2) AS relevance
+		FROM registry_schema WHERE name @0@ $query OR title @1@ $query OR description @2@ $query
 		ORDER BY relevance DESC LIMIT $limit`
-	registryGetStatement      = "SELECT * FROM registry_schema WHERE scope = $scope AND name = $name LIMIT 1"
-	registryVersionsStatement = "SELECT * FROM registry_schema_version WHERE schema = $schema ORDER BY created_at DESC"
-	registryVersionStatement  = "SELECT * FROM registry_schema_version WHERE schema = $schema AND version = $version LIMIT 1"
-	registryFilesStatement    = "SELECT * FROM registry_schema_file WHERE version = $version ORDER BY ordinal"
+	registryGetStatement        = "SELECT * FROM registry_schema WHERE scope = $scope AND name = $name LIMIT 1"
+	registryVersionsStatement   = "SELECT " + registryVersionFields + " FROM registry_schema_version WHERE schema = $schema ORDER BY created_at DESC"
+	registryVersionStatement    = "SELECT " + registryVersionFields + " FROM registry_schema_version WHERE schema = $schema AND version = $version LIMIT 1"
+	registryFilesStatement      = "SELECT * FROM registry_schema_file WHERE version = $version ORDER BY ordinal"
+	registryDescriptorStatement = "SELECT VALUE descriptor FROM registry_schema_version WHERE schema = $schema AND descriptor_hash = $hash LIMIT 1"
 )
 
 // ListRegistrySchemas returns schemas newest-updated first, or ranked by
-// full-text relevance over name and description when query is not empty.
+// full-text relevance over name, title and description when query is not empty.
 func (s *SurrealStore) ListRegistrySchemas(ctx context.Context, query string, limit int) ([]RegistrySchema, error) {
 	statement := registryListStatement
 	params := map[string]any{"limit": clampRegistryLimit(limit)}
@@ -193,4 +205,19 @@ func (s *SurrealStore) GetRegistryVersion(ctx context.Context, scope, name, vers
 	result := versionRow.toVersion()
 	result.Files = files
 	return &result, nil
+}
+
+// GetRegistryDescriptor returns the descriptor a version of `@scope/name` was published
+// with, found by its hash, or ErrNotFound when no version carries it.
+func (s *SurrealStore) GetRegistryDescriptor(ctx context.Context, scope, name, hash string) (string, error) {
+	schemaRow, err := s.getRegistrySchemaRow(ctx, scope, name)
+	if err != nil {
+		return "", err
+	}
+	descriptor, err := queryFirst[string](ctx, s.DB, registryDescriptorStatement,
+		map[string]any{"schema": schemaRow.ID, "hash": hash})
+	if err != nil {
+		return "", err
+	}
+	return *descriptor, nil
 }

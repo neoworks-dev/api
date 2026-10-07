@@ -32,6 +32,7 @@ func (h *Handler) RegisterPublic(router chi.Router) {
 	router.Get("/api/v1/schemas", h.list)
 	router.Get("/api/v1/schemas/{scope}/{name}", h.get)
 	router.Get("/api/v1/schemas/{scope}/{name}/versions/{version}", h.getVersion)
+	router.Get("/api/v1/schemas/{scope}/{name}/descriptors/{hash}", h.getDescriptor)
 }
 
 // RegisterAuthenticated mounts publishing behind JWT and principal resolution.
@@ -76,14 +77,30 @@ func (h *Handler) getVersion(w http.ResponseWriter, r *http.Request) {
 	respond.JSON(w, http.StatusOK, version)
 }
 
+// getDescriptor serves the exact descriptor bytes a version was published with, so a
+// client can compare them byte for byte with the descriptor an app supplied.
+func (h *Handler) getDescriptor(w http.ResponseWriter, r *http.Request) {
+	descriptor, err := h.store.GetRegistryDescriptor(r.Context(),
+		chi.URLParam(r, "scope"), chi.URLParam(r, "name"), chi.URLParam(r, "hash"))
+	if err != nil {
+		respond.StoreError(w, "getRegistryDescriptor", err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(descriptor))
+}
+
 type publishRequest struct {
 	Version     string                         `json:"version"`
+	Title       string                         `json:"title"`
 	Description string                         `json:"description"`
 	License     string                         `json:"license"`
 	Repository  string                         `json:"repository"`
 	Readme      string                         `json:"readme"`
 	Targets     []string                       `json:"targets"`
 	Files       []database.RegistryPublishFile `json:"files"`
+	Descriptor  string                         `json:"descriptor"`
 }
 
 func (h *Handler) publish(w http.ResponseWriter, r *http.Request) {
@@ -94,8 +111,9 @@ func (h *Handler) publish(w http.ResponseWriter, r *http.Request) {
 	}
 	schema, err := h.store.PublishRegistryVersion(r.Context(), principal.UserID, database.RegistryPublishInput{
 		Scope: chi.URLParam(r, "scope"), Name: chi.URLParam(r, "name"), Version: request.Version,
-		Description: request.Description, License: request.License, Repository: request.Repository,
-		Readme: request.Readme, Targets: request.Targets, Files: request.Files,
+		Title: request.Title, Description: request.Description, License: request.License,
+		Repository: request.Repository, Readme: request.Readme, Targets: request.Targets,
+		Files: request.Files, Descriptor: request.Descriptor,
 	})
 	if err != nil {
 		respond.StoreError(w, "publishRegistryVersion", err)
