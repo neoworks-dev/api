@@ -3,6 +3,7 @@ module github.com/neoworks/auth
 go 1.26.2
 
 require (
+	github.com/alicebob/miniredis/v2 v2.39.0
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
@@ -14,7 +15,6 @@ require (
 )
 
 require (
-	github.com/alicebob/miniredis/v2 v2.39.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 )
@@ -27,7 +27,7 @@ require (
 	github.com/fxamacker/cbor/v2 v2.7.0
 	github.com/goccy/go-json v0.10.3 // indirect
 	github.com/gofrs/uuid v4.4.0+incompatible
-	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/gorilla/websocket v1.5.3
 	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.11 // indirect
 	github.com/klauspost/crc32 v1.3.0 // indirect

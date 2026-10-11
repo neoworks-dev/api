@@ -31,6 +31,7 @@ import (
 	notificationhandlers "github.com/neoworks/auth/handlers/notifications"
 	organizationhandlers "github.com/neoworks/auth/handlers/organizations"
 	registryhandlers "github.com/neoworks/auth/handlers/registry"
+	relayhandlers "github.com/neoworks/auth/handlers/relay"
 	renewalhandlers "github.com/neoworks/auth/handlers/renewal"
 	settinghandlers "github.com/neoworks/auth/handlers/settings"
 	storagehandlers "github.com/neoworks/auth/handlers/storage"
@@ -74,11 +75,13 @@ func main() {
 
 	counter := ratelimit.NewRedisCounter(redis.Client())
 	limiter := ratelimit.New(counter, counter, surreal)
+	relay := relayhandlers.NewHandler(relayhandlers.NewHub(redis.Client()), surreal, limiter)
 	assetRouter := limiter.ByIP(ratelimit.BucketAssets)(assethandlers.NewHandler(surreal, redis, objects, clientAuth).Router())
 	servers := []*http.Server{
-		{Addr: ":" + env("PORT", "8081"), Handler: apiRouter(surreal, redis, objects, clientAuth, limiter, counter)},
+		{Addr: ":" + env("PORT", "8081"), Handler: apiRouter(surreal, redis, objects, clientAuth, limiter, counter, relay)},
 		{Addr: ":" + env("ASSETS_PORT", "8082"), Handler: assetRouter},
 	}
+	servers[0].RegisterOnShutdown(relay.Shutdown)
 	for _, server := range servers {
 		go listen(server)
 	}
@@ -147,7 +150,7 @@ func storageQuotaBytes() int64 {
 }
 
 func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects *objectstore.Store, clientAuth *middleware.ClientAuth,
-	limiter *ratelimit.Limiter, counter *ratelimit.RedisCounter) http.Handler {
+	limiter *ratelimit.Limiter, counter *ratelimit.RedisCounter, relay *relayhandlers.Handler) http.Handler {
 	router := chi.NewRouter()
 	router.Use(chimiddleware.Logger)
 	router.Use(chimiddleware.Recoverer)
@@ -158,6 +161,10 @@ func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects 
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
+
+	signedInRelay := clientAuth.JWTMiddleware(middleware.PrincipalMiddleware(surreal)(limiter.Authenticated(relay.SignedIn())))
+	anonymousRelay := limiter.ByIP(ratelimit.BucketPublic)(relay.Anonymous())
+	router.Handle("/api/v1/relay", relayhandlers.ChooseByToken(signedInRelay, anonymousRelay))
 
 	nodes := nodehandlers.NewHandler(surreal)
 	blobs := blobhandlers.NewHandler(surreal, objects).WithLimiter(limiter)
