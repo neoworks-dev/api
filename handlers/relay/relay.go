@@ -63,13 +63,17 @@ type Handler struct {
 	limits  Limits
 	upgrade websocket.Upgrader
 
+	leases connectionLeases
+
 	mutex       sync.Mutex
-	connections map[string]int
+	shutDown    bool
+	connections map[*connection]struct{}
 }
 
 func NewHandler(hub *Hub, clients ClientLookup, limiter FrameLimiter) *Handler {
 	return &Handler{
-		hub: hub, clients: clients, limiter: limiter, limits: DefaultLimits, connections: map[string]int{},
+		hub: hub, clients: clients, limiter: limiter, limits: DefaultLimits,
+		leases: connectionLeases{client: hub.client}, connections: map[*connection]struct{}{},
 		// Tokens travel in a header or subprotocol, never a cookie, so the
 		// origin of the page gives an attacker nothing to ride on.
 		upgrade: websocket.Upgrader{
@@ -121,41 +125,73 @@ func (handler *Handler) Anonymous() http.Handler {
 }
 
 func (handler *Handler) serve(w http.ResponseWriter, r *http.Request, who identity) {
-	releaseKey, admitted := handler.admit(who)
+	if handler.isShutDown() {
+		respond.Error(w, http.StatusServiceUnavailable, "unavailable", "relay is shutting down")
+		return
+	}
+	held, admitted, err := handler.leases.acquire(r.Context(), who, handler.connectionLimit(who))
+	if err != nil {
+		slog.Warn("relay connection lease", "error", err)
+		respond.Error(w, http.StatusServiceUnavailable, "unavailable", "relay is unavailable")
+		return
+	}
 	if !admitted {
 		respond.Error(w, http.StatusTooManyRequests, "too_many_connections", "too many open relay connections")
 		return
 	}
-	defer handler.release(releaseKey)
+	defer handler.leases.release(held)
 	socket, err := handler.upgrade.Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}
-	newConnection(handler, socket, who).run(r.Context())
+	conn := newConnection(handler, socket, who)
+	if !handler.track(conn) {
+		conn.goAway()
+		return
+	}
+	defer handler.untrack(conn)
+	go handler.leases.keepRenewed(held, conn.done)
+	conn.run(r.Context())
 }
 
-func (handler *Handler) admit(who identity) (string, bool) {
-	key := "ip:" + who.ip
-	limit := handler.limits.MaxConnectionsPerIP
+func (handler *Handler) connectionLimit(who identity) int {
 	if who.signedIn() {
-		key = "user:" + who.clientID + ":" + who.userID
-		limit = handler.limits.MaxConnectionsPerUser
+		return handler.limits.MaxConnectionsPerUser
 	}
-	handler.mutex.Lock()
-	defer handler.mutex.Unlock()
-	if handler.connections[key] >= limit {
-		return "", false
-	}
-	handler.connections[key]++
-	return key, true
+	return handler.limits.MaxConnectionsPerIP
 }
 
-func (handler *Handler) release(key string) {
+func (handler *Handler) isShutDown() bool {
 	handler.mutex.Lock()
 	defer handler.mutex.Unlock()
-	handler.connections[key]--
-	if handler.connections[key] <= 0 {
-		delete(handler.connections, key)
+	return handler.shutDown
+}
+
+func (handler *Handler) track(conn *connection) bool {
+	handler.mutex.Lock()
+	defer handler.mutex.Unlock()
+	if handler.shutDown {
+		return false
+	}
+	handler.connections[conn] = struct{}{}
+	return true
+}
+
+func (handler *Handler) untrack(conn *connection) {
+	handler.mutex.Lock()
+	defer handler.mutex.Unlock()
+	delete(handler.connections, conn)
+}
+
+// Shutdown tells every open connection the server is going away and refuses
+// new ones. http.Server.Shutdown does not see hijacked connections, so register
+// it with RegisterOnShutdown.
+func (handler *Handler) Shutdown() {
+	handler.mutex.Lock()
+	defer handler.mutex.Unlock()
+	handler.shutDown = true
+	for conn := range handler.connections {
+		conn.goAway()
 	}
 }
 

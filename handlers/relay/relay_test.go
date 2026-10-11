@@ -48,7 +48,8 @@ func signInAsTokenParts(next http.Handler) http.Handler {
 }
 
 type instance struct {
-	server *httptest.Server
+	server  *httptest.Server
+	handler *relay.Handler
 }
 
 func newInstance(t *testing.T, redisAddress string, limits relay.Limits) *instance {
@@ -66,7 +67,7 @@ func newInstance(t *testing.T, redisAddress string, limits relay.Limits) *instan
 		hub.Close()
 		_ = redisClient.Close()
 	})
-	return &instance{server: server}
+	return &instance{server: server, handler: handler}
 }
 
 func (inst *instance) websocketURL(query string) string {
@@ -365,4 +366,75 @@ func TestMalformedAndInvalidFramesGetErrors(t *testing.T) {
 	expectError(t, socket, "invalid_frame")
 	send(t, socket, frame{"type": "subscribe", "topic": ""})
 	expectError(t, socket, "invalid_topic")
+}
+
+func dialStatus(dialer *websocket.Dialer, url string) int {
+	socket, response, err := dialer.Dial(url, nil)
+	if err == nil {
+		_ = socket.Close()
+		return http.StatusSwitchingProtocols
+	}
+	if response == nil {
+		return 0
+	}
+	return response.StatusCode
+}
+
+func TestConnectionCapsHoldAcrossInstances(t *testing.T) {
+	limits := relay.DefaultLimits
+	limits.MaxConnectionsPerIP = 1
+	redisServer := miniredis.RunT(t)
+	firstInstance := newInstance(t, redisServer.Addr(), limits)
+	secondInstance := newInstance(t, redisServer.Addr(), limits)
+	firstInstance.dialAnonymous(t, "appA")
+
+	status := dialStatus(websocket.DefaultDialer, secondInstance.websocketURL("?client_id=appA"))
+
+	if status != http.StatusTooManyRequests {
+		t.Fatalf("second connection on another instance answered %d", status)
+	}
+}
+
+func TestClosingAConnectionFreesItsPlace(t *testing.T) {
+	limits := relay.DefaultLimits
+	limits.MaxConnectionsPerIP = 1
+	inst := newInstance(t, miniredis.RunT(t).Addr(), limits)
+	_ = inst.dialAnonymous(t, "appA").Close()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for dialStatus(websocket.DefaultDialer, inst.websocketURL("?client_id=appA")) != http.StatusSwitchingProtocols {
+		if time.Now().After(deadline) {
+			t.Fatal("the place of a closed connection was never freed")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func TestExpiredLeasesOfACrashedInstanceDoNotCount(t *testing.T) {
+	limits := relay.DefaultLimits
+	limits.MaxConnectionsPerIP = 1
+	redisServer := miniredis.RunT(t)
+	inst := newInstance(t, redisServer.Addr(), limits)
+	if _, err := redisServer.ZAdd("relay:connections:ip:127.0.0.1", 1, "crashed-instance"); err != nil {
+		t.Fatalf("seed stale lease: %v", err)
+	}
+
+	inst.dialAnonymous(t, "appA")
+}
+
+func TestShutdownClosesConnectionsAsGoingAway(t *testing.T) {
+	inst := newInstance(t, miniredis.RunT(t).Addr(), relay.DefaultLimits)
+	socket := inst.dialAnonymous(t, "appA")
+
+	inst.handler.Shutdown()
+
+	_ = socket.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, _, err := socket.ReadMessage()
+	if !websocket.IsCloseError(err, websocket.CloseGoingAway) {
+		t.Fatalf("expected a going away close, got %v", err)
+	}
+	status := dialStatus(websocket.DefaultDialer, inst.websocketURL("?client_id=appA"))
+	if status == http.StatusSwitchingProtocols {
+		t.Fatal("a connection was accepted after shutdown")
+	}
 }

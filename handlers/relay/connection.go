@@ -69,6 +69,14 @@ func (conn *connection) close() {
 	})
 }
 
+// goAway closes the connection with 1001 so clients reconnect, usually to
+// another instance.
+func (conn *connection) goAway() {
+	message := websocket.FormatCloseMessage(websocket.CloseGoingAway, "server shutting down")
+	_ = conn.socket.WriteControl(websocket.CloseMessage, message, time.Now().Add(writeTimeout))
+	conn.close()
+}
+
 // run serves the connection until the client leaves or it is closed.
 func (conn *connection) run(ctx context.Context) {
 	go conn.writeLoop()
