@@ -13,13 +13,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/neoworks/auth/access"
+	"github.com/neoworks/auth/connectionlease"
 	"github.com/neoworks/auth/handlers/changes"
 	"github.com/neoworks/auth/middleware"
 	"github.com/neoworks/auth/oauth"
 	"github.com/neoworks/auth/storage/database"
+	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -140,6 +143,14 @@ func signIn(next http.Handler) http.Handler {
 	})
 }
 
+// newTestLeases gives each test server its own Redis for the stream caps.
+func newTestLeases(t *testing.T) connectionlease.Leases {
+	t.Helper()
+	client := redis.NewClient(&redis.Options{Addr: miniredis.RunT(t).Addr()})
+	t.Cleanup(func() { _ = client.Close() })
+	return connectionlease.New(client)
+}
+
 type feedServer struct {
 	server *httptest.Server
 	hub    *changes.Hub
@@ -148,12 +159,19 @@ type feedServer struct {
 
 func newFeedServer(t *testing.T, limits changes.Limits) *feedServer {
 	t.Helper()
+	return newFeedServerSharing(t, limits, newTestLeases(t))
+}
+
+// newFeedServerSharing builds an instance whose stream caps live in the given
+// Redis, as every instance of a deployment shares one.
+func newFeedServerSharing(t *testing.T, limits changes.Limits, leases connectionlease.Leases) *feedServer {
+	t.Helper()
 	feed := newFakeFeed()
 	hub := changes.NewHub(feed).WithLimits(limits)
 	router := chi.NewRouter()
 	router.Group(func(authenticated chi.Router) {
 		authenticated.Use(signIn)
-		changes.NewHandler(hub, feed).RegisterAuthenticated(authenticated)
+		changes.NewHandler(hub, feed, leases).RegisterAuthenticated(authenticated)
 	})
 	server := httptest.NewUnstartedServer(router)
 	server.Config.RegisterOnShutdown(hub.Shutdown)
@@ -594,6 +612,20 @@ func TestStreamsPerUserAreCapped(t *testing.T) {
 	}
 	opened[0].close()
 	waitUntilAdmitted(t, fixture, options)
+}
+
+func TestStreamsPerUserAreCappedAcrossInstances(t *testing.T) {
+	leases := newTestLeases(t)
+	first := newFeedServerSharing(t, fastLimits, leases)
+	second := newFeedServerSharing(t, fastLimits, leases)
+	options := clientOptions{userID: "owner", scopes: photos + ":read"}
+	for range fastLimits.MaxStreamsPerUser {
+		first.open(t, options)
+	}
+
+	if _, status := second.tryOpen(t, options); status != http.StatusTooManyRequests {
+		t.Fatalf("a stream on another instance over the cap: status %d", status)
+	}
 }
 
 func waitUntilAdmitted(t *testing.T, fixture *feedServer, options clientOptions) {

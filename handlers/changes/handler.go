@@ -2,24 +2,25 @@ package changes
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/neoworks/auth/connectionlease"
 	"github.com/neoworks/auth/handlers/respond"
 	"github.com/neoworks/auth/middleware"
 )
 
 type Handler struct {
-	hub  *Hub
-	feed Feed
+	hub    *Hub
+	feed   Feed
+	leases connectionlease.Leases
 }
 
-func NewHandler(hub *Hub, feed Feed) *Handler {
-	return &Handler{hub: hub, feed: feed}
+func NewHandler(hub *Hub, feed Feed, leases connectionlease.Leases) *Handler {
+	return &Handler{hub: hub, feed: feed, leases: leases}
 }
 
 // RegisterAuthenticated mounts the stream behind the principal middleware.
@@ -38,10 +39,15 @@ func (handler *Handler) stream(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, http.StatusBadRequest, "invalid_last_event_id", "Last-Event-ID must be a sequence number")
 		return
 	}
+	releaseLease, admitted := handler.admit(w, r, principal.UserID)
+	if !admitted {
+		return
+	}
+	defer releaseLease()
 	open := newStream(principal, handler.hub.limits.StreamBuffer)
 	release, err := handler.hub.register(open)
 	if err != nil {
-		writeRegisterError(w, err)
+		respond.Error(w, http.StatusServiceUnavailable, "unavailable", "change feed is shutting down")
 		return
 	}
 	defer release()
@@ -57,12 +63,26 @@ func (handler *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	handler.pump(r.Context(), open, w, flusher)
 }
 
-func writeRegisterError(w http.ResponseWriter, err error) {
-	if errors.Is(err, errShutDown) {
-		respond.Error(w, http.StatusServiceUnavailable, "unavailable", "change feed is shutting down")
-		return
+// admit takes one of the user's stream places in Redis and keeps it renewed
+// until the returned function releases it. It answers the request itself when
+// the user is at the cap or Redis is unreachable.
+func (handler *Handler) admit(w http.ResponseWriter, r *http.Request, userID string) (func(), bool) {
+	lease, admitted, err := handler.leases.Acquire(r.Context(), "changes:streams:user:"+userID, handler.hub.limits.MaxStreamsPerUser)
+	if err != nil {
+		slog.Warn("change stream lease", "error", err)
+		respond.Error(w, http.StatusServiceUnavailable, "unavailable", "change feed is unavailable")
+		return nil, false
 	}
-	respond.Error(w, http.StatusTooManyRequests, "too_many_streams", "too many open change streams")
+	if !admitted {
+		respond.Error(w, http.StatusTooManyRequests, "too_many_streams", "too many open change streams")
+		return nil, false
+	}
+	held := make(chan struct{})
+	go handler.leases.Hold(lease, held)
+	return func() {
+		close(held)
+		handler.leases.Release(lease)
+	}, true
 }
 
 func writeStreamHeaders(w http.ResponseWriter) {

@@ -11,14 +11,12 @@ import (
 	"github.com/neoworks/auth/storage/database"
 )
 
-var (
-	errShutDown    = errors.New("change feed is shutting down")
-	errTooManyOpen = errors.New("too many open change streams")
-)
+var errShutDown = errors.New("change feed is shutting down")
 
 // Limits are the caps and timings of the feed.
 type Limits struct {
-	// MaxStreamsPerUser caps the open streams of one account on this instance.
+	// MaxStreamsPerUser caps the open streams of one account across every
+	// instance sharing the Redis.
 	MaxStreamsPerUser int
 	// StreamBuffer is how many frames may wait for one slow client.
 	StreamBuffer int
@@ -54,14 +52,13 @@ type Hub struct {
 	watching bool
 	shutDown bool
 	streams  map[database.FeedRecipient]map[*stream]struct{}
-	perUser  map[string]int
 }
 
 func NewHub(feed Feed) *Hub {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Hub{
 		feed: feed, limits: DefaultLimits, ctx: ctx, cancel: cancel, exited: make(chan struct{}),
-		streams: map[database.FeedRecipient]map[*stream]struct{}{}, perUser: map[string]int{},
+		streams: map[database.FeedRecipient]map[*stream]struct{}{},
 	}
 }
 
@@ -198,15 +195,11 @@ func (hub *Hub) register(open *stream) (func(), error) {
 	if hub.shutDown {
 		return nil, errShutDown
 	}
-	if hub.perUser[open.principal.UserID] >= hub.limits.MaxStreamsPerUser {
-		return nil, errTooManyOpen
-	}
 	key := principalKey(open.principal)
 	if hub.streams[key] == nil {
 		hub.streams[key] = map[*stream]struct{}{}
 	}
 	hub.streams[key][open] = struct{}{}
-	hub.perUser[open.principal.UserID]++
 	if !hub.watching {
 		open.send(resyncMessage(reasonLost))
 	}
@@ -220,10 +213,6 @@ func (hub *Hub) unregister(open *stream) {
 	delete(hub.streams[key], open)
 	if len(hub.streams[key]) == 0 {
 		delete(hub.streams, key)
-	}
-	hub.perUser[open.principal.UserID]--
-	if hub.perUser[open.principal.UserID] == 0 {
-		delete(hub.perUser, open.principal.UserID)
 	}
 }
 

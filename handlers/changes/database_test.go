@@ -30,7 +30,7 @@ func newLiveFixture(t *testing.T) *liveFixture {
 	router := chi.NewRouter()
 	router.Group(func(authenticated chi.Router) {
 		authenticated.Use(signIn)
-		changes.NewHandler(hub, feed).RegisterAuthenticated(authenticated)
+		changes.NewHandler(hub, feed, newTestLeases(t)).RegisterAuthenticated(authenticated)
 	})
 	server := httptest.NewServer(router)
 	hub.Start()

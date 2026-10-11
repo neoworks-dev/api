@@ -16,6 +16,7 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
 	"github.com/neoworks/auth/config"
+	"github.com/neoworks/auth/connectionlease"
 	"github.com/neoworks/auth/crypto"
 	"github.com/neoworks/auth/domainproof"
 	adminhandlers "github.com/neoworks/auth/handlers/admin"
@@ -79,7 +80,7 @@ func main() {
 	relay := relayhandlers.NewHandler(relayhandlers.NewHub(redis.Client()), surreal, limiter)
 	changeHub := changehandlers.NewHub(changehandlers.StoreFeed{SurrealStore: surreal})
 	changeHub.Start()
-	changeFeed := changehandlers.NewHandler(changeHub, changehandlers.StoreFeed{SurrealStore: surreal})
+	changeFeed := changehandlers.NewHandler(changeHub, changehandlers.StoreFeed{SurrealStore: surreal}, connectionlease.New(redis.Client()))
 	assetRouter := limiter.ByIP(ratelimit.BucketAssets)(assethandlers.NewHandler(surreal, redis, objects, clientAuth).Router())
 	servers := []*http.Server{
 		{Addr: ":" + env("PORT", "8081"), Handler: apiRouter(surreal, redis, objects, clientAuth, limiter, counter, relay, changeFeed)},
