@@ -3,6 +3,8 @@ package cache
 import (
 	"reflect"
 	"testing"
+
+	"github.com/alicebob/miniredis/v2"
 )
 
 func TestConfigFromEnvSingleNode(t *testing.T) {
@@ -51,5 +53,18 @@ func TestNewRedisStoreBothTopologies(t *testing.T) {
 	})
 	if sentinel == nil || sentinel.client == nil {
 		t.Fatal("sentinel store or client is nil")
+	}
+}
+
+func TestTheStoreAuthenticatesWithTheConfiguredPassword(t *testing.T) {
+	server := miniredis.RunT(t)
+	server.RequireAuth("secret")
+	t.Setenv("REDIS_URL", server.Addr())
+	t.Setenv("REDIS_PASSWORD", "secret")
+
+	store := NewRedisStore(ConfigFromEnv())
+
+	if err := store.Client().Ping(t.Context()).Err(); err != nil {
+		t.Fatalf("ping with the password: %v", err)
 	}
 }
