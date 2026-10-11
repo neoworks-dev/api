@@ -150,6 +150,43 @@
           },
           "required": true,
           "constraints": {}
+        },
+        {
+          "ordinal": 8,
+          "name": "file",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "uuid",
+            "reference": "example.songs.SongFile"
+          },
+          "required": false,
+          "constraints": {}
+        }
+      ]
+    },
+    {
+      "name": "SongFile",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "filename",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": true,
+          "constraints": {
+            "minLength": 1,
+            "maxLength": 255
+          }
         }
       ]
     }
@@ -186,7 +223,8 @@
             4,
             5,
             6,
-            7
+            7,
+            8
           ]
         }
       ],
@@ -195,6 +233,22 @@
         2,
         3
       ],
+      "title": 1,
+      "timeRange": null
+    },
+    {
+      "kind": "asset",
+      "model": "SongFile",
+      "facets": [
+        {
+          "name": "default",
+          "tag": 1,
+          "fields": [
+            1
+          ]
+        }
+      ],
+      "searchable": [],
       "title": 1,
       "timeRange": null
     }

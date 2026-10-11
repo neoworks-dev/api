@@ -467,7 +467,8 @@
           },
           "value": {
             "kind": "scalar",
-            "scalar": "string"
+            "scalar": "uuid",
+            "reference": "neoworks.contacts.Picture"
           },
           "required": false,
           "constraints": {}
@@ -639,6 +640,28 @@
           },
           "required": true,
           "constraints": {}
+        }
+      ]
+    },
+    {
+      "name": "Picture",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "name",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": true,
+          "constraints": {
+            "minLength": 1,
+            "maxLength": 255
+          }
         }
       ]
     },
@@ -1192,6 +1215,22 @@
         19
       ],
       "title": 3,
+      "timeRange": null
+    },
+    {
+      "kind": "asset",
+      "model": "Picture",
+      "facets": [
+        {
+          "name": "default",
+          "tag": 1,
+          "fields": [
+            1
+          ]
+        }
+      ],
+      "searchable": [],
+      "title": 1,
       "timeRange": null
     }
   ]
