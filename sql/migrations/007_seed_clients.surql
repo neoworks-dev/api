@@ -126,6 +126,20 @@ CREATE client CONTENT {
     public:            true
 };
 
+-- Sample third-party app on a non-@neoworks collection (apps/songs in the superproject).
+CREATE client CONTENT {
+    id:                "example-songs",
+    name:              "Songs",
+    secret_hash:       NONE,
+    redirect_uris:     [
+        "http://localhost:5179/callback",
+        "https://songs.neoworks.localhost:8443/callback"
+    ],
+    scopes:            ["openid", "profile", "email", "@example/songs:read", "@example/songs:write"],
+    auto_grant_scopes: true,
+    public:            true
+};
+
 -- OpenSchema registry site. `schemas:publish` lets the signed-in user publish
 -- schema versions; reading the registry needs no token.
 CREATE client CONTENT {
