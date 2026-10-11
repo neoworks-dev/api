@@ -52,7 +52,7 @@ func HandleConsentRedirect(
 		return
 	}
 
-	if client.AutoGrantScopes {
+	if client.FirstParty {
 
 		err := redis.DeleteLoginChallenge(ctx, loginChallenge.ID)
 		if err != nil {

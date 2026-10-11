@@ -51,13 +51,13 @@ type TokenResponse struct {
 }
 
 type Client struct {
-	ID              *models.RecordID `json:"id"`
-	Name            *string          `json:"name,omitempty"`
-	SecretHash      string           `json:"secret_hash"`
-	RedirectURIs    []string         `json:"redirect_uris"`
-	Scopes          []string         `json:"scopes"`
-	AutoGrantScopes bool             `json:"auto_grant_scopes"`
-	Public          bool             `json:"public"` // PKCE-only, no secret
+	ID           *models.RecordID `json:"id"`
+	Name         *string          `json:"name,omitempty"`
+	SecretHash   string           `json:"secret_hash"`
+	RedirectURIs []string         `json:"redirect_uris"`
+	Scopes       []string         `json:"scopes"`
+	FirstParty   bool             `json:"first_party"`
+	Public       bool             `json:"public"` // PKCE-only, no secret
 }
 
 type AuthCode struct {

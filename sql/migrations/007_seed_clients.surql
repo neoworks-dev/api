@@ -1,7 +1,9 @@
--- First-party OAuth clients. All are public PKCE clients with no secret. Native
--- builds redirect to a custom scheme, browser builds to a localhost route and to
--- the dev and prod hosts. The MCP's loopback callback (NW_MCP_REDIRECT_PORT,
--- default 8765) is registered on every client so `login` works with any of them.
+-- Seed OAuth clients. All are public PKCE clients with no secret. `first_party`
+-- is set only here: first-party clients may skip the consent screen, every other
+-- client always shows it. Native builds redirect to a custom scheme, browser
+-- builds to a localhost route and to the dev and prod hosts. The MCP's loopback
+-- callback (NW_MCP_REDIRECT_PORT, default 8765) is registered on every client so
+-- `login` works with any of them.
 --
 -- A collection is the registry path `@scope/name` of the schema its nodes follow.
 -- A collection scope `<collection>:read|write` is the ceiling for the role any
@@ -21,7 +23,7 @@ CREATE client CONTENT {
         "http://127.0.0.1:8765/callback"
     ],
     scopes:            ["openid", "profile", "email"],
-    auto_grant_scopes: true,
+    first_party:       true,
     public:            true
 };
 
@@ -36,7 +38,7 @@ CREATE client CONTENT {
         "http://127.0.0.1:8765/callback"
     ],
     scopes:            ["openid", "profile", "email"],
-    auto_grant_scopes: true,
+    first_party:       true,
     public:            true
 };
 
@@ -57,7 +59,7 @@ CREATE client CONTENT {
         "@neoworks/contacts:read",
         "@neoworks/google:read", "@neoworks/google:write", "@neoworks/google:share"
     ],
-    auto_grant_scopes: true,
+    first_party:       true,
     public:            true
 };
 
@@ -74,7 +76,7 @@ CREATE client CONTENT {
         "@neoworks/contacts:read",
         "@neoworks/google:read", "@neoworks/google:write", "@neoworks/google:share"
     ],
-    auto_grant_scopes: true,
+    first_party:       true,
     public:            true
 };
 
@@ -90,7 +92,7 @@ CREATE client CONTENT {
         "http://127.0.0.1:8765/callback"
     ],
     scopes:            ["openid", "profile", "email", "@neoworks/contacts:read", "@neoworks/contacts:write", "@neoworks/contacts:share"],
-    auto_grant_scopes: true,
+    first_party:       true,
     public:            true
 };
 
@@ -106,23 +108,7 @@ CREATE client CONTENT {
         "http://127.0.0.1:8765/callback"
     ],
     scopes:            ["openid", "profile", "email", "@neoworks/photos:read", "@neoworks/photos:write", "@neoworks/photos:share", "@neoworks/contacts:read"],
-    auto_grant_scopes: true,
-    public:            true
-};
-
-CREATE client CONTENT {
-    id:                "neoworks-files",
-    name:              "Neoworks Files",
-    secret_hash:       NONE,
-    redirect_uris:     [
-        "dev.neoworks.files://callback",
-        "http://localhost:5183/callback",
-        "https://files.neoworks.localhost:8443/callback",
-        "https://files.neoworks.dev/callback",
-        "http://127.0.0.1:8765/callback"
-    ],
-    scopes:            ["openid", "profile", "email", "@neoworks/files:read", "@neoworks/files:write", "@neoworks/files:share"],
-    auto_grant_scopes: true,
+    first_party:       true,
     public:            true
 };
 
@@ -136,7 +122,7 @@ CREATE client CONTENT {
         "https://songs.neoworks.localhost:8443/callback"
     ],
     scopes:            ["openid", "profile", "email", "@example/songs:read", "@example/songs:write"],
-    auto_grant_scopes: true,
+    first_party:       false,
     public:            true
 };
 
@@ -153,6 +139,6 @@ CREATE client CONTENT {
         "http://127.0.0.1:8765/callback"
     ],
     scopes:            ["openid", "profile", "email", "schemas:publish"],
-    auto_grant_scopes: true,
+    first_party:       true,
     public:            true
 };

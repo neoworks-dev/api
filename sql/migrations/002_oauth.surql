@@ -9,7 +9,9 @@ DEFINE FIELD name              ON client TYPE option<string>;
 DEFINE FIELD secret_hash       ON client TYPE option<string>;
 DEFINE FIELD redirect_uris     ON client TYPE array<string> DEFAULT [];
 DEFINE FIELD scopes            ON client TYPE array<string> DEFAULT [];
-DEFINE FIELD auto_grant_scopes ON client TYPE bool DEFAULT false;
+-- Only first-party clients may skip the consent screen. Set when the client is
+-- created (the seed), never changed afterwards.
+DEFINE FIELD first_party       ON client TYPE bool DEFAULT false READONLY;
 DEFINE FIELD public            ON client TYPE bool DEFAULT false;
 
 DEFINE INDEX client_id ON client FIELDS id UNIQUE;
