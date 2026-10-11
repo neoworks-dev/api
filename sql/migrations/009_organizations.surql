@@ -39,9 +39,9 @@ DEFINE FIELD organization      ON organization_invitation TYPE record<organizati
 DEFINE FIELD email             ON organization_invitation TYPE option<string> READONLY;
 DEFINE FIELD contact_code      ON organization_invitation TYPE option<string> READONLY;
 DEFINE FIELD invitee           ON organization_invitation TYPE option<record<user>> READONLY;
-DEFINE FIELD grants            ON organization_invitation TYPE array<object> READONLY;
-DEFINE FIELD grants[*].permission ON organization_invitation TYPE string READONLY;
-DEFINE FIELD grants[*].app     ON organization_invitation TYPE option<string> READONLY;
+DEFINE FIELD grants            ON organization_invitation TYPE array<object>;
+DEFINE FIELD grants[*].permission ON organization_invitation TYPE string;
+DEFINE FIELD grants[*].app     ON organization_invitation TYPE option<string>;
 DEFINE FIELD invited_by        ON organization_invitation TYPE record<user> READONLY;
 DEFINE FIELD created_at        ON organization_invitation TYPE datetime VALUE $before OR time::now() READONLY;
 DEFINE FIELD expires_at        ON organization_invitation TYPE datetime READONLY;

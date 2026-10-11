@@ -17,6 +17,7 @@ import (
 	"github.com/neoworks/auth/config"
 	"github.com/neoworks/auth/crypto"
 	approvalhandlers "github.com/neoworks/auth/handlers/approvals"
+	apphandlers "github.com/neoworks/auth/handlers/apps"
 	assethandlers "github.com/neoworks/auth/handlers/assets"
 	blobhandlers "github.com/neoworks/auth/handlers/blobs"
 	contactcodehandlers "github.com/neoworks/auth/handlers/contactcodes"
@@ -159,6 +160,7 @@ func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects 
 			renewals.RegisterAuthenticator(account.With(middleware.RequireClient(env("AUTHENTICATOR_CLIENT_ID", "neoworks-authenticator"))))
 			dashboard := account.With(middleware.RequireClient(env("WEB_CLIENT_ID", "neoworks.dev")))
 			organizationhandlers.NewHandler(surreal).RegisterAuthenticated(dashboard)
+			apphandlers.NewHandler(surreal).RegisterAuthenticated(dashboard)
 			data := principals.With(middleware.RequireDataAccess(env("VAULT_CLIENT_ID", "neoworks.vault")))
 			nodes.RegisterAuthenticated(data)
 			renewals.RegisterVerifier(data)

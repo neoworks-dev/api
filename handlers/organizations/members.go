@@ -38,7 +38,7 @@ func (h *Handler) setMemberGrants(w http.ResponseWriter, r *http.Request) {
 	}
 	memberID := chi.URLParam(r, "userId")
 	after := ownership.Normalize(request.Grants)
-	if !h.checkGrantChange(w, r, acting, memberID, after) || !h.appsExist(w, r, after) {
+	if !h.checkGrantChange(w, r, acting, memberID, after) || !h.appsExist(w, r, acting.handle, after) {
 		return
 	}
 	if err := h.store.SetMemberGrants(r.Context(), acting.handle, memberID, after); err != nil {
@@ -70,15 +70,20 @@ func (h *Handler) checkGrantChange(w http.ResponseWriter, r *http.Request, actin
 	return true
 }
 
-// appsExist refuses per-app grants for apps that do not exist.
-func (h *Handler) appsExist(w http.ResponseWriter, r *http.Request, grants []ownership.Grant) bool {
+// appsExist refuses per-app grants for apps the organization does not own.
+func (h *Handler) appsExist(w http.ResponseWriter, r *http.Request, organization string, grants []ownership.Grant) bool {
 	for _, grant := range grants {
 		if grant.AppID == nil {
 			continue
 		}
-		if _, err := h.store.GetClient(r.Context(), *grant.AppID); err != nil {
+		owned, err := h.store.AppBelongsTo(r.Context(), *grant.AppID, organization)
+		if err != nil {
+			writeStoreError(w, "appBelongsTo", err)
+			return false
+		}
+		if !owned {
 			respond.JSON(w, http.StatusBadRequest, map[string]string{
-				"error": "unknown_app", "field": "grants", "message": "no app " + *grant.AppID,
+				"error": "unknown_app", "field": "grants", "message": "no app " + *grant.AppID + " in this organization",
 			})
 			return false
 		}

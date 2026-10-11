@@ -24,6 +24,12 @@ const (
 	AuditInvitationRevoked    = "invitation.revoked"
 	AuditInvitationAccepted   = "invitation.accepted"
 	AuditInvitationDeclined   = "invitation.declined"
+
+	AuditAppCreated             = "app.created"
+	AuditAppDeleted             = "app.deleted"
+	AuditAppRedirectURIsChanged = "app.redirect_uris_changed"
+	AuditAppScopesChanged       = "app.scopes_changed"
+	AuditAppSecretRotated       = "app.secret_rotated"
 )
 
 // AuditTarget is what an audit entry is about.

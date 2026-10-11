@@ -32,7 +32,6 @@ func newNode(author access.Principal, ownerID, collection, kind string, parentID
 
 func (f *fixture) push(author access.Principal, node database.Node) *database.PushOutcome {
 	f.t.Helper()
-	dbtest.PublishNodeSchemas(f.t, f.store)
 	validated, err := database.ValidateNodeInput(node, author)
 	if err != nil {
 		f.t.Fatalf("validate: %v", err)

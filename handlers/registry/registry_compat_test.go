@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/neoworks/auth/handlers/handlertest"
-	"github.com/neoworks/auth/handlers/registry"
 	"github.com/neoworks/auth/registrycompat"
 	"github.com/neoworks/auth/storage/database"
 )
@@ -64,7 +63,7 @@ func songsBody(t *testing.T, version string, descriptor *registrycompat.Descript
 
 func TestTheSongsHistoryPublishesAndIsListed(t *testing.T) {
 	f := newFixture(t)
-	owner := handlertest.CreateUser(t, f.store, registry.PublishScope)
+	owner := f.publisher(t, "example")
 	first := f.router.Do(t, owner, "POST", songsPath+"/versions", songsBody(t, "0.1.0", withoutPlaylist(songsDescriptor(t))), nil)
 	second := f.router.Do(t, owner, "POST", songsPath+"/versions", songsBody(t, "0.2.0", songsDescriptor(t)), nil)
 	if first.Code != http.StatusCreated || second.Code != http.StatusCreated {
@@ -85,7 +84,7 @@ func TestTheSongsHistoryPublishesAndIsListed(t *testing.T) {
 
 func TestAnIncompatibleVersionIsRefusedWithItsViolationsAndRecorded(t *testing.T) {
 	f := newFixture(t)
-	owner := handlertest.CreateUser(t, f.store, registry.PublishScope)
+	owner := f.publisher(t, "example")
 	f.router.Do(t, owner, "POST", songsPath+"/versions", songsBody(t, "0.1.0", songsDescriptor(t)), nil)
 
 	broken := songsDescriptor(t)
@@ -128,7 +127,7 @@ func TestAnIncompatibleVersionIsRefusedWithItsViolationsAndRecorded(t *testing.T
 
 func TestEveryPublishedVersionIsCheckedNotOnlyTheLatest(t *testing.T) {
 	f := newFixture(t)
-	owner := handlertest.CreateUser(t, f.store, registry.PublishScope)
+	owner := f.publisher(t, "example")
 	withLegacy := songsDescriptor(t)
 	withLegacy.Models[1].Fields = append(withLegacy.Models[1].Fields, registrycompat.Field{
 		Ordinal: 8, Name: "legacy", Container: registrycompat.Container{Kind: "singular", Nullable: true},
@@ -150,7 +149,7 @@ func TestEveryPublishedVersionIsCheckedNotOnlyTheLatest(t *testing.T) {
 
 func TestRepublishingAVersionIsRecordedAsRefused(t *testing.T) {
 	f := newFixture(t)
-	owner := handlertest.CreateUser(t, f.store, registry.PublishScope)
+	owner := f.publisher(t, "example")
 	f.router.Do(t, owner, "POST", songsPath+"/versions", songsBody(t, "0.1.0", songsDescriptor(t)), nil)
 	if again := f.router.Do(t, owner, "POST", songsPath+"/versions", songsBody(t, "0.1.0", songsDescriptor(t)), nil); again.Code != http.StatusConflict {
 		t.Fatalf("republish: got %d want 409", again.Code)
@@ -162,10 +161,10 @@ func TestRepublishingAVersionIsRecordedAsRefused(t *testing.T) {
 	}
 }
 
-func TestOnlyTheOwnerReadsThePublishesAndIntrudersLeaveNoTrace(t *testing.T) {
+func TestOnlyPublishersOfTheScopeReadThePublishesAndIntrudersLeaveNoTrace(t *testing.T) {
 	f := newFixture(t)
-	owner := handlertest.CreateUser(t, f.store, registry.PublishScope)
-	intruder := handlertest.CreateUser(t, f.store, registry.PublishScope)
+	owner := f.publisher(t, "example")
+	intruder := f.publisher(t, "intruder")
 	f.router.Do(t, owner, "POST", songsPath+"/versions", songsBody(t, "0.1.0", songsDescriptor(t)), nil)
 
 	if response := f.router.Do(t, intruder, "POST", songsPath+"/versions", songsBody(t, "0.2.0", songsDescriptor(t)), nil); response.Code != http.StatusForbidden {

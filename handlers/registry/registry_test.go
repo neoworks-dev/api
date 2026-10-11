@@ -1,10 +1,12 @@
 package registry_test
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/neoworks/auth/access"
 	"github.com/neoworks/auth/handlers/handlertest"
 	"github.com/neoworks/auth/handlers/registry"
 	"github.com/neoworks/auth/storage/database"
@@ -12,18 +14,30 @@ import (
 )
 
 type fixture struct {
+	t      *testing.T
 	router *handlertest.Router
 	store  *database.SurrealStore
 }
 
 func newFixture(t *testing.T) fixture {
+	t.Helper()
 	store := dbtest.New(t)
 	handler := registry.NewHandler(store)
 	router := handlertest.NewAuthenticated(func(router chi.Router) {
 		handler.RegisterPublic(router)
 		handler.RegisterAuthenticated(router)
 	})
-	return fixture{router: router, store: store}
+	return fixture{t: t, router: router, store: store}
+}
+
+// publisher creates a user holding the handle, who may publish into its scope.
+func (f fixture) publisher(t *testing.T, handle string) access.Principal {
+	t.Helper()
+	user := handlertest.CreateUser(t, f.store, registry.PublishScope)
+	if err := f.store.ClaimUserHandle(context.Background(), user.UserID, handle); err != nil {
+		t.Fatalf("claim handle %s: %v", handle, err)
+	}
+	return user
 }
 
 func publishBody(version string) map[string]any {
@@ -39,9 +53,9 @@ func publishBody(version string) map[string]any {
 
 const commercePath = "/api/v1/schemas/acme/commerce"
 
-func TestPublishCreatesSchemaOwnedByThePublisherAndIsPubliclyReadable(t *testing.T) {
+func TestPublishCreatesTheSchemaInTheScopeOfThePublisherAndIsPubliclyReadable(t *testing.T) {
 	f := newFixture(t)
-	owner := handlertest.CreateUser(t, f.store, registry.PublishScope)
+	owner := f.publisher(t, "acme")
 
 	published := f.router.Do(t, owner, "POST", commercePath+"/versions", publishBody("1.0.0"), nil)
 	if published.Code != http.StatusCreated {
@@ -53,7 +67,7 @@ func TestPublishCreatesSchemaOwnedByThePublisherAndIsPubliclyReadable(t *testing
 		Versions []database.RegistryVersion `json:"versions"`
 	}
 	handlertest.Decode(t, f.router.DoAnonymous(t, "GET", commercePath), &detail)
-	if detail.Schema.OwnerID != owner.UserID || detail.Schema.LatestVersion != "1.0.0" || detail.Schema.Description != "Orders and customers" {
+	if detail.Schema.LatestVersion != "1.0.0" || detail.Schema.Description != "Orders and customers" {
 		t.Fatalf("schema: %+v", detail.Schema)
 	}
 	if len(detail.Versions) != 1 || detail.Versions[0].Version != "1.0.0" {
@@ -80,7 +94,7 @@ func TestPublishNeedsThePublishScope(t *testing.T) {
 
 func TestVersionsAreImmutableAndLatestFollowsTheLastPublish(t *testing.T) {
 	f := newFixture(t)
-	owner := handlertest.CreateUser(t, f.store, registry.PublishScope)
+	owner := f.publisher(t, "acme")
 	f.router.Do(t, owner, "POST", commercePath+"/versions", publishBody("1.0.0"), nil)
 
 	changed := publishBody("1.0.0")
@@ -107,10 +121,10 @@ func TestVersionsAreImmutableAndLatestFollowsTheLastPublish(t *testing.T) {
 	}
 }
 
-func TestAnotherUserCannotPublishOverASchema(t *testing.T) {
+func TestAnotherUserCannotPublishIntoAForeignScope(t *testing.T) {
 	f := newFixture(t)
-	owner := handlertest.CreateUser(t, f.store, registry.PublishScope)
-	intruder := handlertest.CreateUser(t, f.store, registry.PublishScope)
+	owner := f.publisher(t, "acme")
+	intruder := f.publisher(t, "intruder")
 	f.router.Do(t, owner, "POST", commercePath+"/versions", publishBody("1.0.0"), nil)
 
 	for _, version := range []string{"1.0.0", "2.0.0"} {
@@ -130,7 +144,7 @@ func TestAnotherUserCannotPublishOverASchema(t *testing.T) {
 
 func TestPublishRejectsInvalidInput(t *testing.T) {
 	f := newFixture(t)
-	owner := handlertest.CreateUser(t, f.store, registry.PublishScope)
+	owner := f.publisher(t, "acme")
 	noFiles := publishBody("1.0.0")
 	noFiles["files"] = []map[string]string{}
 	badVersion := publishBody("not a version")
@@ -158,7 +172,7 @@ func TestPublishRejectsInvalidInput(t *testing.T) {
 
 func TestListAndSearchArePublic(t *testing.T) {
 	f := newFixture(t)
-	owner := handlertest.CreateUser(t, f.store, registry.PublishScope)
+	owner := f.publisher(t, "acme")
 	identity := publishBody("1.0.0")
 	identity["description"] = "Accounts, sessions and roles"
 	f.router.Do(t, owner, "POST", "/api/v1/schemas/acme/identity/versions", identity, nil)
@@ -167,7 +181,7 @@ func TestListAndSearchArePublic(t *testing.T) {
 	var all struct {
 		Schemas []database.RegistrySchema `json:"schemas"`
 	}
-	handlertest.Decode(t, f.router.DoAnonymous(t, "GET", "/api/v1/schemas"), &all)
+	handlertest.Decode(t, f.router.DoAnonymous(t, "GET", "/api/v1/schemas?scope=acme"), &all)
 	if len(all.Schemas) != 2 || all.Schemas[0].Name != "commerce" {
 		t.Fatalf("list should be newest first: %+v", all.Schemas)
 	}
@@ -194,7 +208,7 @@ func TestListAndSearchArePublic(t *testing.T) {
 
 func TestLaterVersionsReplaceTheSchemaMetadata(t *testing.T) {
 	f := newFixture(t)
-	owner := handlertest.CreateUser(t, f.store, registry.PublishScope)
+	owner := f.publisher(t, "acme")
 	f.router.Do(t, owner, "POST", commercePath+"/versions", publishBody("1.0.0"), nil)
 	next := publishBody("1.1.0")
 	next["title"] = "Commerce Pro"
@@ -212,7 +226,7 @@ func TestLaterVersionsReplaceTheSchemaMetadata(t *testing.T) {
 
 func TestDescriptorIsServedByHash(t *testing.T) {
 	f := newFixture(t)
-	owner := handlertest.CreateUser(t, f.store, registry.PublishScope)
+	owner := f.publisher(t, "acme")
 	descriptor := "{\n  \"descriptorVersion\": 1\n}\n"
 	withDescriptor := publishBody("1.0.0")
 	withDescriptor["descriptor"] = descriptor

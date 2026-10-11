@@ -67,7 +67,6 @@ func (fx *fixture) storeFile(owner access.Principal, objectID string) string {
 }
 
 func (fx *fixture) push(author access.Principal, node database.Node) {
-	dbtest.PublishNodeSchemas(fx.t, fx.store)
 	validated, err := database.ValidateNodeInput(node, author)
 	if err != nil {
 		fx.t.Fatalf("validate: %v", err)

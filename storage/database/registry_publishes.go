@@ -20,7 +20,7 @@ type RegistryActor struct {
 	Verified    bool   `json:"verified"`
 }
 
-// RegistryPublishAttempt is one publish by a schema's owner, accepted or refused.
+// RegistryPublishAttempt is one publish into a schema's scope, accepted or refused.
 type RegistryPublishAttempt struct {
 	Version    string                     `json:"version"`
 	At         time.Time                  `json:"at"`
@@ -71,15 +71,15 @@ const registryPublishesStatement = `
 	FROM registry_publish WHERE schema = $schema ORDER BY created_at DESC LIMIT $limit`
 
 // ListRegistryPublishes returns the publish attempts of a schema, newest first.
-// Only the schema's owner may read them, because refused attempts are not part
-// of the public registry.
+// Only users who may publish into its scope read them, because refused attempts
+// are not part of the public registry.
 func (s *SurrealStore) ListRegistryPublishes(ctx context.Context, userID, scope, name string) ([]RegistryPublishAttempt, error) {
 	schemaRow, err := s.getRegistrySchemaRow(ctx, scope, name)
 	if err != nil {
 		return nil, err
 	}
-	if ownerID, _ := schemaRow.Owner.ID.(string); ownerID != userID {
-		return nil, ErrForbidden
+	if err := s.requireSchemaPublisher(ctx, userID, scope); err != nil {
+		return nil, err
 	}
 	rows, err := queryRows[dbPublishAttempt](ctx, s.DB, registryPublishesStatement,
 		map[string]any{"schema": schemaRow.ID, "limit": maxListedPublishes})
@@ -94,7 +94,7 @@ func (s *SurrealStore) ListRegistryPublishes(ctx context.Context, userID, scope,
 }
 
 // recordRefusedPublish stores a refused attempt with the violations that refused it.
-func (s *SurrealStore) recordRefusedPublish(ctx context.Context, schemaID models.RecordID, ownerID, version string, violations []registrycompat.Violation) error {
+func (s *SurrealStore) recordRefusedPublish(ctx context.Context, schemaID models.RecordID, actorID, version string, violations []registrycompat.Violation) error {
 	rows := make([]map[string]any, 0, len(violations))
 	for _, violation := range violations {
 		rows = append(rows, map[string]any{"rule": violation.Rule, "path": violation.Path, "message": violation.Message})
@@ -102,7 +102,7 @@ func (s *SurrealStore) recordRefusedPublish(ctx context.Context, schemaID models
 	_, err := queryRows[any](ctx, s.DB, `
 		CREATE registry_publish SET schema = $schema, version = $version, actor = $actor,
 			accepted = false, violations = $violations`,
-		map[string]any{"schema": schemaID, "version": version, "actor": models.NewRecordID("user", ownerID), "violations": rows})
+		map[string]any{"schema": schemaID, "version": version, "actor": userRecord(actorID), "violations": rows})
 	if err != nil {
 		return fmt.Errorf("record refused publish: %w", err)
 	}

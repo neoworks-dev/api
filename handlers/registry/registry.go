@@ -1,6 +1,6 @@
 // Package registry serves the public OpenSchema registry: anyone reads and
 // searches published schemas, a signed-in user with the schemas:publish scope
-// publishes versions of schemas they own.
+// publishes versions into the scope of an owner they hold schemas.publish for.
 package registry
 
 import (
@@ -44,8 +44,11 @@ func (h *Handler) RegisterAuthenticated(router chi.Router) {
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	query := strings.TrimSpace(r.URL.Query().Get("q"))
-	schemas, err := h.store.ListRegistrySchemas(r.Context(), query, limit)
+	schemas, err := h.store.ListRegistrySchemas(r.Context(), database.RegistryListFilter{
+		Query: strings.TrimSpace(r.URL.Query().Get("q")),
+		Scope: r.URL.Query().Get("scope"),
+		Limit: limit,
+	})
 	if err != nil {
 		respond.StoreError(w, "listRegistrySchemas", err)
 		return
@@ -93,7 +96,7 @@ func (h *Handler) getDescriptor(w http.ResponseWriter, r *http.Request) {
 }
 
 // listPublishes serves a schema's publish attempts, including refused ones, to
-// the schema's owner.
+// users who may publish into its scope.
 func (h *Handler) listPublishes(w http.ResponseWriter, r *http.Request) {
 	principal, _ := middleware.PrincipalFromContext(r.Context())
 	publishes, err := h.store.ListRegistryPublishes(r.Context(), principal.UserID, chi.URLParam(r, "scope"), chi.URLParam(r, "name"))

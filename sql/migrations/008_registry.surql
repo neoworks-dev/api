@@ -1,14 +1,14 @@
 -- ── OpenSchema registry: public schemas, publishable by any signed-in user ───
 -- Schemas are plain (not end-to-end encrypted) rows. Scope and name form the
--- public path `@scope/name`. The first publisher owns the schema; only the owner
--- publishes further versions. Versions and their files are immutable.
+-- public path `@scope/name`. The scope is a handle (see 009), so the schema is
+-- owned by whoever holds that handle and is published by members holding
+-- `schemas.publish`. Versions and their files are immutable.
 
 DEFINE ANALYZER registry_text TOKENIZERS class FILTERS lowercase, ascii;
 
 DEFINE TABLE registry_schema SCHEMAFULL;
 DEFINE FIELD scope           ON registry_schema TYPE string;
 DEFINE FIELD name            ON registry_schema TYPE string;
-DEFINE FIELD owner           ON registry_schema TYPE record<user> READONLY;
 -- title, description, license and repository follow the latest published manifest.
 DEFINE FIELD title           ON registry_schema TYPE string;
 DEFINE FIELD description     ON registry_schema TYPE string;
@@ -52,7 +52,7 @@ DEFINE FIELD ordinal  ON registry_schema_file TYPE int READONLY;
 
 DEFINE INDEX idx_registry_file_version ON registry_schema_file FIELDS version;
 
--- ── registry_publish: every publish attempt by a schema's owner ──────────────
+-- ── registry_publish: every publish attempt by a user acting for the scope ───
 -- Accepted publishes and refused ones (an incompatible descriptor, an existing
 -- version) with the violations that refused them. Append-only.
 DEFINE TABLE registry_publish SCHEMAFULL;

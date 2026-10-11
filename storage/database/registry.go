@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/surrealdb/surrealdb.go/pkg/models"
@@ -13,12 +14,11 @@ const (
 	maxRegistryLimit     = 200
 )
 
-// RegistrySchema is a published schema's current state: `@scope/name`, its owner
-// and the most recently published version.
+// RegistrySchema is a published schema's current state: `@scope/name` and the
+// most recently published version. The scope is the handle of its owner.
 type RegistrySchema struct {
 	Scope          string    `json:"scope"`
 	Name           string    `json:"name"`
-	OwnerID        string    `json:"ownerId"`
 	Title          string    `json:"title"`
 	Description    string    `json:"description"`
 	Tags           []string  `json:"tags"`
@@ -56,7 +56,6 @@ type dbRegistrySchema struct {
 	ID             models.RecordID `json:"id"`
 	Scope          string          `json:"scope"`
 	Name           string          `json:"name"`
-	Owner          models.RecordID `json:"owner"`
 	Title          string          `json:"title"`
 	Description    string          `json:"description"`
 	Tags           []string        `json:"tags"`
@@ -70,13 +69,12 @@ type dbRegistrySchema struct {
 }
 
 func (row dbRegistrySchema) toSchema() RegistrySchema {
-	ownerID, _ := row.Owner.ID.(string)
 	tags := row.Tags
 	if tags == nil {
 		tags = []string{}
 	}
 	return RegistrySchema{
-		Scope: row.Scope, Name: row.Name, OwnerID: ownerID, Title: row.Title, Description: row.Description,
+		Scope: row.Scope, Name: row.Name, Title: row.Title, Description: row.Description,
 		Tags: tags, License: row.License, Repository: row.Repository, LatestVersion: row.LatestVersion,
 		Official: row.Official, DownloadsTotal: row.DownloadsTotal,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
@@ -113,10 +111,9 @@ func (row dbRegistryVersion) toVersion() RegistryVersion {
 const registryVersionFields = "id, version, state, readme, targets, descriptor_hash, released_at, created_at"
 
 const (
-	registryListStatement   = "SELECT * FROM registry_schema ORDER BY updated_at DESC LIMIT $limit"
-	registrySearchStatement = `SELECT *, search::score(0) + search::score(1) + search::score(2) AS relevance
-		FROM registry_schema WHERE name @0@ $query OR title @1@ $query OR description @2@ $query
-		ORDER BY relevance DESC LIMIT $limit`
+	registryScopeCondition = "scope = $scope"
+	registryTextCondition  = "(name @0@ $query OR title @1@ $query OR description @2@ $query)"
+
 	registryGetStatement        = "SELECT * FROM registry_schema WHERE scope = $scope AND name = $name LIMIT 1"
 	registryVersionsStatement   = "SELECT " + registryVersionFields + " FROM registry_schema_version WHERE schema = $schema ORDER BY created_at DESC"
 	registryVersionStatement    = "SELECT " + registryVersionFields + " FROM registry_schema_version WHERE schema = $schema AND version = $version LIMIT 1"
@@ -124,15 +121,41 @@ const (
 	registryDescriptorStatement = "SELECT VALUE descriptor FROM registry_schema_version WHERE schema = $schema AND descriptor_hash = $hash LIMIT 1"
 )
 
-// ListRegistrySchemas returns schemas newest-updated first, or ranked by
-// full-text relevance over name, title and description when query is not empty.
-func (s *SurrealStore) ListRegistrySchemas(ctx context.Context, query string, limit int) ([]RegistrySchema, error) {
-	statement := registryListStatement
-	params := map[string]any{"limit": clampRegistryLimit(limit)}
-	if query != "" {
-		statement = registrySearchStatement
-		params["query"] = query
+// RegistryListFilter narrows a registry listing. Query is full-text over name,
+// title and description; Scope is a handle.
+type RegistryListFilter struct {
+	Query string
+	Scope string
+	Limit int
+}
+
+// registryListStatement builds the listing for the filter together with its
+// parameters: newest-updated first, or by relevance when there is a text query.
+func registryListStatement(filter RegistryListFilter) (string, map[string]any) {
+	params := map[string]any{"limit": clampRegistryLimit(filter.Limit)}
+	conditions := []string{}
+	selection := "SELECT *"
+	order := "updated_at DESC"
+	if filter.Query != "" {
+		selection = "SELECT *, search::score(0) + search::score(1) + search::score(2) AS relevance"
+		order = "relevance DESC"
+		conditions = append(conditions, registryTextCondition)
+		params["query"] = filter.Query
 	}
+	if filter.Scope != "" {
+		conditions = append(conditions, registryScopeCondition)
+		params["scope"] = filter.Scope
+	}
+	statement := selection + " FROM registry_schema"
+	if len(conditions) > 0 {
+		statement += " WHERE " + strings.Join(conditions, " AND ")
+	}
+	return statement + " ORDER BY " + order + " LIMIT $limit", params
+}
+
+// ListRegistrySchemas returns the schemas matching the filter.
+func (s *SurrealStore) ListRegistrySchemas(ctx context.Context, filter RegistryListFilter) ([]RegistrySchema, error) {
+	statement, params := registryListStatement(filter)
 	rows, err := queryRows[dbRegistrySchema](ctx, s.DB, statement, params)
 	if err != nil {
 		return nil, fmt.Errorf("list registry schemas: %w", err)

@@ -6,6 +6,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/neoworks/auth/ownership"
+	"github.com/neoworks/auth/registrycompat"
 	"github.com/neoworks/auth/storage/database"
 	surrealdb "github.com/surrealdb/surrealdb.go"
 	"github.com/surrealdb/surrealdb.go/pkg/models"
@@ -65,5 +67,71 @@ func TestFirstPartyCannotBeChangedAfterTheClientExists(t *testing.T) {
 	client, err := f.store.GetClient(context.Background(), "example-songs")
 	if err != nil || client.FirstParty {
 		t.Fatalf("example-songs must stay third-party: %+v %v", client, err)
+	}
+}
+
+func TestTheNeoworksCollectionSchemasAreSeededWithTheirDescriptors(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	owner, err := f.store.GetOwner(ctx, "neoworks")
+	if err != nil || owner.Kind != database.OwnerKindOrganization {
+		t.Fatalf("the neoworks scope belongs to the Neoworks organization: %+v %v", owner, err)
+	}
+	for _, name := range []string{"calendar", "contacts", "photos", "google"} {
+		schema, err := f.store.GetRegistrySchema(ctx, "neoworks", name)
+		if err != nil {
+			t.Fatalf("@neoworks/%s is not seeded: %v", name, err)
+		}
+		version, err := f.store.GetRegistryVersion(ctx, "neoworks", name, schema.LatestVersion)
+		if err != nil {
+			t.Fatalf("@neoworks/%s %s: %v", name, schema.LatestVersion, err)
+		}
+		if len(version.Files) == 0 || version.DescriptorHash == "" {
+			t.Fatalf("@neoworks/%s must carry its sources and descriptor: %+v", name, version)
+		}
+		descriptor, err := f.store.GetRegistryDescriptor(ctx, "neoworks", name, version.DescriptorHash)
+		if err != nil {
+			t.Fatalf("@neoworks/%s descriptor: %v", name, err)
+		}
+		if database.DescriptorHash([]byte(descriptor)) != version.DescriptorHash {
+			t.Errorf("@neoworks/%s: the stored hash is not the hash of the stored descriptor", name)
+		}
+		if _, err := registrycompat.Parse(descriptor); err != nil {
+			t.Errorf("@neoworks/%s: the seeded descriptor does not parse: %v", name, err)
+		}
+	}
+}
+
+func TestANewVersionOfASeededSchemaIsCheckedAgainstTheSeed(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	staff := f.createUser()
+	if err := f.store.AddMember(ctx, "neoworks", staff.UserID, []ownership.Grant{ownership.OrganizationWide(ownership.SchemasPublish)}); err != nil {
+		t.Fatal(err)
+	}
+	schema, err := f.store.GetRegistrySchema(ctx, "neoworks", "photos")
+	if err != nil {
+		t.Fatal(err)
+	}
+	version, err := f.store.GetRegistryVersion(ctx, "neoworks", "photos", schema.LatestVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seeded, err := f.store.GetRegistryDescriptor(ctx, "neoworks", "photos", version.DescriptorHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := database.RegistryPublishInput{
+		Scope: "neoworks", Name: "photos", Version: "0.1.1", Title: "Photos", Description: "Photos",
+		Files: []database.RegistryPublishFile{{Path: "photos.schema", Contents: "x"}}, Descriptor: seeded,
+	}
+	if _, err := f.store.PublishRegistryVersion(ctx, staff.UserID, input); err != nil {
+		t.Fatalf("the seeded descriptor is compatible with itself: %v", err)
+	}
+	input.Version = "0.1.2"
+	input.Descriptor = `{"descriptorVersion":1,"namespace":"neoworks.photos"}`
+	var incompatible *database.IncompatibleSchemaError
+	if _, err := f.store.PublishRegistryVersion(ctx, staff.UserID, input); !errors.As(err, &incompatible) {
+		t.Fatalf("a version that drops the seeded models is refused: %v", err)
 	}
 }

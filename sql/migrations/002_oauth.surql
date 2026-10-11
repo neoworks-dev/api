@@ -1,6 +1,6 @@
 -- ── client: an application that signs users in ───────────────────────────────
--- The record key is the OAuth client_id string. Clients are seed data (see 007);
--- there is no self-registration.
+-- The record key is the OAuth client_id string. First-party clients are seed data
+-- (see 007); developers register the others through the apps API.
 DEFINE TABLE client SCHEMAFULL
     PERMISSIONS NONE;
 
@@ -13,8 +13,20 @@ DEFINE FIELD scopes            ON client TYPE array<string> DEFAULT [];
 -- created (the seed), never changed afterwards.
 DEFINE FIELD first_party       ON client TYPE bool DEFAULT false READONLY;
 DEFINE FIELD public            ON client TYPE bool DEFAULT false;
+-- The person (`user:<id>`) or organization (`organization:<handle>`) that manages
+-- the client. Seed clients without one cannot be managed through the apps API.
+DEFINE FIELD owner             ON client TYPE option<record<user | organization>> READONLY;
+DEFINE FIELD description       ON client TYPE string DEFAULT '';
+DEFINE FIELD homepage          ON client TYPE string DEFAULT '';
+-- The reason the developer gave for each requested scope, in the order of `scopes`.
+DEFINE FIELD scope_reasons     ON client TYPE array<object> DEFAULT [];
+DEFINE FIELD scope_reasons[*].scope  ON client TYPE string;
+DEFINE FIELD scope_reasons[*].reason ON client TYPE string;
+DEFINE FIELD created_at        ON client TYPE datetime DEFAULT time::now() READONLY;
+DEFINE FIELD updated_at        ON client TYPE datetime VALUE time::now();
 
-DEFINE INDEX client_id ON client FIELDS id UNIQUE;
+DEFINE INDEX client_id    ON client FIELDS id UNIQUE;
+DEFINE INDEX client_owner ON client FIELDS owner;
 
 -- ── grant: a user's standing authorization of a client for a set of scopes ───
 DEFINE TABLE grant SCHEMAFULL;

@@ -70,7 +70,6 @@ func push(t *testing.T, router *handlertest.Router, author access.Principal, nod
 func bootstrapRoot(t *testing.T, router *handlertest.Router, store *database.SurrealStore, account *dbtest.Account) map[string]any {
 	t.Helper()
 	owner := account.Principal
-	dbtest.PublishNodeSchemas(t, store)
 	root := wireNode(owner, "@neoworks/calendar", "root", nil)
 	push(t, router, owner, root)
 	request := account.GrantRequest(t, store, root["id"].(string), dbtest.WriteGrant("user", owner.UserID, 1))

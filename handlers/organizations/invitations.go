@@ -44,7 +44,7 @@ func (h *Handler) createInvitation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input, ok := invitationInput(w, request)
-	if !ok || !h.appsExist(w, r, input.Grants) {
+	if !ok || !h.appsExist(w, r, acting.handle, input.Grants) {
 		return
 	}
 	if problem := ownership.CheckGrantsToInvite(acting.grants, input.Grants); problem != "" {

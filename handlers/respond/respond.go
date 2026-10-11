@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/neoworks/auth/ownership"
 	"github.com/neoworks/auth/storage/database"
 )
 
@@ -33,6 +34,14 @@ func Error(w http.ResponseWriter, status int, code, message string) {
 	JSON(w, status, map[string]string{"error": code, "message": message})
 }
 
+// MissingPermission writes the 403 for a permission the caller lacks.
+func MissingPermission(w http.ResponseWriter, permission ownership.Permission) {
+	JSON(w, http.StatusForbidden, map[string]string{
+		"error": "missing_permission", "message": "this needs the " + string(permission) + " permission",
+		"permission": string(permission),
+	})
+}
+
 // Decode reads a JSON request body of at most maxBytes into target and reports
 // whether the handler should continue.
 func Decode(w http.ResponseWriter, r *http.Request, target any, maxBytes int64) bool {
@@ -50,7 +59,12 @@ func StoreError(w http.ResponseWriter, operation string, err error) {
 	var purged *database.PurgedError
 	var headMoved *database.LogHeadMovedError
 	var incompatible *database.IncompatibleSchemaError
+	var missing *database.MissingPermissionError
 	switch {
+	case errors.As(err, &missing):
+		MissingPermission(w, missing.Permission)
+	case errors.Is(err, database.ErrArchived):
+		Error(w, http.StatusConflict, "archived", "the organization is archived")
 	case errors.As(err, &incompatible):
 		JSON(w, http.StatusConflict, map[string]any{
 			"error": "incompatible_schema", "message": "the schema version is incompatible with earlier versions",

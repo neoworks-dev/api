@@ -176,6 +176,19 @@ func (s *SurrealStore) GetOwner(ctx context.Context, handle string) (*Owner, err
 	return &Owner{Handle: handle, Kind: OwnerKindUser, DisplayName: userDisplayName(*name)}, nil
 }
 
+// IsOwnerArchived reports whether the handle belongs to an archived
+// organization; people are never archived.
+func (s *SurrealStore) IsOwnerArchived(ctx context.Context, handle string) (bool, error) {
+	row, err := s.getHandle(ctx, handle)
+	if err != nil {
+		return false, err
+	}
+	if row.Kind != OwnerKindOrganization {
+		return false, nil
+	}
+	return s.IsArchived(ctx, handle)
+}
+
 // HandleUserID returns the user holding a personal handle, or ErrNotFound when
 // the handle is free or held by an organization.
 func (s *SurrealStore) HandleUserID(ctx context.Context, handle string) (string, error) {

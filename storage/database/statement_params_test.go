@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/neoworks/auth/access"
 	"github.com/neoworks/auth/accesslog"
+	"github.com/neoworks/auth/ownership"
 )
 
 // SurrealQL evaluates a parameter that was never bound as NONE instead of
@@ -150,11 +151,34 @@ func TestRegistryStatementsBindEveryParameter(t *testing.T) {
 	input.Descriptor = `{"descriptorVersion":1}`
 	statement, params = registryPublish(uuid.NewString(), input)
 	requireAllBound(t, "registry publish with descriptor", statement, params)
-	requireAllBound(t, "registry list", registryListStatement, map[string]any{"limit": 1})
-	requireAllBound(t, "registry search", registrySearchStatement, map[string]any{"limit": 1, "query": "q"})
+	for name, filter := range map[string]RegistryListFilter{
+		"list": {Limit: 1}, "search": {Query: "q"}, "scope": {Scope: "acme"}, "search in scope": {Query: "q", Scope: "acme"},
+	} {
+		statement, params := registryListStatement(filter)
+		requireAllBound(t, "registry "+name, statement, params)
+	}
 	requireAllBound(t, "registry get", registryGetStatement, map[string]any{"scope": "s", "name": "n"})
 	requireAllBound(t, "registry versions", registryVersionsStatement, map[string]any{"schema": "s"})
 	requireAllBound(t, "registry version", registryVersionStatement, map[string]any{"schema": "s", "version": "v"})
 	requireAllBound(t, "registry files", registryFilesStatement, map[string]any{"version": "v"})
 	requireAllBound(t, "registry descriptor", registryDescriptorStatement, map[string]any{"schema": "s", "hash": "h"})
+}
+
+func TestAppStatementsBindEveryParameter(t *testing.T) {
+	scope := []RequestedScope{{Scope: "openid", Reason: "sign in"}}
+	fields := AppFields{Name: "Recipes", RedirectURIs: []string{"https://example.com/cb"}, Scopes: scope}
+	owner := organizationRecord("acme")
+	for name, newApp := range map[string]NewApp{
+		"public":                     {ID: "app_1", CreatorID: "u", Type: AppTypePublic, Fields: fields},
+		"confidential with grants":   {ID: "app_1", CreatorID: "u", Type: AppTypeConfidential, SecretHash: "h", Fields: fields, CreatorGrants: []ownership.Grant{ownership.ForApp(ownership.AppsEdit, "app_1")}},
+		"confidential without grant": {ID: "app_1", CreatorID: "u", Type: AppTypeConfidential, SecretHash: "h", Fields: fields},
+	} {
+		statement, params := createAppStatement(newApp, owner)
+		requireAllBound(t, "create app "+name, statement, params)
+	}
+	name, scopes := "Recipes", scope
+	statement, params := updateAppStatement("app_1", AppPatch{Name: &name, Description: &name, Homepage: &name, RedirectURIs: []string{"u"}, Scopes: &scopes})
+	requireAllBound(t, "update app", statement, params)
+	requireAllBound(t, "delete app", deleteAppStatement, map[string]any{"client": "c", "client_id": "c"})
+	requireAllBound(t, "published collections", publishedCollectionsStatement, map[string]any{"collections": []string{}}, "parent")
 }

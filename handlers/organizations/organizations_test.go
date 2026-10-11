@@ -60,6 +60,19 @@ func (f *fixture) emailOf(user access.Principal) string {
 	return stored.Email
 }
 
+// app registers an app owned by the organization and returns its client id.
+func (f *fixture) app(organization string, creator access.Principal, name string) string {
+	f.t.Helper()
+	app, err := f.store.CreateApp(context.Background(), database.NewApp{
+		ID: name, OwnerHandle: organization, CreatorID: creator.UserID, Type: database.AppTypePublic,
+		Fields: database.AppFields{Name: name, RedirectURIs: []string{"https://example.com/callback"}},
+	})
+	if err != nil {
+		f.t.Fatalf("create app %s: %v", name, err)
+	}
+	return app.ID
+}
+
 // join invites the user by email with the grants and accepts.
 func (f *fixture) join(inviter access.Principal, organization string, user access.Principal, grants []ownership.Grant) {
 	f.t.Helper()
@@ -130,8 +143,10 @@ func TestMemberPermissionsFollowTheRules(t *testing.T) {
 	f.expect(owner, "POST", "/api/v1/organizations", map[string]string{"handle": "acme", "displayName": "Acme"}, http.StatusCreated, "")
 	maintainer := handlertest.CreateUser(t, f.store)
 	viewer := handlertest.CreateUser(t, f.store)
+	contacts := f.app("acme", owner, "acme-contacts")
+	foreign := f.app("neoworks", owner, "neoworks-foreign")
 
-	contactsApp := []ownership.Grant{ownership.OrganizationWide(ownership.MembersManage), ownership.ForApp(ownership.AppsEdit, "neoworks-contacts")}
+	contactsApp := []ownership.Grant{ownership.OrganizationWide(ownership.MembersManage), ownership.ForApp(ownership.AppsEdit, contacts)}
 	f.join(owner, "acme", maintainer, contactsApp)
 	f.join(owner, "acme", viewer, nil)
 
@@ -143,7 +158,7 @@ func TestMemberPermissionsFollowTheRules(t *testing.T) {
 	viewerGrants := "/api/v1/organizations/acme/members/" + viewer.UserID + "/grants"
 	f.expect(viewer, "PUT", viewerGrants, map[string]any{"grants": []ownership.Grant{}}, http.StatusForbidden, "missing_permission")
 	f.expect(maintainer, "PUT", viewerGrants,
-		map[string]any{"grants": []ownership.Grant{ownership.ForApp(ownership.AppsEdit, "neoworks-contacts")}}, http.StatusOK, "")
+		map[string]any{"grants": []ownership.Grant{ownership.ForApp(ownership.AppsEdit, contacts)}}, http.StatusOK, "")
 	f.expect(maintainer, "PUT", viewerGrants,
 		map[string]any{"grants": []ownership.Grant{ownership.OrganizationWide(ownership.AppsEdit)}}, http.StatusForbidden, "escalation")
 	f.expect(maintainer, "PUT", "/api/v1/organizations/acme/members/"+owner.UserID+"/grants",
@@ -151,7 +166,9 @@ func TestMemberPermissionsFollowTheRules(t *testing.T) {
 	f.expect(owner, "PUT", viewerGrants,
 		map[string]any{"grants": []ownership.Grant{ownership.ForApp(ownership.AppsEdit, "no-such-app")}}, http.StatusBadRequest, "unknown_app")
 	f.expect(owner, "PUT", viewerGrants,
-		map[string]any{"grants": []ownership.Grant{ownership.ForApp(ownership.AuditView, "neoworks-contacts")}}, http.StatusBadRequest, "invalid_grant")
+		map[string]any{"grants": []ownership.Grant{ownership.ForApp(ownership.AppsEdit, foreign)}}, http.StatusBadRequest, "unknown_app")
+	f.expect(owner, "PUT", viewerGrants,
+		map[string]any{"grants": []ownership.Grant{ownership.ForApp(ownership.AuditView, contacts)}}, http.StatusBadRequest, "invalid_grant")
 
 	f.expect(maintainer, "POST", "/api/v1/organizations/acme/invitations",
 		map[string]any{"email": "new@example.com", "grants": []ownership.Grant{ownership.OrganizationWide(ownership.SchemasPublish)}},

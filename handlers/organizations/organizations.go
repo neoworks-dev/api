@@ -113,7 +113,7 @@ func (h *Handler) permitted(w http.ResponseWriter, r *http.Request, permission o
 		return nil, false
 	}
 	if !ownership.Allows(acting.grants, permission, "") {
-		writeMissingPermission(w, permission)
+		respond.MissingPermission(w, permission)
 		return nil, false
 	}
 	return acting, true
@@ -137,13 +137,6 @@ func (h *Handler) writable(w http.ResponseWriter, r *http.Request, permission ow
 	return acting, true
 }
 
-func writeMissingPermission(w http.ResponseWriter, permission ownership.Permission) {
-	respond.JSON(w, http.StatusForbidden, map[string]string{
-		"error": "missing_permission", "message": "this needs the " + string(permission) + " permission",
-		"permission": string(permission),
-	})
-}
-
 // writeStoreError maps the ownership errors, then falls back to respond.StoreError.
 func writeStoreError(w http.ResponseWriter, operation string, err error) {
 	conflicts := map[error][2]string{
@@ -165,7 +158,7 @@ func writeStoreError(w http.ResponseWriter, operation string, err error) {
 func writeChangeProblem(w http.ResponseWriter, problem ownership.ChangeProblem) {
 	switch problem {
 	case ownership.ProblemMissingPermission:
-		writeMissingPermission(w, ownership.MembersManage)
+		respond.MissingPermission(w, ownership.MembersManage)
 	case ownership.ProblemEscalation:
 		respond.Error(w, http.StatusForbidden, "escalation", "you can only grant or remove permissions you hold, at the same or a wider reach")
 	case ownership.ProblemLastManager:

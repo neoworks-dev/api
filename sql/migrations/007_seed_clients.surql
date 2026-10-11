@@ -1,9 +1,11 @@
--- Seed OAuth clients. All are public PKCE clients with no secret. `first_party`
--- is set only here: first-party clients may skip the consent screen, every other
--- client always shows it. Native builds redirect to a custom scheme, browser
--- builds to a localhost route and to the dev and prod hosts. The MCP's loopback
--- callback (NW_MCP_REDIRECT_PORT, default 8765) is registered on every client so
--- `login` works with any of them.
+-- Seed OAuth clients. All are public PKCE clients with no secret. The Neoworks
+-- clients are owned by the Neoworks organization (see 009); the sample app has no
+-- owner: its `@example` scope is whatever dev user claims the `example` handle.
+-- `first_party` is set only here: first-party clients may skip the consent
+-- screen, every other client always shows it. Native builds redirect to a custom
+-- scheme, browser builds to a localhost route and to the dev and prod hosts. The
+-- MCP's loopback callback (NW_MCP_REDIRECT_PORT, default 8765) is registered on
+-- every client so `login` works with any of them.
 --
 -- A collection is the registry path `@scope/name` of the schema its nodes follow.
 -- A collection scope `<collection>:read|write` is the ceiling for the role any
@@ -16,6 +18,7 @@ CREATE client CONTENT {
     id:                "neoworks.dev",
     name:              "Neoworks",
     secret_hash:       NONE,
+    owner:             organization:neoworks,
     redirect_uris:     [
         "http://neoworks.localhost/auth/callback",
         "https://neoworks.localhost:8443/auth/callback",
@@ -32,6 +35,7 @@ CREATE client CONTENT {
     id:                "neoworks-authenticator",
     name:              "Neoworks Authenticator",
     secret_hash:       NONE,
+    owner:             organization:neoworks,
     redirect_uris:     [
         "dev.neoworks.neo://callback",
         "http://localhost:5173/callback",
@@ -46,6 +50,7 @@ CREATE client CONTENT {
     id:                "neoworks-calendar",
     name:              "Neoworks Calendar",
     secret_hash:       NONE,
+    owner:             organization:neoworks,
     redirect_uris:     [
         "dev.neoworks.calendar://callback",
         "http://localhost:5175/callback",
@@ -67,6 +72,7 @@ CREATE client CONTENT {
     id:                "neoworks-calendar-native",
     name:              "Neoworks Calendar",
     secret_hash:       NONE,
+    owner:             organization:neoworks,
     redirect_uris:     [
         "neoworks-calendar://callback"
     ],
@@ -84,6 +90,7 @@ CREATE client CONTENT {
     id:                "neoworks-contacts",
     name:              "Neoworks Contacts",
     secret_hash:       NONE,
+    owner:             organization:neoworks,
     redirect_uris:     [
         "dev.neoworks.contacts://callback",
         "http://localhost:5176/callback",
@@ -100,6 +107,7 @@ CREATE client CONTENT {
     id:                "neoworks-photos",
     name:              "Neoworks Photos",
     secret_hash:       NONE,
+    owner:             organization:neoworks,
     redirect_uris:     [
         "dev.neoworks.photos://callback",
         "http://localhost:5177/callback",
@@ -132,6 +140,7 @@ CREATE client CONTENT {
     id:                "openschema",
     name:              "OpenSchema",
     secret_hash:       NONE,
+    owner:             organization:neoworks,
     redirect_uris:     [
         "http://localhost:5178/auth/callback",
         "https://openschema.neoworks.localhost:8443/auth/callback",
