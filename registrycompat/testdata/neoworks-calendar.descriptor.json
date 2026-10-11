@@ -1,0 +1,1870 @@
+{
+  "descriptorVersion": 1,
+  "namespace": "neoworks.calendar",
+  "enums": [
+    {
+      "name": "CategoryColor",
+      "variants": [
+        {
+          "name": "neutral",
+          "ordinal": 1
+        },
+        {
+          "name": "green",
+          "ordinal": 2
+        },
+        {
+          "name": "red",
+          "ordinal": 3
+        },
+        {
+          "name": "amber",
+          "ordinal": 4
+        },
+        {
+          "name": "blue",
+          "ordinal": 5
+        },
+        {
+          "name": "violet",
+          "ordinal": 6
+        },
+        {
+          "name": "pink",
+          "ordinal": 7
+        }
+      ]
+    },
+    {
+      "name": "EventStatus",
+      "variants": [
+        {
+          "name": "confirmed",
+          "ordinal": 1
+        },
+        {
+          "name": "cancelled",
+          "ordinal": 2
+        },
+        {
+          "name": "tentative",
+          "ordinal": 3
+        }
+      ]
+    },
+    {
+      "name": "FreeBusyStatus",
+      "variants": [
+        {
+          "name": "busy",
+          "ordinal": 1
+        },
+        {
+          "name": "free",
+          "ordinal": 2
+        }
+      ]
+    },
+    {
+      "name": "Privacy",
+      "variants": [
+        {
+          "name": "public",
+          "ordinal": 1
+        },
+        {
+          "name": "private",
+          "ordinal": 2
+        },
+        {
+          "name": "secret",
+          "ordinal": 3
+        }
+      ]
+    },
+    {
+      "name": "Frequency",
+      "variants": [
+        {
+          "name": "yearly",
+          "ordinal": 1
+        },
+        {
+          "name": "monthly",
+          "ordinal": 2
+        },
+        {
+          "name": "weekly",
+          "ordinal": 3
+        },
+        {
+          "name": "daily",
+          "ordinal": 4
+        },
+        {
+          "name": "hourly",
+          "ordinal": 5
+        },
+        {
+          "name": "minutely",
+          "ordinal": 6
+        },
+        {
+          "name": "secondly",
+          "ordinal": 7
+        }
+      ]
+    },
+    {
+      "name": "Skip",
+      "variants": [
+        {
+          "name": "omit",
+          "ordinal": 1
+        },
+        {
+          "name": "backward",
+          "ordinal": 2
+        },
+        {
+          "name": "forward",
+          "ordinal": 3
+        }
+      ]
+    },
+    {
+      "name": "Weekday",
+      "variants": [
+        {
+          "name": "mo",
+          "ordinal": 1
+        },
+        {
+          "name": "tu",
+          "ordinal": 2
+        },
+        {
+          "name": "we",
+          "ordinal": 3
+        },
+        {
+          "name": "th",
+          "ordinal": 4
+        },
+        {
+          "name": "fr",
+          "ordinal": 5
+        },
+        {
+          "name": "sa",
+          "ordinal": 6
+        },
+        {
+          "name": "su",
+          "ordinal": 7
+        }
+      ]
+    },
+    {
+      "name": "ParticipantKind",
+      "variants": [
+        {
+          "name": "individual",
+          "ordinal": 1
+        },
+        {
+          "name": "group",
+          "ordinal": 2
+        },
+        {
+          "name": "location",
+          "ordinal": 3
+        },
+        {
+          "name": "resource",
+          "ordinal": 4
+        }
+      ]
+    },
+    {
+      "name": "ParticipantRole",
+      "variants": [
+        {
+          "name": "owner",
+          "ordinal": 1
+        },
+        {
+          "name": "attendee",
+          "ordinal": 2
+        },
+        {
+          "name": "optional",
+          "ordinal": 3
+        },
+        {
+          "name": "informational",
+          "ordinal": 4
+        },
+        {
+          "name": "chair",
+          "ordinal": 5
+        },
+        {
+          "name": "contact",
+          "ordinal": 6
+        }
+      ]
+    },
+    {
+      "name": "ParticipationStatus",
+      "variants": [
+        {
+          "name": "needsAction",
+          "ordinal": 1
+        },
+        {
+          "name": "accepted",
+          "ordinal": 2
+        },
+        {
+          "name": "declined",
+          "ordinal": 3
+        },
+        {
+          "name": "tentative",
+          "ordinal": 4
+        },
+        {
+          "name": "delegated",
+          "ordinal": 5
+        }
+      ]
+    },
+    {
+      "name": "ScheduleAgent",
+      "variants": [
+        {
+          "name": "server",
+          "ordinal": 1
+        },
+        {
+          "name": "client",
+          "ordinal": 2
+        },
+        {
+          "name": "none",
+          "ordinal": 3
+        }
+      ]
+    },
+    {
+      "name": "LocationRelation",
+      "variants": [
+        {
+          "name": "start",
+          "ordinal": 1
+        },
+        {
+          "name": "end",
+          "ordinal": 2
+        }
+      ]
+    },
+    {
+      "name": "AlertAction",
+      "variants": [
+        {
+          "name": "display",
+          "ordinal": 1
+        },
+        {
+          "name": "email",
+          "ordinal": 2
+        }
+      ]
+    }
+  ],
+  "models": [
+    {
+      "name": "Calendar",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "name",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": true,
+          "constraints": {
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        {
+          "ordinal": 2,
+          "name": "color",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "enum",
+            "name": "CategoryColor"
+          },
+          "required": true,
+          "constraints": {}
+        },
+        {
+          "ordinal": 3,
+          "name": "isDefault",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "bool"
+          },
+          "required": true,
+          "constraints": {}
+        }
+      ]
+    },
+    {
+      "name": "Event",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "uid",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": true,
+          "constraints": {
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        {
+          "ordinal": 2,
+          "name": "title",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": true,
+          "constraints": {
+            "maxLength": 1000
+          }
+        },
+        {
+          "ordinal": 3,
+          "name": "description",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 4,
+          "name": "start",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "timestamp"
+          },
+          "required": true,
+          "constraints": {}
+        },
+        {
+          "ordinal": 5,
+          "name": "end",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "timestamp"
+          },
+          "required": true,
+          "constraints": {}
+        },
+        {
+          "ordinal": 6,
+          "name": "timeZone",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 7,
+          "name": "showWithoutTime",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "bool"
+          },
+          "required": true,
+          "constraints": {}
+        },
+        {
+          "ordinal": 8,
+          "name": "recurrenceRules",
+          "container": {
+            "kind": "wrapperRepeated",
+            "packed": false
+          },
+          "value": {
+            "kind": "message",
+            "name": "RecurrenceRule"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 9,
+          "name": "excludedRecurrenceRules",
+          "container": {
+            "kind": "wrapperRepeated",
+            "packed": false
+          },
+          "value": {
+            "kind": "message",
+            "name": "RecurrenceRule"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 10,
+          "name": "freeBusyStatus",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "enum",
+            "name": "FreeBusyStatus"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 11,
+          "name": "status",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "enum",
+            "name": "EventStatus"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 12,
+          "name": "privacy",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "enum",
+            "name": "Privacy"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 13,
+          "name": "priority",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "u8"
+          },
+          "required": false,
+          "constraints": {
+            "minValue": 0,
+            "maxValue": 9
+          }
+        },
+        {
+          "ordinal": 14,
+          "name": "color",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "enum",
+            "name": "CategoryColor"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 15,
+          "name": "sequence",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "u32"
+          },
+          "required": true,
+          "constraints": {}
+        },
+        {
+          "ordinal": 16,
+          "name": "keywords",
+          "container": {
+            "kind": "wrapperRepeated",
+            "packed": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 17,
+          "name": "categories",
+          "container": {
+            "kind": "wrapperRepeated",
+            "packed": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 18,
+          "name": "participants",
+          "container": {
+            "kind": "wrapperMap",
+            "key": "string"
+          },
+          "value": {
+            "kind": "message",
+            "name": "Participant"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 19,
+          "name": "locations",
+          "container": {
+            "kind": "wrapperMap",
+            "key": "string"
+          },
+          "value": {
+            "kind": "message",
+            "name": "Location"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 20,
+          "name": "virtualLocations",
+          "container": {
+            "kind": "wrapperMap",
+            "key": "string"
+          },
+          "value": {
+            "kind": "message",
+            "name": "VirtualLocation"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 21,
+          "name": "alerts",
+          "container": {
+            "kind": "wrapperMap",
+            "key": "string"
+          },
+          "value": {
+            "kind": "message",
+            "name": "Alert"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 22,
+          "name": "links",
+          "container": {
+            "kind": "wrapperMap",
+            "key": "string"
+          },
+          "value": {
+            "kind": "message",
+            "name": "Link"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 23,
+          "name": "relatedTo",
+          "container": {
+            "kind": "wrapperMap",
+            "key": "string"
+          },
+          "value": {
+            "kind": "message",
+            "name": "Relation"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 24,
+          "name": "localizations",
+          "container": {
+            "kind": "wrapperMap",
+            "key": "string"
+          },
+          "value": {
+            "kind": "message",
+            "name": "PatchObject"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 25,
+          "name": "recurrenceOverrides",
+          "container": {
+            "kind": "wrapperMap",
+            "key": "string"
+          },
+          "value": {
+            "kind": "message",
+            "name": "PatchObject"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 26,
+          "name": "deleted",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "bool"
+          },
+          "required": true,
+          "constraints": {}
+        },
+        {
+          "ordinal": 27,
+          "name": "createdAt",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "timestamp"
+          },
+          "required": true,
+          "constraints": {}
+        },
+        {
+          "ordinal": 28,
+          "name": "updatedAt",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "timestamp"
+          },
+          "required": true,
+          "constraints": {}
+        }
+      ]
+    },
+    {
+      "name": "RecurrenceRule",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "frequency",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "enum",
+            "name": "Frequency"
+          },
+          "required": true,
+          "constraints": {}
+        },
+        {
+          "ordinal": 2,
+          "name": "interval",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "u32"
+          },
+          "required": false,
+          "constraints": {
+            "minValue": 1
+          }
+        },
+        {
+          "ordinal": 3,
+          "name": "rscale",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 4,
+          "name": "skip",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "enum",
+            "name": "Skip"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 5,
+          "name": "firstDayOfWeek",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "enum",
+            "name": "Weekday"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 6,
+          "name": "byDay",
+          "container": {
+            "kind": "wrapperRepeated",
+            "packed": false
+          },
+          "value": {
+            "kind": "message",
+            "name": "NDay"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 7,
+          "name": "byMonthDay",
+          "container": {
+            "kind": "wrapperRepeated",
+            "packed": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "i32"
+          },
+          "required": false,
+          "constraints": {
+            "minValue": -31,
+            "maxValue": 31
+          }
+        },
+        {
+          "ordinal": 8,
+          "name": "byMonth",
+          "container": {
+            "kind": "wrapperRepeated",
+            "packed": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 9,
+          "name": "byYearDay",
+          "container": {
+            "kind": "wrapperRepeated",
+            "packed": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "i32"
+          },
+          "required": false,
+          "constraints": {
+            "minValue": -366,
+            "maxValue": 366
+          }
+        },
+        {
+          "ordinal": 10,
+          "name": "byWeekNo",
+          "container": {
+            "kind": "wrapperRepeated",
+            "packed": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "i32"
+          },
+          "required": false,
+          "constraints": {
+            "minValue": -53,
+            "maxValue": 53
+          }
+        },
+        {
+          "ordinal": 11,
+          "name": "byHour",
+          "container": {
+            "kind": "wrapperRepeated",
+            "packed": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "u32"
+          },
+          "required": false,
+          "constraints": {
+            "maxValue": 23
+          }
+        },
+        {
+          "ordinal": 12,
+          "name": "byMinute",
+          "container": {
+            "kind": "wrapperRepeated",
+            "packed": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "u32"
+          },
+          "required": false,
+          "constraints": {
+            "maxValue": 59
+          }
+        },
+        {
+          "ordinal": 13,
+          "name": "bySecond",
+          "container": {
+            "kind": "wrapperRepeated",
+            "packed": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "u32"
+          },
+          "required": false,
+          "constraints": {
+            "maxValue": 60
+          }
+        },
+        {
+          "ordinal": 14,
+          "name": "bySetPosition",
+          "container": {
+            "kind": "wrapperRepeated",
+            "packed": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "i32"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 15,
+          "name": "count",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "u32"
+          },
+          "required": false,
+          "constraints": {
+            "minValue": 1
+          }
+        },
+        {
+          "ordinal": 16,
+          "name": "until",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "timestamp"
+          },
+          "required": false,
+          "constraints": {}
+        }
+      ]
+    },
+    {
+      "name": "NDay",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "day",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "enum",
+            "name": "Weekday"
+          },
+          "required": true,
+          "constraints": {}
+        },
+        {
+          "ordinal": 2,
+          "name": "nthOfPeriod",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "i32"
+          },
+          "required": false,
+          "constraints": {}
+        }
+      ]
+    },
+    {
+      "name": "Participant",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "name",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 2,
+          "name": "email",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {
+            "format": "email"
+          }
+        },
+        {
+          "ordinal": 3,
+          "name": "description",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 4,
+          "name": "sendTo",
+          "container": {
+            "kind": "wrapperMap",
+            "key": "string"
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 5,
+          "name": "kind",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "enum",
+            "name": "ParticipantKind"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 6,
+          "name": "roles",
+          "container": {
+            "kind": "wrapperRepeated",
+            "packed": true
+          },
+          "value": {
+            "kind": "enum",
+            "name": "ParticipantRole"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 7,
+          "name": "locationId",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 8,
+          "name": "language",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 9,
+          "name": "participationStatus",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "enum",
+            "name": "ParticipationStatus"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 10,
+          "name": "participationComment",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 11,
+          "name": "expectReply",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "bool"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 12,
+          "name": "scheduleAgent",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "enum",
+            "name": "ScheduleAgent"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 13,
+          "name": "scheduleForceSend",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "bool"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 14,
+          "name": "scheduleSequence",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "u32"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 15,
+          "name": "scheduleStatus",
+          "container": {
+            "kind": "wrapperRepeated",
+            "packed": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 16,
+          "name": "scheduleUpdated",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "timestamp"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 17,
+          "name": "sentBy",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 18,
+          "name": "invitedBy",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 19,
+          "name": "delegatedTo",
+          "container": {
+            "kind": "wrapperRepeated",
+            "packed": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 20,
+          "name": "delegatedFrom",
+          "container": {
+            "kind": "wrapperRepeated",
+            "packed": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 21,
+          "name": "memberOf",
+          "container": {
+            "kind": "wrapperRepeated",
+            "packed": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 22,
+          "name": "links",
+          "container": {
+            "kind": "wrapperMap",
+            "key": "string"
+          },
+          "value": {
+            "kind": "message",
+            "name": "Link"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 23,
+          "name": "userId",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "uuid"
+          },
+          "required": false,
+          "constraints": {}
+        }
+      ]
+    },
+    {
+      "name": "Location",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "name",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 2,
+          "name": "description",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 3,
+          "name": "locationTypes",
+          "container": {
+            "kind": "wrapperRepeated",
+            "packed": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 4,
+          "name": "relativeTo",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "enum",
+            "name": "LocationRelation"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 5,
+          "name": "timeZone",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 6,
+          "name": "coordinates",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 7,
+          "name": "links",
+          "container": {
+            "kind": "wrapperMap",
+            "key": "string"
+          },
+          "value": {
+            "kind": "message",
+            "name": "Link"
+          },
+          "required": false,
+          "constraints": {}
+        }
+      ]
+    },
+    {
+      "name": "VirtualLocation",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "name",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 2,
+          "name": "description",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 3,
+          "name": "uri",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": true,
+          "constraints": {
+            "format": "uri"
+          }
+        },
+        {
+          "ordinal": 4,
+          "name": "features",
+          "container": {
+            "kind": "wrapperRepeated",
+            "packed": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        }
+      ]
+    },
+    {
+      "name": "Alert",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "trigger",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "oneof",
+            "variants": [
+              {
+                "ordinal": 1,
+                "name": "offset",
+                "value": {
+                  "kind": "message",
+                  "name": "OffsetTrigger"
+                }
+              },
+              {
+                "ordinal": 2,
+                "name": "absolute",
+                "value": {
+                  "kind": "message",
+                  "name": "AbsoluteTrigger"
+                }
+              }
+            ]
+          },
+          "required": true,
+          "constraints": {}
+        },
+        {
+          "ordinal": 2,
+          "name": "acknowledged",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "timestamp"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 3,
+          "name": "relatedTo",
+          "container": {
+            "kind": "wrapperMap",
+            "key": "string"
+          },
+          "value": {
+            "kind": "message",
+            "name": "Relation"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 4,
+          "name": "action",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "enum",
+            "name": "AlertAction"
+          },
+          "required": false,
+          "constraints": {}
+        }
+      ]
+    },
+    {
+      "name": "OffsetTrigger",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "offset",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": true,
+          "constraints": {
+            "pattern": "^[+-]?P([0-9]+W)?([0-9]+D)?(T([0-9]+H)?([0-9]+M)?([0-9]+(\\.[0-9]+)?S)?)?$"
+          }
+        },
+        {
+          "ordinal": 2,
+          "name": "relativeTo",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "enum",
+            "name": "LocationRelation"
+          },
+          "required": false,
+          "constraints": {}
+        }
+      ]
+    },
+    {
+      "name": "AbsoluteTrigger",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "when",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "timestamp"
+          },
+          "required": true,
+          "constraints": {}
+        }
+      ]
+    },
+    {
+      "name": "Link",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "href",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": true,
+          "constraints": {
+            "format": "uri"
+          }
+        },
+        {
+          "ordinal": 2,
+          "name": "cid",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 3,
+          "name": "contentType",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 4,
+          "name": "size",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "u64"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 5,
+          "name": "rel",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 6,
+          "name": "display",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 7,
+          "name": "title",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        }
+      ]
+    },
+    {
+      "name": "Relation",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "relation",
+          "container": {
+            "kind": "repeatedLen"
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        }
+      ]
+    },
+    {
+      "name": "PatchObject",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "patches",
+          "container": {
+            "kind": "map",
+            "key": "string"
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "json"
+          },
+          "required": false,
+          "constraints": {}
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "kind": "container",
+      "model": "Calendar",
+      "facets": [
+        {
+          "name": "default",
+          "tag": 1,
+          "fields": [
+            1,
+            2,
+            3
+          ]
+        }
+      ],
+      "searchable": [],
+      "title": 1,
+      "timeRange": null
+    },
+    {
+      "kind": "item",
+      "model": "Event",
+      "facets": [
+        {
+          "name": "default",
+          "tag": 1,
+          "fields": [
+            1,
+            2,
+            3,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28
+          ]
+        },
+        {
+          "name": "Availability",
+          "tag": 488337835,
+          "fields": [
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ]
+        }
+      ],
+      "searchable": [
+        2,
+        3,
+        16
+      ],
+      "title": 2,
+      "timeRange": {
+        "start": 4,
+        "end": 5
+      }
+    }
+  ]
+}

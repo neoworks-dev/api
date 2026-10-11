@@ -1,0 +1,202 @@
+{
+  "descriptorVersion": 1,
+  "namespace": "example.songs",
+  "enums": [],
+  "models": [
+    {
+      "name": "Playlist",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "name",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": true,
+          "constraints": {
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        {
+          "ordinal": 2,
+          "name": "entries",
+          "container": {
+            "kind": "wrapperRepeated",
+            "packed": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "uuid"
+          },
+          "required": false,
+          "constraints": {}
+        }
+      ]
+    },
+    {
+      "name": "Song",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "title",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": true,
+          "constraints": {
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        {
+          "ordinal": 2,
+          "name": "artist",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {
+            "maxLength": 200
+          }
+        },
+        {
+          "ordinal": 3,
+          "name": "album",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {
+            "maxLength": 200
+          }
+        },
+        {
+          "ordinal": 4,
+          "name": "reference",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {
+            "format": "uri"
+          }
+        },
+        {
+          "ordinal": 5,
+          "name": "liked",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "bool"
+          },
+          "required": true,
+          "constraints": {}
+        },
+        {
+          "ordinal": 6,
+          "name": "durationSeconds",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "u32"
+          },
+          "required": false,
+          "constraints": {
+            "minValue": 0
+          }
+        },
+        {
+          "ordinal": 7,
+          "name": "addedAt",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "timestamp"
+          },
+          "required": true,
+          "constraints": {}
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "kind": "container",
+      "model": "Playlist",
+      "facets": [
+        {
+          "name": "default",
+          "tag": 1,
+          "fields": [
+            1,
+            2
+          ]
+        }
+      ],
+      "searchable": [],
+      "title": 1,
+      "timeRange": null
+    },
+    {
+      "kind": "item",
+      "model": "Song",
+      "facets": [
+        {
+          "name": "default",
+          "tag": 1,
+          "fields": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ]
+        }
+      ],
+      "searchable": [
+        1,
+        2,
+        3
+      ],
+      "title": 1,
+      "timeRange": null
+    }
+  ]
+}

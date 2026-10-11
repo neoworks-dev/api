@@ -51,3 +51,19 @@ DEFINE FIELD size     ON registry_schema_file TYPE int READONLY;
 DEFINE FIELD ordinal  ON registry_schema_file TYPE int READONLY;
 
 DEFINE INDEX idx_registry_file_version ON registry_schema_file FIELDS version;
+
+-- ── registry_publish: every publish attempt by a schema's owner ──────────────
+-- Accepted publishes and refused ones (an incompatible descriptor, an existing
+-- version) with the violations that refused them. Append-only.
+DEFINE TABLE registry_publish SCHEMAFULL;
+DEFINE FIELD schema     ON registry_publish TYPE record<registry_schema> READONLY;
+DEFINE FIELD version    ON registry_publish TYPE string READONLY;
+DEFINE FIELD actor      ON registry_publish TYPE record<user> READONLY;
+DEFINE FIELD accepted   ON registry_publish TYPE bool READONLY;
+DEFINE FIELD violations ON registry_publish TYPE array<object> DEFAULT [] READONLY;
+DEFINE FIELD violations.*.rule    ON registry_publish TYPE string;
+DEFINE FIELD violations.*.path    ON registry_publish TYPE string;
+DEFINE FIELD violations.*.message ON registry_publish TYPE string;
+DEFINE FIELD created_at ON registry_publish TYPE datetime VALUE time::now() READONLY;
+
+DEFINE INDEX idx_registry_publish_schema ON registry_publish FIELDS schema, created_at;

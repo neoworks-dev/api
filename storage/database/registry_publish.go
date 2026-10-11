@@ -10,6 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/neoworks/auth/registrycompat"
 	"github.com/surrealdb/surrealdb.go/pkg/models"
 	"golang.org/x/crypto/blake2b"
 )
@@ -30,6 +31,16 @@ var (
 	registryNamePattern    = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
 	registryVersionPattern = regexp.MustCompile(`^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$`)
 )
+
+// IncompatibleSchemaError means the proposed version breaks versions published
+// before it; Violations lists every rule it breaks.
+type IncompatibleSchemaError struct {
+	Violations []registrycompat.Violation
+}
+
+func (err *IncompatibleSchemaError) Error() string {
+	return fmt.Sprintf("schema version is incompatible with earlier versions (%d violations)", len(err.Violations))
+}
 
 // RegistryPublishInput is one version of a schema as submitted by its publisher.
 // Descriptor is empty when the schema defines no Neoworks nodes.
@@ -143,6 +154,7 @@ const registryPublishStatementTemplate = `
 		CREATE registry_schema_file SET version = $created.id, path = $file.path,
 			contents = $file.contents, size = $file.size, ordinal = $file.ordinal;
 	};
+	CREATE registry_publish SET schema = $schema.id, version = $version, actor = $owner, accepted = true, violations = [];
 	RETURN [$schema];
 	COMMIT TRANSACTION;`
 
@@ -182,45 +194,129 @@ func publishFiles(input []RegistryPublishFile) []map[string]any {
 }
 
 // checkPublishable refuses a publish by a user who does not own an existing
-// schema, and a version that already exists.
-func (s *SurrealStore) checkPublishable(ctx context.Context, ownerID string, input RegistryPublishInput) error {
+// schema, and a version that already exists. It returns the existing schema, or
+// nil when this publish creates it.
+func (s *SurrealStore) checkPublishable(ctx context.Context, ownerID string, input RegistryPublishInput) (*dbRegistrySchema, error) {
 	row, err := s.getRegistrySchemaRow(ctx, input.Scope, input.Name)
 	if errors.Is(err, ErrNotFound) {
-		return nil
+		return nil, nil
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if rowOwner, _ := row.Owner.ID.(string); rowOwner != ownerID {
-		return ErrForbidden
+		return nil, ErrForbidden
 	}
 	_, err = queryFirst[dbRegistryVersion](ctx, s.DB, registryVersionStatement,
 		map[string]any{"schema": row.ID, "version": input.Version})
 	if errors.Is(err, ErrNotFound) {
-		return nil
+		return row, nil
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return ErrVersionExists
+	return row, ErrVersionExists
 }
 
 // PublishRegistryVersion adds an immutable version. The first publish of
 // `@scope/name` creates the schema owned by ownerID; later versions are accepted
-// only from that owner and replace the schema's title, description, license and
-// repository.
+// only from that owner, only when their descriptor is compatible with every
+// published version, and replace the schema's title, description, license and
+// repository. The owner's attempts, accepted or refused, are recorded.
 func (s *SurrealStore) PublishRegistryVersion(ctx context.Context, ownerID string, input RegistryPublishInput) (*RegistrySchema, error) {
 	if err := input.validate(); err != nil {
 		return nil, err
 	}
-	if err := s.checkPublishable(ctx, ownerID, input); err != nil {
+	existing, err := s.checkPublishable(ctx, ownerID, input)
+	if errors.Is(err, ErrVersionExists) {
+		return nil, s.refuse(ctx, existing, ownerID, input.Version, err, versionExistsViolations(input.Version))
+	}
+	if err != nil {
 		return nil, err
 	}
+	if err := s.checkCompatible(ctx, existing, ownerID, input); err != nil {
+		return nil, err
+	}
+	return s.insertRegistryVersion(ctx, ownerID, input)
+}
+
+func versionExistsViolations(version string) []registrycompat.Violation {
+	return []registrycompat.Violation{{
+		Rule: "version_exists", Path: "version", Message: fmt.Sprintf("version %s is already published and cannot change", version),
+	}}
+}
+
+// refuse records a refused attempt and returns the error to report.
+func (s *SurrealStore) refuse(ctx context.Context, schema *dbRegistrySchema, ownerID, version string, reason error, violations []registrycompat.Violation) error {
+	if err := s.recordRefusedPublish(ctx, schema.ID, ownerID, version, violations); err != nil {
+		return err
+	}
+	return reason
+}
+
+// checkCompatible refuses a version whose descriptor breaks an earlier version
+// of the schema it extends.
+func (s *SurrealStore) checkCompatible(ctx context.Context, existing *dbRegistrySchema, ownerID string, input RegistryPublishInput) error {
+	if existing == nil {
+		return nil
+	}
+	proposed, err := registrycompat.Parse(input.Descriptor)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidInput, err)
+	}
+	published, err := s.publishedDescriptors(ctx, existing.ID)
+	if err != nil {
+		return err
+	}
+	violations := registrycompat.Check(published, proposed)
+	if len(violations) == 0 {
+		return nil
+	}
+	return s.refuse(ctx, existing, ownerID, input.Version, &IncompatibleSchemaError{Violations: violations}, violations)
+}
+
+type dbPublishedDescriptor struct {
+	Version    string  `json:"version"`
+	Descriptor *string `json:"descriptor"`
+}
+
+// publishedDescriptors returns every published version's descriptor, oldest
+// first. Versions that define no nodes have none.
+func (s *SurrealStore) publishedDescriptors(ctx context.Context, schemaID models.RecordID) ([]registrycompat.Version, error) {
+	rows, err := queryRows[dbPublishedDescriptor](ctx, s.DB,
+		"SELECT version, descriptor, created_at FROM registry_schema_version WHERE schema = $schema ORDER BY created_at ASC",
+		map[string]any{"schema": schemaID})
+	if err != nil {
+		return nil, fmt.Errorf("list published descriptors: %w", err)
+	}
+	published := make([]registrycompat.Version, 0, len(rows))
+	for _, row := range rows {
+		version, err := publishedVersion(row)
+		if err != nil {
+			return nil, err
+		}
+		published = append(published, version)
+	}
+	return published, nil
+}
+
+func publishedVersion(row dbPublishedDescriptor) (registrycompat.Version, error) {
+	if row.Descriptor == nil {
+		return registrycompat.Version{Version: row.Version}, nil
+	}
+	descriptor, err := registrycompat.Parse(*row.Descriptor)
+	if err != nil {
+		return registrycompat.Version{}, fmt.Errorf("stored descriptor of version %s: %w", row.Version, err)
+	}
+	return registrycompat.Version{Version: row.Version, Descriptor: descriptor}, nil
+}
+
+func (s *SurrealStore) insertRegistryVersion(ctx context.Context, ownerID string, input RegistryPublishInput) (*RegistrySchema, error) {
 	statement, params := registryPublish(ownerID, input)
 	rows, err := queryReturned[[]dbRegistrySchema](ctx, s.DB, statement, params)
 	if err != nil {
 		// A concurrent publish may have won a unique index; report why.
-		if recheck := s.checkPublishable(ctx, ownerID, input); recheck != nil {
+		if _, recheck := s.checkPublishable(ctx, ownerID, input); recheck != nil {
 			return nil, recheck
 		}
 		return nil, fmt.Errorf("publish registry version: %w", err)

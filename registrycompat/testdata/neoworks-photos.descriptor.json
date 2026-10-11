@@ -1,0 +1,237 @@
+{
+  "descriptorVersion": 1,
+  "namespace": "neoworks.photos",
+  "enums": [],
+  "models": [
+    {
+      "name": "Album",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "name",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": true,
+          "constraints": {
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        {
+          "ordinal": 2,
+          "name": "isDefault",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "bool"
+          },
+          "required": true,
+          "constraints": {}
+        }
+      ]
+    },
+    {
+      "name": "Photo",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "filename",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": true,
+          "constraints": {
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        {
+          "ordinal": 2,
+          "name": "mimeType",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": true,
+          "constraints": {}
+        },
+        {
+          "ordinal": 3,
+          "name": "size",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "u64"
+          },
+          "required": true,
+          "constraints": {}
+        },
+        {
+          "ordinal": 4,
+          "name": "favorite",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "bool"
+          },
+          "required": true,
+          "constraints": {}
+        },
+        {
+          "ordinal": 5,
+          "name": "captureDate",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "timestamp"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 6,
+          "name": "location",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "message",
+            "name": "GeoPoint"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 7,
+          "name": "exif",
+          "container": {
+            "kind": "wrapperMap",
+            "key": "string"
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "json"
+          },
+          "required": false,
+          "constraints": {}
+        }
+      ]
+    },
+    {
+      "name": "GeoPoint",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "lat",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "f64"
+          },
+          "required": true,
+          "constraints": {
+            "minValue": -90,
+            "maxValue": 90
+          }
+        },
+        {
+          "ordinal": 2,
+          "name": "lng",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "f64"
+          },
+          "required": true,
+          "constraints": {
+            "minValue": -180,
+            "maxValue": 180
+          }
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "kind": "container",
+      "model": "Album",
+      "facets": [
+        {
+          "name": "default",
+          "tag": 1,
+          "fields": [
+            1,
+            2
+          ]
+        }
+      ],
+      "searchable": [],
+      "title": 1,
+      "timeRange": null
+    },
+    {
+      "kind": "item",
+      "model": "Photo",
+      "facets": [
+        {
+          "name": "default",
+          "tag": 1,
+          "fields": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ]
+        },
+        {
+          "name": "Exif",
+          "tag": 371023750,
+          "fields": [
+            7
+          ]
+        }
+      ],
+      "searchable": [
+        1
+      ],
+      "title": 1,
+      "timeRange": null
+    }
+  ]
+}

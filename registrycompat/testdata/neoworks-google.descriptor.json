@@ -1,0 +1,246 @@
+{
+  "descriptorVersion": 1,
+  "namespace": "neoworks.google",
+  "enums": [],
+  "models": [
+    {
+      "name": "SyncRecord",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "record",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "oneof",
+            "variants": [
+              {
+                "ordinal": 1,
+                "name": "account",
+                "value": {
+                  "kind": "message",
+                  "name": "GoogleAccount"
+                }
+              },
+              {
+                "ordinal": 2,
+                "name": "calendarLink",
+                "value": {
+                  "kind": "message",
+                  "name": "CalendarLink"
+                }
+              }
+            ]
+          },
+          "required": true,
+          "constraints": {}
+        },
+        {
+          "ordinal": 2,
+          "name": "eventJoins",
+          "container": {
+            "kind": "wrapperMap",
+            "key": "string"
+          },
+          "value": {
+            "kind": "message",
+            "name": "EventJoin"
+          },
+          "required": false,
+          "constraints": {}
+        }
+      ]
+    },
+    {
+      "name": "GoogleAccount",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "refreshToken",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": true,
+          "constraints": {}
+        },
+        {
+          "ordinal": 2,
+          "name": "email",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": true,
+          "constraints": {
+            "format": "email"
+          }
+        },
+        {
+          "ordinal": 3,
+          "name": "scopes",
+          "container": {
+            "kind": "repeatedLen"
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 4,
+          "name": "linkedAt",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "timestamp"
+          },
+          "required": true,
+          "constraints": {}
+        }
+      ]
+    },
+    {
+      "name": "CalendarLink",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "calendarId",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "uuid"
+          },
+          "required": true,
+          "constraints": {}
+        },
+        {
+          "ordinal": 2,
+          "name": "googleCalendarId",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": true,
+          "constraints": {}
+        },
+        {
+          "ordinal": 3,
+          "name": "accessRole",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": true,
+          "constraints": {}
+        },
+        {
+          "ordinal": 4,
+          "name": "syncToken",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        },
+        {
+          "ordinal": 5,
+          "name": "enabled",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "bool"
+          },
+          "required": true,
+          "constraints": {}
+        }
+      ]
+    },
+    {
+      "name": "EventJoin",
+      "fields": [
+        {
+          "ordinal": 1,
+          "name": "googleEventId",
+          "container": {
+            "kind": "singular",
+            "nullable": false
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": true,
+          "constraints": {}
+        },
+        {
+          "ordinal": 2,
+          "name": "contentHash",
+          "container": {
+            "kind": "singular",
+            "nullable": true
+          },
+          "value": {
+            "kind": "scalar",
+            "scalar": "string"
+          },
+          "required": false,
+          "constraints": {}
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "kind": "item",
+      "model": "SyncRecord",
+      "facets": [
+        {
+          "name": "default",
+          "tag": 1,
+          "fields": [
+            1,
+            2
+          ]
+        }
+      ],
+      "searchable": [],
+      "title": null,
+      "timeRange": null
+    }
+  ]
+}

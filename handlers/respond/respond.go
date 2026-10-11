@@ -49,7 +49,13 @@ func Decode(w http.ResponseWriter, r *http.Request, target any, maxBytes int64) 
 func StoreError(w http.ResponseWriter, operation string, err error) {
 	var purged *database.PurgedError
 	var headMoved *database.LogHeadMovedError
+	var incompatible *database.IncompatibleSchemaError
 	switch {
+	case errors.As(err, &incompatible):
+		JSON(w, http.StatusConflict, map[string]any{
+			"error": "incompatible_schema", "message": "the schema version is incompatible with earlier versions",
+			"violations": incompatible.Violations,
+		})
 	case errors.As(err, &headMoved):
 		JSON(w, http.StatusConflict, map[string]any{
 			"error": "log_head_moved", "message": "the access log head moved; re-read and re-sign", "head": headMoved.Head,

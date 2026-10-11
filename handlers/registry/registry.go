@@ -39,6 +39,7 @@ func (h *Handler) RegisterPublic(router chi.Router) {
 func (h *Handler) RegisterAuthenticated(router chi.Router) {
 	publisher := router.With(middleware.RequireAccountPrincipal, middleware.RequireScope(PublishScope))
 	publisher.Post("/api/v1/schemas/{scope}/{name}/versions", h.publish)
+	router.With(middleware.RequireAccountPrincipal).Get("/api/v1/schemas/{scope}/{name}/publishes", h.listPublishes)
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
@@ -89,6 +90,18 @@ func (h *Handler) getDescriptor(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(descriptor))
+}
+
+// listPublishes serves a schema's publish attempts, including refused ones, to
+// the schema's owner.
+func (h *Handler) listPublishes(w http.ResponseWriter, r *http.Request) {
+	principal, _ := middleware.PrincipalFromContext(r.Context())
+	publishes, err := h.store.ListRegistryPublishes(r.Context(), principal.UserID, chi.URLParam(r, "scope"), chi.URLParam(r, "name"))
+	if err != nil {
+		respond.StoreError(w, "listRegistryPublishes", err)
+		return
+	}
+	respond.JSON(w, http.StatusOK, map[string]any{"publishes": publishes})
 }
 
 type publishRequest struct {
