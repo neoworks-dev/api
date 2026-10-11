@@ -34,6 +34,16 @@ var (
 // all migrations applied. The test is skipped when no surreal binary is on PATH.
 func New(t *testing.T) *database.SurrealStore {
 	t.Helper()
+	store := Empty(t)
+	if _, err := migrations.Apply(context.Background(), store.DB, migrationsDir(), nil); err != nil {
+		t.Fatalf("apply migrations: %v", err)
+	}
+	return store
+}
+
+// Empty returns a store on a new database with no migrations applied.
+func Empty(t *testing.T) *database.SurrealStore {
+	t.Helper()
 	if _, err := exec.LookPath("surreal"); err != nil {
 		t.Skip("surreal binary not on PATH")
 	}
@@ -41,14 +51,10 @@ func New(t *testing.T) *database.SurrealStore {
 	if serverStartup != nil {
 		t.Fatalf("start surreal: %v", serverStartup)
 	}
-
 	databaseName := "t" + uuid.NewString()[:8]
 	store, err := database.NewSurrealStore(serverURL, rootUser, rootPass, "test", databaseName)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
-	}
-	if _, err := migrations.Apply(context.Background(), store.DB, migrationsDir(), nil); err != nil {
-		t.Fatalf("apply migrations: %v", err)
 	}
 	return store
 }
