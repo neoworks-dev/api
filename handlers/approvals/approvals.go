@@ -125,8 +125,8 @@ func (h *Handler) detail(w http.ResponseWriter, r *http.Request) {
 }
 
 // stream is a long-poll: it returns as soon as the user has pending requests,
-// or an empty list after a short timeout. The app reconnects in a loop. NATS/SSE
-// can later push to this same endpoint without changing the contract.
+// or an empty list after a short timeout. The app reconnects in a loop. SSE can
+// later push to this same endpoint without changing the contract.
 func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	userID, ok := subject(w, r)
 	if !ok {
