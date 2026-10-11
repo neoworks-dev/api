@@ -30,12 +30,14 @@ type Config struct {
 	Addr          string
 	SentinelAddrs []string
 	MasterName    string
+	Password      string
 }
 
 func ConfigFromEnv() Config {
 	config := Config{
 		Addr:       envOr("REDIS_URL", "127.0.0.1:6379"),
 		MasterName: os.Getenv("REDIS_MASTER_NAME"),
+		Password:   os.Getenv("REDIS_PASSWORD"),
 	}
 	if raw := os.Getenv("REDIS_SENTINEL_ADDRS"); raw != "" {
 		config.SentinelAddrs = splitAddrs(raw)
@@ -53,11 +55,12 @@ func NewRedisStore(config Config) *RedisStore {
 			client: redis.NewFailoverClient(&redis.FailoverOptions{
 				MasterName:    config.MasterName,
 				SentinelAddrs: config.SentinelAddrs,
+				Password:      config.Password,
 			}),
 		}
 	}
 	return &RedisStore{
-		client: redis.NewClient(&redis.Options{Addr: config.Addr}),
+		client: redis.NewClient(&redis.Options{Addr: config.Addr, Password: config.Password}),
 	}
 }
 
