@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/neoworks/auth/connectionlease"
 	"github.com/neoworks/auth/handlers/respond"
 	"github.com/neoworks/auth/middleware"
 	"github.com/neoworks/auth/oauth"
@@ -63,7 +64,7 @@ type Handler struct {
 	limits  Limits
 	upgrade websocket.Upgrader
 
-	leases connectionLeases
+	leases connectionlease.Leases
 
 	mutex       sync.Mutex
 	shutDown    bool
@@ -73,7 +74,7 @@ type Handler struct {
 func NewHandler(hub *Hub, clients ClientLookup, limiter FrameLimiter) *Handler {
 	return &Handler{
 		hub: hub, clients: clients, limiter: limiter, limits: DefaultLimits,
-		leases: connectionLeases{client: hub.client}, connections: map[*connection]struct{}{},
+		leases: connectionlease.New(hub.client), connections: map[*connection]struct{}{},
 		// Tokens travel in a header or subprotocol, never a cookie, so the
 		// origin of the page gives an attacker nothing to ride on.
 		upgrade: websocket.Upgrader{
@@ -129,7 +130,7 @@ func (handler *Handler) serve(w http.ResponseWriter, r *http.Request, who identi
 		respond.Error(w, http.StatusServiceUnavailable, "unavailable", "relay is shutting down")
 		return
 	}
-	held, admitted, err := handler.leases.acquire(r.Context(), who, handler.connectionLimit(who))
+	held, admitted, err := handler.leases.Acquire(r.Context(), leaseKey(who), handler.connectionLimit(who))
 	if err != nil {
 		slog.Warn("relay connection lease", "error", err)
 		respond.Error(w, http.StatusServiceUnavailable, "unavailable", "relay is unavailable")
@@ -139,7 +140,7 @@ func (handler *Handler) serve(w http.ResponseWriter, r *http.Request, who identi
 		respond.Error(w, http.StatusTooManyRequests, "too_many_connections", "too many open relay connections")
 		return
 	}
-	defer handler.leases.release(held)
+	defer handler.leases.Release(held)
 	socket, err := handler.upgrade.Upgrade(w, r, nil)
 	if err != nil {
 		return
@@ -150,7 +151,7 @@ func (handler *Handler) serve(w http.ResponseWriter, r *http.Request, who identi
 		return
 	}
 	defer handler.untrack(conn)
-	go handler.leases.keepRenewed(held, conn.done)
+	go handler.leases.Hold(held, conn.done)
 	conn.run(r.Context())
 }
 

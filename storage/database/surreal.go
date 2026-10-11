@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/neoworks/auth/oauth"
 	surrealdb "github.com/surrealdb/surrealdb.go"
@@ -16,6 +17,27 @@ type SurrealStore struct {
 	// StorageQuotaBytes is the most node content and blob bytes one account may
 	// store; zero or less turns the limit off.
 	StorageQuotaBytes int64
+
+	// probeInterval is how often the change feed checks its connection; zero
+	// uses the default.
+	probeInterval time.Duration
+
+	// dial opens another connection to the same database, for the change
+	// feed's live queries, which belong to the connection that started them.
+	dial func(ctx context.Context) (*surrealdb.DB, error)
+}
+
+// SetFeedProbeInterval sets how often the change feed checks that its
+// connection still answers.
+func (s *SurrealStore) SetFeedProbeInterval(interval time.Duration) {
+	s.probeInterval = interval
+}
+
+func (s *SurrealStore) feedProbeInterval() time.Duration {
+	if s.probeInterval <= 0 {
+		return defaultProbeInterval
+	}
+	return s.probeInterval
 }
 
 // SetStorageQuota sets the per-account storage quota in bytes.
@@ -24,25 +46,30 @@ func (s *SurrealStore) SetStorageQuota(bytes int64) {
 }
 
 func NewSurrealStore(url, user, pass, ns, dbName string) (*SurrealStore, error) {
-	ctx := context.Background()
+	dial := func(ctx context.Context) (*surrealdb.DB, error) {
+		return connectSurreal(ctx, url, user, pass, ns, dbName)
+	}
+	db, err := dial(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	return &SurrealStore{DB: db, dial: dial}, nil
+}
 
+func connectSurreal(ctx context.Context, url, user, pass, ns, dbName string) (*surrealdb.DB, error) {
 	db, err := surrealdb.FromEndpointURLString(ctx, url)
 	if err != nil {
 		return nil, err
 	}
-
-	if _, err := db.SignIn(ctx, surrealdb.Auth{
-		Username: user,
-		Password: pass,
-	}); err != nil {
+	if _, err := db.SignIn(ctx, surrealdb.Auth{Username: user, Password: pass}); err != nil {
+		_ = db.Close(ctx)
 		return nil, err
 	}
-
 	if err := db.Use(ctx, ns, dbName); err != nil {
+		_ = db.Close(ctx)
 		return nil, err
 	}
-
-	return &SurrealStore{DB: db}, nil
+	return db, nil
 }
 
 // ── Clients ───────────────────────────────────────────────────────────────────

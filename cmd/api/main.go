@@ -16,6 +16,7 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
 	"github.com/neoworks/auth/config"
+	"github.com/neoworks/auth/connectionlease"
 	"github.com/neoworks/auth/crypto"
 	"github.com/neoworks/auth/domainproof"
 	adminhandlers "github.com/neoworks/auth/handlers/admin"
@@ -23,6 +24,7 @@ import (
 	apphandlers "github.com/neoworks/auth/handlers/apps"
 	assethandlers "github.com/neoworks/auth/handlers/assets"
 	blobhandlers "github.com/neoworks/auth/handlers/blobs"
+	changehandlers "github.com/neoworks/auth/handlers/changes"
 	contactcodehandlers "github.com/neoworks/auth/handlers/contactcodes"
 	devicehandlers "github.com/neoworks/auth/handlers/devices"
 	installhandlers "github.com/neoworks/auth/handlers/installs"
@@ -76,12 +78,16 @@ func main() {
 	counter := ratelimit.NewRedisCounter(redis.Client())
 	limiter := ratelimit.New(counter, counter, surreal)
 	relay := relayhandlers.NewHandler(relayhandlers.NewHub(redis.Client()), surreal, limiter)
+	changeHub := changehandlers.NewHub(changehandlers.StoreFeed{SurrealStore: surreal})
+	changeHub.Start()
+	changeFeed := changehandlers.NewHandler(changeHub, changehandlers.StoreFeed{SurrealStore: surreal}, connectionlease.New(redis.Client()))
 	assetRouter := limiter.ByIP(ratelimit.BucketAssets)(assethandlers.NewHandler(surreal, redis, objects, clientAuth).Router())
 	servers := []*http.Server{
-		{Addr: ":" + env("PORT", "8081"), Handler: apiRouter(surreal, redis, objects, clientAuth, limiter, counter, relay)},
+		{Addr: ":" + env("PORT", "8081"), Handler: apiRouter(surreal, redis, objects, clientAuth, limiter, counter, relay, changeFeed)},
 		{Addr: ":" + env("ASSETS_PORT", "8082"), Handler: assetRouter},
 	}
 	servers[0].RegisterOnShutdown(relay.Shutdown)
+	servers[0].RegisterOnShutdown(changeHub.Shutdown)
 	for _, server := range servers {
 		go listen(server)
 	}
@@ -150,7 +156,8 @@ func storageQuotaBytes() int64 {
 }
 
 func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects *objectstore.Store, clientAuth *middleware.ClientAuth,
-	limiter *ratelimit.Limiter, counter *ratelimit.RedisCounter, relay *relayhandlers.Handler) http.Handler {
+	limiter *ratelimit.Limiter, counter *ratelimit.RedisCounter, relay *relayhandlers.Handler,
+	changeFeed *changehandlers.Handler) http.Handler {
 	router := chi.NewRouter()
 	router.Use(chimiddleware.Logger)
 	router.Use(chimiddleware.Recoverer)
@@ -195,6 +202,7 @@ func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects 
 			adminhandlers.NewHandler(surreal).RegisterAuthenticated(dashboard)
 			data := principals.With(middleware.RequireDataAccess(env("VAULT_CLIENT_ID", "neoworks.vault")))
 			nodes.RegisterAuthenticated(data)
+			changeFeed.RegisterAuthenticated(data)
 			renewals.RegisterVerifier(data)
 			blobs.RegisterAuthenticated(data)
 			registry.RegisterAuthenticated(principals)
@@ -210,7 +218,7 @@ func allowCrossOrigin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, If-Match")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, If-Match, Last-Event-ID")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
