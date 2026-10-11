@@ -252,7 +252,7 @@ func TestAnonymousFramesAreLimitedPerIP(t *testing.T) {
 	send(t, socket, frame{"type": "unsubscribe", "topic": "t"})
 
 	limited := expectError(t, socket, "rate_limited")
-	if limited["retryAfter"] == nil {
+	if limited["retryAfter"] == nil || limited["topic"] != "t" {
 		t.Fatalf("rate limit error without retryAfter: %v", limited)
 	}
 }

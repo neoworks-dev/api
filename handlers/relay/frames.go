@@ -48,6 +48,7 @@ type errorFrame struct {
 	Type       string `json:"type"`
 	Code       string `json:"code"`
 	Message    string `json:"message"`
+	Topic      string `json:"topic,omitempty"`
 	RetryAfter int    `json:"retryAfter,omitempty"`
 }
 
@@ -61,7 +62,7 @@ func encodeStatus(frameType string, topic string) []byte {
 	return encoded
 }
 
-func encodeError(code string, message string, retryAfterSeconds int) []byte {
-	encoded, _ := json.Marshal(errorFrame{Type: frameError, Code: code, Message: message, RetryAfter: retryAfterSeconds})
+func encodeError(code string, message string, topic string, retryAfterSeconds int) []byte {
+	encoded, _ := json.Marshal(errorFrame{Type: frameError, Code: code, Message: message, Topic: topic, RetryAfter: retryAfterSeconds})
 	return encoded
 }

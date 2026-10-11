@@ -7,7 +7,6 @@ import (
 	"math"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	"github.com/gorilla/websocket"
 	"github.com/neoworks/auth/ratelimit"
@@ -124,14 +123,14 @@ func (conn *connection) write(messageType int, payload []byte) bool {
 }
 
 func (conn *connection) handleFrame(ctx context.Context, raw []byte) {
-	if wait := conn.takeFrame(ctx); wait > 0 {
-		seconds := int(math.Ceil(wait.Seconds()))
-		conn.send(encodeError(codeRateLimited, "too many frames; retry after the delay", seconds))
-		return
-	}
 	var frame clientFrame
 	if err := json.Unmarshal(raw, &frame); err != nil {
-		conn.send(encodeError(codeInvalidFrame, "frame is not valid JSON of the expected shape", 0))
+		conn.send(encodeError(codeInvalidFrame, "frame is not valid JSON of the expected shape", "", 0))
+		return
+	}
+	if wait := conn.takeFrame(ctx); wait > 0 {
+		seconds := int(math.Ceil(wait.Seconds()))
+		conn.send(encodeError(codeRateLimited, "too many frames; retry after the delay", frame.Topic, seconds))
 		return
 	}
 	switch frame.Type {
@@ -142,7 +141,7 @@ func (conn *connection) handleFrame(ctx context.Context, raw []byte) {
 	case framePublish:
 		conn.publish(ctx, frame)
 	default:
-		conn.send(encodeError(codeInvalidFrame, "unknown frame type", 0))
+		conn.send(encodeError(codeInvalidFrame, "unknown frame type", frame.Topic, 0))
 	}
 }
 
@@ -155,10 +154,10 @@ func (conn *connection) takeFrame(ctx context.Context) time.Duration {
 
 func (conn *connection) topicIsValid(topic string) bool {
 	if topic == "" || len(topic) > conn.handler.limits.MaxTopicBytes {
-		conn.send(encodeError(codeInvalidTopic, "topic must be between 1 and the maximum topic bytes", 0))
+		conn.send(encodeError(codeInvalidTopic, "topic must be between 1 and the maximum topic bytes", topic, 0))
 		return false
 	}
-	return utf8.ValidString(topic)
+	return true
 }
 
 func (conn *connection) subscribe(ctx context.Context, topic string) {
@@ -170,7 +169,7 @@ func (conn *connection) subscribe(ctx context.Context, topic string) {
 		return
 	}
 	if len(conn.topics) >= conn.handler.limits.MaxSubscriptions {
-		conn.send(encodeError(codeSubscriptionLimit, "too many subscriptions on this connection", 0))
+		conn.send(encodeError(codeSubscriptionLimit, "too many subscriptions on this connection", topic, 0))
 		return
 	}
 	channel := channelName(conn.who.clientID, topic)
@@ -178,7 +177,7 @@ func (conn *connection) subscribe(ctx context.Context, topic string) {
 	if err := conn.handler.hub.Subscribe(ctx, conn, channel, topic); err != nil {
 		delete(conn.topics, topic)
 		slog.Warn("relay subscribe", "error", err)
-		conn.send(encodeError(codeUnavailable, "relay is unavailable", 0))
+		conn.send(encodeError(codeUnavailable, "relay is unavailable", topic, 0))
 	}
 }
 
@@ -196,12 +195,12 @@ func (conn *connection) publish(ctx context.Context, frame clientFrame) {
 		return
 	}
 	if len(frame.Data) > conn.handler.limits.MaxDataBytes {
-		conn.send(encodeError(codeMessageTooLarge, "message data exceeds the maximum size", 0))
+		conn.send(encodeError(codeMessageTooLarge, "message data exceeds the maximum size", frame.Topic, 0))
 		return
 	}
 	channel := channelName(conn.who.clientID, frame.Topic)
 	if err := conn.handler.hub.Publish(ctx, channel, frame.Data); err != nil {
 		slog.Warn("relay publish", "error", err)
-		conn.send(encodeError(codeUnavailable, "relay is unavailable", 0))
+		conn.send(encodeError(codeUnavailable, "relay is unavailable", frame.Topic, 0))
 	}
 }
