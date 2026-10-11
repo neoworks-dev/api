@@ -31,6 +31,7 @@ import (
 	notificationhandlers "github.com/neoworks/auth/handlers/notifications"
 	organizationhandlers "github.com/neoworks/auth/handlers/organizations"
 	registryhandlers "github.com/neoworks/auth/handlers/registry"
+	relayhandlers "github.com/neoworks/auth/handlers/relay"
 	renewalhandlers "github.com/neoworks/auth/handlers/renewal"
 	settinghandlers "github.com/neoworks/auth/handlers/settings"
 	storagehandlers "github.com/neoworks/auth/handlers/storage"
@@ -158,6 +159,11 @@ func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects 
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
+
+	relay := relayhandlers.NewHandler(relayhandlers.NewHub(redis.Client()), surreal, limiter)
+	signedInRelay := clientAuth.JWTMiddleware(middleware.PrincipalMiddleware(surreal)(limiter.Authenticated(relay.SignedIn())))
+	anonymousRelay := limiter.ByIP(ratelimit.BucketPublic)(relay.Anonymous())
+	router.Handle("/api/v1/relay", relayhandlers.ChooseByToken(signedInRelay, anonymousRelay))
 
 	nodes := nodehandlers.NewHandler(surreal)
 	blobs := blobhandlers.NewHandler(surreal, objects).WithLimiter(limiter)

@@ -164,6 +164,19 @@ func (limiter *Limiter) ByIP(bucket Bucket) func(http.Handler) http.Handler {
 	}
 }
 
+// TakeUser counts one call of a user of a client against the bucket and returns
+// how long to wait when the call is over the limit; zero otherwise.
+func (limiter *Limiter) TakeUser(ctx context.Context, bucket Bucket, clientID string, userID string) time.Duration {
+	key := "rl:" + string(bucket) + ":user:" + clientID + ":" + userID
+	return limiter.hit(ctx, key, limiter.limits[bucket].PerUserClient)
+}
+
+// TakeIP counts one call of an IP address against the bucket and returns how
+// long to wait when the call is over the limit; zero otherwise.
+func (limiter *Limiter) TakeIP(ctx context.Context, bucket Bucket, ip string) time.Duration {
+	return limiter.hit(ctx, "rl:"+string(bucket)+":ip:"+ip, limiter.limits[bucket].PerIP)
+}
+
 // ClientIP is the address the request came from; the router's RealIP
 // middleware has already replaced it with the forwarded one.
 func ClientIP(r *http.Request) string {

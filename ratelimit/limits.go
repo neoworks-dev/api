@@ -19,6 +19,9 @@ const (
 	BucketBlobDownload Bucket = "blob_download"
 	BucketIdentity     Bucket = "identity"
 	BucketGeneral      Bucket = "general"
+	// BucketRelay limits the frames a relay connection sends, per user for a
+	// signed-in connection and per IP for an anonymous one.
+	BucketRelay Bucket = "relay"
 	// BucketPublic and BucketAssets limit callers without a token, by IP.
 	BucketPublic Bucket = "public"
 	BucketAssets Bucket = "assets"
@@ -45,6 +48,7 @@ var DefaultLimits = map[Bucket]Limit{
 	BucketBlobDownload: {PerClient: 6000, PerUserClient: 600},
 	BucketIdentity:     {PerClient: 1200, PerUserClient: 120},
 	BucketGeneral:      {PerClient: 6000, PerUserClient: 600},
+	BucketRelay:        {PerUserClient: 600, PerIP: 120},
 	BucketPublic:       {PerIP: 120},
 	BucketAssets:       {PerIP: 600},
 }
