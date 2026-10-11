@@ -270,23 +270,24 @@ func TestInvalidFieldsAreRefusedWithTheFieldNamed(t *testing.T) {
 		field     string
 		code      string
 	}{
-		"no name":          {map[string]any{"name": " "}, "name", "invalid_request"},
-		"long name":        {map[string]any{"name": string(make([]byte, 61))}, "name", "invalid_request"},
-		"bad type":         {map[string]any{"type": "hybrid"}, "type", "invalid_request"},
-		"no type":          {map[string]any{"type": nil}, "type", "invalid_request"},
-		"http homepage":    {map[string]any{"homepage": "http://example.com"}, "homepage", "invalid_request"},
-		"no redirects":     {map[string]any{"redirectUris": []string{}}, "redirectUris", "invalid_request"},
-		"plain http":       {map[string]any{"redirectUris": []string{"http://example.com/cb"}}, "redirectUris", "invalid_request"},
-		"loopback no port": {map[string]any{"redirectUris": []string{"http://localhost/cb"}}, "redirectUris", "invalid_request"},
-		"port too large":   {map[string]any{"redirectUris": []string{"http://localhost:99999/cb"}}, "redirectUris", "invalid_request"},
-		"flat scheme":      {map[string]any{"redirectUris": []string{"myapp://cb"}}, "redirectUris", "invalid_request"},
-		"duplicate uris":   {map[string]any{"redirectUris": []string{"https://a.example.com/cb", "https://a.example.com/cb"}}, "redirectUris", "invalid_request"},
-		"unknown scope":    {map[string]any{"scopes": []map[string]string{{"scope": "admin", "reason": "x"}}}, "scopes", "invalid_request"},
-		"service scope":    {map[string]any{"scopes": []map[string]string{{"scope": "schemas:publish", "reason": "x"}}}, "scopes", "invalid_request"},
-		"bad action":       {map[string]any{"scopes": []map[string]string{{"scope": "@acme/recipes:admin", "reason": "x"}}}, "scopes", "invalid_request"},
-		"no reason":        {map[string]any{"scopes": []map[string]string{{"scope": "openid", "reason": ""}}}, "scopes", "invalid_request"},
-		"duplicate scope":  {map[string]any{"scopes": []map[string]string{{"scope": "openid", "reason": "a"}, {"scope": "openid", "reason": "b"}}}, "scopes", "invalid_request"},
-		"unpublished":      {map[string]any{"scopes": []map[string]string{{"scope": "@acme/recipes:read", "reason": "x"}}}, "scopes", "unknown_collection"},
+		"no name":                 {map[string]any{"name": " "}, "name", "invalid_request"},
+		"long name":               {map[string]any{"name": string(make([]byte, 61))}, "name", "invalid_request"},
+		"bad type":                {map[string]any{"type": "hybrid"}, "type", "invalid_request"},
+		"no type":                 {map[string]any{"type": nil}, "type", "invalid_request"},
+		"http homepage":           {map[string]any{"homepage": "http://example.com"}, "homepage", "invalid_request"},
+		"no redirects":            {map[string]any{"redirectUris": []string{}}, "redirectUris", "invalid_request"},
+		"plain http":              {map[string]any{"redirectUris": []string{"http://example.com/cb"}}, "redirectUris", "invalid_request"},
+		"localhost no port":       {map[string]any{"redirectUris": []string{"http://localhost/cb"}}, "redirectUris", "invalid_request"},
+		"loopback port too large": {map[string]any{"redirectUris": []string{"http://127.0.0.1:99999/cb"}}, "redirectUris", "invalid_request"},
+		"port too large":          {map[string]any{"redirectUris": []string{"http://localhost:99999/cb"}}, "redirectUris", "invalid_request"},
+		"flat scheme":             {map[string]any{"redirectUris": []string{"myapp://cb"}}, "redirectUris", "invalid_request"},
+		"duplicate uris":          {map[string]any{"redirectUris": []string{"https://a.example.com/cb", "https://a.example.com/cb"}}, "redirectUris", "invalid_request"},
+		"unknown scope":           {map[string]any{"scopes": []map[string]string{{"scope": "admin", "reason": "x"}}}, "scopes", "invalid_request"},
+		"service scope":           {map[string]any{"scopes": []map[string]string{{"scope": "schemas:publish", "reason": "x"}}}, "scopes", "invalid_request"},
+		"bad action":              {map[string]any{"scopes": []map[string]string{{"scope": "@acme/recipes:admin", "reason": "x"}}}, "scopes", "invalid_request"},
+		"no reason":               {map[string]any{"scopes": []map[string]string{{"scope": "openid", "reason": ""}}}, "scopes", "invalid_request"},
+		"duplicate scope":         {map[string]any{"scopes": []map[string]string{{"scope": "openid", "reason": "a"}, {"scope": "openid", "reason": "b"}}}, "scopes", "invalid_request"},
+		"unpublished":             {map[string]any{"scopes": []map[string]string{{"scope": "@acme/recipes:read", "reason": "x"}}}, "scopes", "unknown_collection"},
 	}
 	for name, testCase := range cases {
 		response := f.expect(owner, "POST", "/api/v1/owners/moritz/apps", appBody(testCase.overrides), http.StatusBadRequest, testCase.code)
@@ -296,6 +297,7 @@ func TestInvalidFieldsAreRefusedWithTheFieldNamed(t *testing.T) {
 	}
 	valid := map[string]any{"redirectUris": []string{
 		"https://example.com/cb", "http://localhost:5173/cb", "http://127.0.0.1:8765/callback", "com.example.app://callback",
+		"http://127.0.0.1/callback", "http://[::1]/callback",
 	}}
 	f.createApp(owner, "moritz", valid)
 	if listed := f.expect(owner, "GET", "/api/v1/owners/moritz/apps", nil, http.StatusOK, ""); len(listed["apps"].([]any)) != 1 {

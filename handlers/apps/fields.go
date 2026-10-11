@@ -30,7 +30,10 @@ var (
 	collectionSegmentPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
 	collectionActions        = []string{"read", "write", "share"}
 
-	loopbackPattern     = regexp.MustCompile(`^http://(127\.0\.0\.1|localhost):([0-9]{1,5})(/\S*)?$`)
+	// The OAuth server matches loopback IP redirects on any port, so their port is optional;
+	// localhost is matched exactly and needs one.
+	loopbackPattern     = regexp.MustCompile(`^http://(127\.0\.0\.1|\[::1\])(:([0-9]{1,5}))?(/\S*)?$`)
+	localhostPattern    = regexp.MustCompile(`^http://localhost:([0-9]{1,5})(/\S*)?$`)
 	customSchemePattern = regexp.MustCompile(`^[a-z][a-z0-9-]*(\.[a-z0-9-]+)+://\S*$`)
 )
 
@@ -82,8 +85,8 @@ func isHTTPSURL(value string) bool {
 	return err == nil && parsed.Scheme == "https" && parsed.Hostname() != ""
 }
 
-// isValidRedirectURI accepts https URLs, loopback URLs with a port and
-// reverse-domain custom schemes.
+// isValidRedirectURI accepts https URLs, loopback IP URLs with or without a
+// port, localhost URLs with a port and reverse-domain custom schemes.
 func isValidRedirectURI(uri string) bool {
 	if isHTTPSURL(uri) {
 		return true
@@ -91,11 +94,22 @@ func isValidRedirectURI(uri string) bool {
 	if customSchemePattern.MatchString(uri) {
 		return true
 	}
+	localhostMatch := localhostPattern.FindStringSubmatch(uri)
+	if localhostMatch != nil {
+		return isValidPort(localhostMatch[1])
+	}
 	match := loopbackPattern.FindStringSubmatch(uri)
 	if match == nil {
 		return false
 	}
-	port, _ := strconv.Atoi(match[2])
+	if match[3] == "" {
+		return true
+	}
+	return isValidPort(match[3])
+}
+
+func isValidPort(digits string) bool {
+	port, _ := strconv.Atoi(digits)
 	return port >= 1 && port <= maxPort
 }
 
@@ -110,7 +124,7 @@ func parseRedirectURIs(values []string) ([]string, error) {
 			return nil, err
 		}
 		if !isValidRedirectURI(uri) {
-			return nil, invalidField("redirectUris", uri+" is not allowed: use https://, http://localhost:<port>, http://127.0.0.1:<port> or a reverse-domain scheme such as com.example.app://")
+			return nil, invalidField("redirectUris", uri+" is not allowed: use https://, http://localhost:<port>, http://127.0.0.1 with any port or a reverse-domain scheme such as com.example.app://")
 		}
 		if slices.Contains(uris, uri) {
 			return nil, invalidField("redirectUris", "redirect URIs must be unique")
