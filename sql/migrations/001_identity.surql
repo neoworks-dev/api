@@ -9,6 +9,8 @@ DEFINE FIELD auth_hash      ON user TYPE string;
 DEFINE FIELD escrow_enabled ON user TYPE bool DEFAULT false;
 DEFINE FIELD first_name     ON user TYPE option<string>;
 DEFINE FIELD last_name      ON user TYPE option<string>;
+-- The user's handle (and registry scope), picked once when first needed; see `handle`.
+DEFINE FIELD handle         ON user TYPE option<string>;
 DEFINE FIELD created_at     ON user TYPE datetime DEFAULT time::now() READONLY;
 
 DEFINE INDEX user_email_unique ON user FIELDS email UNIQUE;
