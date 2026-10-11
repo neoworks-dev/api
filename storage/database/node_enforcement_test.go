@@ -352,7 +352,8 @@ func TestReferenceNodesShareTheirTargetsBlobObject(t *testing.T) {
 	}
 
 	used, err := f.store.StorageUsedBytes(context.Background(), owner.UserID)
-	if err != nil || used != 50 {
-		t.Fatalf("storage used with a reference: %d %v, want 50", used, err)
+	want := 50 + int64(len(album.Content)+len(original.Content)+len(reference.Content))
+	if err != nil || used != want {
+		t.Fatalf("storage used with a reference: %d %v, want %d (the blob counted once)", used, err, want)
 	}
 }

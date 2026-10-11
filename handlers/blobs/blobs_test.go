@@ -36,10 +36,11 @@ type fixture struct {
 	object  string
 }
 
-// newFixture stores a files node whose blob has 3 chunks and 100 declared bytes.
+// newFixture stores a files node whose blob has 3 chunks and 100 declared bytes,
+// then limits the account to quotaBytes.
 func newFixture(t *testing.T, quotaBytes int64) *fixture {
 	store := dbtest.New(t)
-	handler := blobs.NewHandler(store, fakePresigner{}, quotaBytes)
+	handler := blobs.NewHandler(store, fakePresigner{})
 	router := handlertest.NewAuthenticated(func(router chi.Router) {
 		handler.RegisterAuthenticated(router)
 		handler.RegisterPublic(router)
@@ -47,6 +48,7 @@ func newFixture(t *testing.T, quotaBytes int64) *fixture {
 	account := dbtest.CreateAccount(t, store, "@neoworks/photos:read", "@neoworks/photos:write")
 	fx := &fixture{t: t, router: router, store: store, account: account, owner: account.Principal, object: uuid.NewString()}
 	fx.nodeID = fx.storeFile(fx.owner, fx.object)
+	store.SetStorageQuota(quotaBytes)
 	return fx
 }
 
@@ -107,8 +109,12 @@ func TestPresignUsesObjectIDAndChunkIndexAsKey(t *testing.T) {
 	}
 }
 
+// storedBytes is what the fixture's node counts: 6 characters of content plus
+// the 100 declared blob bytes.
+const storedBytes = 106
+
 func TestPresignPutIsRefusedOverQuotaButGetStillWorks(t *testing.T) {
-	fx := newFixture(t, 99)
+	fx := newFixture(t, storedBytes-1)
 	if code, _ := fx.presign(fx.owner, "put", 0); code != http.StatusForbidden {
 		t.Fatalf("put over quota: got %d want 403", code)
 	}
@@ -118,7 +124,7 @@ func TestPresignPutIsRefusedOverQuotaButGetStillWorks(t *testing.T) {
 }
 
 func TestPresignPutAtExactlyTheQuotaIsAllowed(t *testing.T) {
-	fx := newFixture(t, 100)
+	fx := newFixture(t, storedBytes)
 	if code, _ := fx.presign(fx.owner, "put", 0); code != http.StatusOK {
 		t.Fatalf("put at quota: got %d want 200", code)
 	}

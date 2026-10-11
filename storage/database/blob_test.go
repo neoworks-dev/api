@@ -8,7 +8,7 @@ import (
 	"github.com/neoworks/auth/storage/database"
 )
 
-func TestStorageUsageCountsLiveBlobsOnly(t *testing.T) {
+func TestStorageUsageCountsLiveContentAndBlobsOnly(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	root := f.createRoot(owner, "@neoworks/photos")
@@ -17,8 +17,8 @@ func TestStorageUsageCountsLiveBlobsOnly(t *testing.T) {
 	seq := f.pushOK(owner, file)
 
 	used, err := f.store.StorageUsedBytes(context.Background(), owner.UserID)
-	if err != nil || used != 70 {
-		t.Fatalf("usage: %d %v", used, err)
+	if want := 70 + int64(len(file.Content)); err != nil || used != want {
+		t.Fatalf("usage: %d %v, want %d", used, err, want)
 	}
 	file.BaseSeq = seq
 	file.Deleted = true

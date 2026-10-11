@@ -80,8 +80,12 @@ func TestPushStatementBindsEveryParameter(t *testing.T) {
 			validated.BlobJSON = &blobJSON
 			validated.BlobObject = map[string]any{"objectId": "x"}
 		}
-		params := pushParams(owner, validated, []string{"write"}, shortcutTargetRoles(owner, node))
-		requireAllBound(t, "push "+name, pushStatement(validated), params, "parent", "parent_id")
+		owner.ClientID = "example-songs"
+		params := pushParams(owner, validated, []string{"write"}, shortcutTargetRoles(owner, node), 1<<30)
+		requireAllBound(t, "push "+name, pushStatement(validated, true), params, "parent", "parent_id")
+		owner.ClientID = ""
+		params = pushParams(owner, validated, []string{"write"}, shortcutTargetRoles(owner, node), 0)
+		requireAllBound(t, "push without client "+name, pushStatement(validated, false), params, "parent", "parent_id")
 	}
 }
 
@@ -177,8 +181,17 @@ func TestAppStatementsBindEveryParameter(t *testing.T) {
 		requireAllBound(t, "create app "+name, statement, params)
 	}
 	name, scopes := "Recipes", scope
-	statement, params := updateAppStatement("app_1", AppPatch{Name: &name, Description: &name, Homepage: &name, RedirectURIs: []string{"u"}, Scopes: &scopes})
+	statement, params := updateAppStatement("app_1", AppPatch{Name: &name, Description: &name, Homepage: &name, RedirectURIs: []string{"u"}, Scopes: &scopes}, true)
 	requireAllBound(t, "update app", statement, params)
+	requireAllBound(t, "submit review", submitReviewStatement, map[string]any{"client": "c", "privacy_policy_url": "p", "support_contact": "s"})
+	for name, logo := range map[string]AppLogo{
+		"png":  {ClientID: "app_1", AssetID: "a", LogoFingerprint: LogoFingerprint{SHA256: "s", AHash: "ff"}},
+		"svg":  {ClientID: "app_1", AssetID: "a", LogoFingerprint: LogoFingerprint{SHA256: "s"}},
+		"held": {ClientID: "app_1", AssetID: "a", LogoFingerprint: LogoFingerprint{SHA256: "s"}, Held: true},
+	} {
+		statement, params := setLogoStatement(logo)
+		requireAllBound(t, "set logo "+name, statement, params)
+	}
 	requireAllBound(t, "delete app", deleteAppStatement, map[string]any{"client": "c", "client_id": "c"})
 	requireAllBound(t, "published collections", publishedCollectionsStatement, map[string]any{"collections": []string{}}, "parent")
 }

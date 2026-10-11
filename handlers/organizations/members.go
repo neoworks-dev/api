@@ -61,7 +61,7 @@ func (h *Handler) checkGrantChange(w http.ResponseWriter, r *http.Request, actin
 		return false
 	}
 	problem := ownership.CheckGrantChange(ownership.GrantChange{
-		ActorGrants: acting.grants, Before: before, After: after, MemberID: memberID, Members: members,
+		Organization: acting.handle, ActorGrants: acting.grants, Before: before, After: after, MemberID: memberID, Members: members,
 	})
 	if problem != "" {
 		writeChangeProblem(w, problem)

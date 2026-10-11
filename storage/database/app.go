@@ -14,8 +14,11 @@ const (
 	AppTypePublic       = "public"
 	AppTypeConfidential = "confidential"
 
-	// ReviewStatusNone is the review state of every app until app review (#35) exists.
-	ReviewStatusNone = "none"
+	ReviewStatusNone      = "none"
+	ReviewStatusPending   = "pending"
+	ReviewStatusApproved  = "approved"
+	ReviewStatusRejected  = "rejected"
+	ReviewStatusSuspended = "suspended"
 )
 
 // RequestedScope is a scope an app asks for with the reason it gives users.
@@ -49,9 +52,16 @@ type App struct {
 	Homepage     string           `json:"homepage"`
 	RedirectURIs []string         `json:"redirectUris"`
 	Scopes       []RequestedScope `json:"scopes"`
-	LogoURL      *string          `json:"logoUrl"`
 	Review       AppReview        `json:"review"`
 	UpdatedAt    time.Time        `json:"updatedAt"`
+	// LogoAssetID is the asset holding the logo; the handler turns it into a URL.
+	LogoAssetID *string `json:"-"`
+	// LogoHeld means the logo resembles another app's and waits for approval.
+	LogoHeld bool `json:"logoHeld"`
+	// FirstParty apps are Neoworks' own.
+	FirstParty bool `json:"-"`
+	// ReviewedScopes are the scopes the reviewer approved; nil before approval.
+	ReviewedScopes []string `json:"-"`
 }
 
 // AppFields are the fields a developer edits.
@@ -93,6 +103,16 @@ type dbScopeReason struct {
 type dbApp struct {
 	ID           models.RecordID  `json:"id"`
 	Owner        *models.RecordID `json:"owner"`
+	FirstParty   bool             `json:"first_party"`
+	Verified     bool             `json:"verified"`
+	ReviewStatus string           `json:"review_status"`
+	ReviewReason *string          `json:"review_reason"`
+	ReviewedAt   *time.Time       `json:"review_updated_at"`
+	PrivacyURL   *string          `json:"privacy_policy_url"`
+	Support      *string          `json:"support_contact"`
+	ReviewedWith []string         `json:"reviewed_scopes"`
+	Logo         *models.RecordID `json:"logo"`
+	LogoHeld     bool             `json:"logo_held"`
 	Name         *string          `json:"name"`
 	Description  string           `json:"description"`
 	Homepage     string           `json:"homepage"`
@@ -125,7 +145,7 @@ func (row dbApp) displayName() string {
 func (row dbApp) summary() AppSummary {
 	return AppSummary{
 		ID: recordTail(row.ID), Name: row.displayName(), Type: row.appType(),
-		ReviewStatus: ReviewStatusNone, Verified: false, CreatedAt: row.CreatedAt,
+		ReviewStatus: row.ReviewStatus, Verified: row.Verified || row.FirstParty, CreatedAt: row.CreatedAt,
 	}
 }
 
@@ -151,9 +171,18 @@ func (row dbApp) toApp(owner Owner) *App {
 	return &App{
 		AppSummary: row.summary(), Owner: owner, Description: row.Description, Homepage: row.Homepage,
 		RedirectURIs: redirectURIs, Scopes: row.requestedScopes(),
-		Review:    AppReview{Status: ReviewStatusNone},
-		UpdatedAt: row.UpdatedAt,
+		Review:    AppReview{Status: row.ReviewStatus, Reason: row.ReviewReason, UpdatedAt: row.ReviewedAt},
+		UpdatedAt: row.UpdatedAt, LogoAssetID: row.logoAssetID(), LogoHeld: row.LogoHeld, FirstParty: row.FirstParty,
+		ReviewedScopes: row.ReviewedWith,
 	}
+}
+
+func (row dbApp) logoAssetID() *string {
+	if row.Logo == nil {
+		return nil
+	}
+	assetID := recordTail(*row.Logo)
+	return &assetID
 }
 
 // ScopeNames lists the scope strings of the requested scopes.
@@ -243,7 +272,7 @@ func (s *SurrealStore) CreateApp(ctx context.Context, newApp NewApp) (*App, erro
 	if err := queryExec(ctx, s.DB, statement, params); err != nil {
 		return nil, fmt.Errorf("create app: %w", err)
 	}
-	return s.GetApp(ctx, newApp.ID)
+	return s.refreshedApp(ctx, newApp.ID)
 }
 
 // GetApp returns a client with its owner; ErrNotFound when it does not exist or
@@ -294,7 +323,7 @@ func (s *SurrealStore) AppBelongsTo(ctx context.Context, clientID string, handle
 
 // updateAppStatement builds the update of the fields set in the patch with its
 // parameters; assignments is empty when the patch changes nothing.
-func updateAppStatement(clientID string, patch AppPatch) (string, map[string]any) {
+func updateAppStatement(clientID string, patch AppPatch, backToReview bool) (string, map[string]any) {
 	assignments := []string{}
 	params := map[string]any{"client": clientRecord(clientID)}
 	if patch.Name != nil {
@@ -318,6 +347,9 @@ func updateAppStatement(clientID string, patch AppPatch) (string, map[string]any
 		params["scopes"] = ScopeNames(*patch.Scopes)
 		params["scope_reasons"] = scopeReasonRows(*patch.Scopes)
 	}
+	if backToReview {
+		assignments = append(assignments, "review_status = 'pending'", "review_reason = NONE", "review_updated_at = time::now()")
+	}
 	if len(assignments) == 0 {
 		return "", params
 	}
@@ -325,14 +357,20 @@ func updateAppStatement(clientID string, patch AppPatch) (string, map[string]any
 }
 
 // UpdateApp applies the patch and returns the app.
+// A reviewed app whose patch requests a scope the reviewer did not approve goes
+// back to review.
 func (s *SurrealStore) UpdateApp(ctx context.Context, clientID string, patch AppPatch) (*App, error) {
-	statement, params := updateAppStatement(clientID, patch)
+	current, err := s.GetApp(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	statement, params := updateAppStatement(clientID, patch, needsReReview(current, patch))
 	if statement != "" {
 		if err := queryExec(ctx, s.DB, statement, params); err != nil {
 			return nil, fmt.Errorf("update app: %w", err)
 		}
 	}
-	return s.GetApp(ctx, clientID)
+	return s.refreshedApp(ctx, clientID)
 }
 
 // SetAppSecretHash replaces a confidential client's secret hash.

@@ -12,6 +12,8 @@ import (
 	"github.com/neoworks/auth/handlers/installs"
 	"github.com/neoworks/auth/storage/database"
 	"github.com/neoworks/auth/storage/database/dbtest"
+	surrealdb "github.com/surrealdb/surrealdb.go"
+	"github.com/surrealdb/surrealdb.go/pkg/models"
 )
 
 func TestInstallLifecycle(t *testing.T) {
@@ -86,5 +88,73 @@ func TestExpiringWithinValidatesTheWindow(t *testing.T) {
 	handlertest.Decode(t, response, &list)
 	if list.Installs == nil || len(list.Installs) != 0 {
 		t.Fatalf("expected an empty list, got %+v", list)
+	}
+}
+
+func authorizeClient(t *testing.T, store *database.SurrealStore, userID string, clientID string) {
+	t.Helper()
+	_, err := surrealdb.Query[[]any](context.Background(), store.DB,
+		"UPSERT grant SET user = $user, client = $client, scopes = ['openid'], enabled = true WHERE user = $user AND client = $client",
+		map[string]any{"user": models.NewRecordID("user", userID), "client": models.NewRecordID("client", clientID)})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestConnectedAppsShowWhoIsBehindEachAppAndWhereItStands(t *testing.T) {
+	store := dbtest.New(t)
+	ctx := context.Background()
+	installHandler := installs.NewHandler(store)
+	router := handlertest.NewAuthenticated(func(router chi.Router) { installHandler.RegisterAuthenticated(router) })
+	user := handlertest.CreateUser(t, store)
+	developer := handlertest.CreateUser(t, store)
+	if err := store.ClaimUserHandle(ctx, developer.UserID, "moritz"); err != nil {
+		t.Fatal(err)
+	}
+	app, err := store.CreateApp(ctx, database.NewApp{
+		ID: "app_recipes", OwnerHandle: "moritz", CreatorID: developer.UserID, Type: database.AppTypePublic,
+		Fields: database.AppFields{Name: "Recipes", Description: "Share recipes", RedirectURIs: []string{"https://recipes.example/cb"}, Scopes: []database.RequestedScope{}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	authorizeClient(t, store, user.UserID, app.ID)
+	authorizeClient(t, store, user.UserID, "neoworks-calendar")
+	authorizeClient(t, store, user.UserID, "example-songs")
+	if _, err := store.CreateInstall(ctx, database.CreateInstallParams{InstallID: uuid.NewString(), UserID: user.UserID, ClientID: app.ID, EncPub: "e", SignPub: "s", Name: "Laptop"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.DecideReview(ctx, app.ID, database.DecisionSuspend, "Abuse reports."); err != nil {
+		t.Fatal(err)
+	}
+
+	var list struct {
+		Apps []map[string]any `json:"apps"`
+	}
+	handlertest.Decode(t, router.Do(t, user, "GET", "/api/v1/connected-apps", nil, nil), &list)
+	byID := map[string]map[string]any{}
+	for _, connected := range list.Apps {
+		byID[connected["clientId"].(string)] = connected
+	}
+	recipes := byID[app.ID]
+	owner := recipes["owner"].(map[string]any)
+	if recipes["name"] != "Recipes" || owner["handle"] != "moritz" || recipes["verified"] != false || recipes["firstParty"] != false {
+		t.Fatalf("third-party app: %v", recipes)
+	}
+	if recipes["reviewStatus"] != "suspended" || recipes["reviewReason"] != "Abuse reports." || len(recipes["installs"].([]any)) != 1 {
+		t.Fatalf("suspension and installs: %v", recipes)
+	}
+	if storage := recipes["storage"].(map[string]any); storage["usedBytes"] != float64(0) || storage["capBytes"] != nil {
+		t.Fatalf("storage: %v", storage)
+	}
+	if official := byID["neoworks-calendar"]; official["firstParty"] != true || official["verified"] != true || official["owner"].(map[string]any)["handle"] != "neoworks" {
+		t.Fatalf("first-party app: %v", official)
+	}
+	if sample := byID["example-songs"]; sample["owner"] != nil || sample["verified"] != false {
+		t.Fatalf("an app without an owner shows none: %v", sample)
+	}
+	appToken := access.Principal{UserID: user.UserID, InstallID: uuid.NewString(), Scopes: user.Scopes}
+	if response := router.Do(t, appToken, "GET", "/api/v1/connected-apps", nil, nil); response.Code != http.StatusForbidden {
+		t.Fatalf("an app listing connected apps: %d", response.Code)
 	}
 }

@@ -55,7 +55,7 @@ func (resolver *principalResolver) ServeHTTP(w http.ResponseWriter, r *http.Requ
 		writeAuthError(w, http.StatusUnauthorized, "invalid_token")
 		return
 	}
-	principal := access.Principal{UserID: claims.Subject, InstallID: claims.InstallID, Scopes: claims.Scope}
+	principal := access.Principal{UserID: claims.Subject, InstallID: claims.InstallID, ClientID: claims.ClientID, Scopes: claims.Scope}
 	resolver.next.ServeHTTP(w, r.WithContext(ContextWithPrincipal(r.Context(), principal)))
 }
 

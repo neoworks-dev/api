@@ -10,6 +10,7 @@ import (
 const (
 	defaultAuditLimit = 50
 	maxAuditLimit     = 200
+	systemActorName   = "Neoworks"
 )
 
 // Audit actions recorded for an organization.
@@ -30,6 +31,21 @@ const (
 	AuditAppRedirectURIsChanged = "app.redirect_uris_changed"
 	AuditAppScopesChanged       = "app.scopes_changed"
 	AuditAppSecretRotated       = "app.secret_rotated"
+	AuditAppLogoChanged         = "app.logo_changed"
+	AuditAppLogoRemoved         = "app.logo_removed"
+	AuditAppReviewSubmitted     = "app.review_submitted"
+	AuditAppReviewApproved      = "app.review_approved"
+	AuditAppReviewRejected      = "app.review_rejected"
+	AuditAppSuspended           = "app.suspended"
+	AuditAppReviewReset         = "app.review_reset"
+	AuditAppVerifiedChanged     = "app.verified_changed"
+
+	AuditDomainAdded    = "domain.added"
+	AuditDomainVerified = "domain.verified"
+	AuditDomainRevoked  = "domain.revoked"
+	AuditDomainRemoved  = "domain.removed"
+
+	AuditOrganizationVerifiedChanged = "organization.verified_changed"
 )
 
 // AuditTarget is what an audit entry is about.
@@ -39,7 +55,8 @@ type AuditTarget struct {
 	Label string `json:"label"`
 }
 
-// AuditInput is one action to record.
+// AuditInput is one action to record. An empty ActorID records an action the
+// system took itself.
 type AuditInput struct {
 	Organization string
 	ActorID      string
@@ -80,6 +97,9 @@ type dbAuditEntry struct {
 func (row dbAuditEntry) toEntry() AuditEntry {
 	name := dbUserName{Handle: row.ActorHandle, FirstName: row.ActorFirst, LastName: row.ActorLast}
 	actor := Owner{Kind: OwnerKindUser, DisplayName: userDisplayName(name)}
+	if row.ActorHandle == nil && actor.DisplayName == "" {
+		actor.DisplayName = systemActorName
+	}
 	if row.ActorHandle != nil {
 		actor.Handle = *row.ActorHandle
 	}
@@ -93,24 +113,34 @@ func (row dbAuditEntry) toEntry() AuditEntry {
 	}
 }
 
-const recordAuditStatement = `CREATE organization_audit SET organization = $organization, actor = $actor,
+const recordAuditStatement = `CREATE organization_audit SET organization = $organization,
 	action = $action, target_kind = $target_kind, target_id = $target_id, target_label = $target_label, details = $details`
+
+const recordAuditWithActorStatement = recordAuditStatement + `, actor = $actor`
 
 func recordAuditParams(input AuditInput) map[string]any {
 	details := input.Details
 	if details == nil {
 		details = map[string]any{}
 	}
-	return map[string]any{
-		"organization": organizationRecord(input.Organization), "actor": userRecord(input.ActorID),
-		"action": input.Action, "target_kind": input.Target.Kind, "target_id": input.Target.ID,
+	params := map[string]any{
+		"organization": organizationRecord(input.Organization),
+		"action":       input.Action, "target_kind": input.Target.Kind, "target_id": input.Target.ID,
 		"target_label": input.Target.Label, "details": details,
 	}
+	if input.ActorID != "" {
+		params["actor"] = userRecord(input.ActorID)
+	}
+	return params
 }
 
 // RecordAudit appends an entry to the organization's audit log.
 func (s *SurrealStore) RecordAudit(ctx context.Context, input AuditInput) error {
-	return queryExec(ctx, s.DB, recordAuditStatement, recordAuditParams(input))
+	statement := recordAuditStatement
+	if input.ActorID != "" {
+		statement = recordAuditWithActorStatement
+	}
+	return queryExec(ctx, s.DB, statement, recordAuditParams(input))
 }
 
 const auditSelection = `SELECT id, at, actor.handle AS actor_handle, actor.first_name AS actor_first_name,

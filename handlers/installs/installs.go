@@ -1,5 +1,6 @@
 // Package installs lists connected apps, revokes them, and serves an install its
-// own delegation material.
+// own delegation material. A connected app is an app the user authorized, with
+// its installs, who is behind it and what it stores in the account.
 package installs
 
 import (
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/neoworks/auth/config"
 	"github.com/neoworks/auth/handlers/respond"
 	"github.com/neoworks/auth/middleware"
 	"github.com/neoworks/auth/storage/database"
@@ -29,6 +31,7 @@ func (h *Handler) RegisterAuthenticated(router chi.Router) {
 	account := router.With(middleware.RequireAccountPrincipal)
 	account.Get("/api/v1/installs", h.list)
 	account.Delete("/api/v1/installs/{id}", h.revoke)
+	account.Get("/api/v1/connected-apps", h.listConnectedApps)
 	router.With(middleware.RequireInstallPrincipal).Get("/api/v1/installs/me", h.me)
 }
 
@@ -81,4 +84,46 @@ func (h *Handler) listExpiring(w http.ResponseWriter, r *http.Request, userID st
 		return
 	}
 	respond.JSON(w, http.StatusOK, map[string]any{"installs": installs})
+}
+
+// connectedApp is what the user sees of an app they authorized.
+type connectedApp struct {
+	*database.PublicApp
+	LogoURL          *string            `json:"logoUrl"`
+	Scopes           []string           `json:"scopes"`
+	AuthorizedAt     time.Time          `json:"authorizedAt"`
+	LastAuthorizedAt time.Time          `json:"lastAuthorizedAt"`
+	Installs         []database.Install `json:"installs"`
+	Storage          appStorage         `json:"storage"`
+}
+
+type appStorage struct {
+	UsedBytes int64  `json:"usedBytes"`
+	CapBytes  *int64 `json:"capBytes"`
+}
+
+func (h *Handler) listConnectedApps(w http.ResponseWriter, r *http.Request) {
+	principal, _ := middleware.PrincipalFromContext(r.Context())
+	apps, err := h.store.ListConnectedApps(r.Context(), principal.UserID)
+	if err != nil {
+		respond.StoreError(w, "listConnectedApps", err)
+		return
+	}
+	views := make([]connectedApp, 0, len(apps))
+	for _, app := range apps {
+		views = append(views, connectedAppView(app))
+	}
+	respond.JSON(w, http.StatusOK, map[string]any{"apps": views})
+}
+
+func connectedAppView(app database.ConnectedApp) connectedApp {
+	view := connectedApp{
+		PublicApp: app.App, Scopes: app.Scopes, AuthorizedAt: app.AuthorizedAt, LastAuthorizedAt: app.LastAuthorizedAt,
+		Installs: app.Installs, Storage: appStorage{UsedBytes: app.Storage.UsedBytes, CapBytes: app.Storage.CapBytes},
+	}
+	if app.App.LogoAssetID != nil {
+		url := config.AssetURL(*app.App.LogoAssetID)
+		view.LogoURL = &url
+	}
+	return view
 }

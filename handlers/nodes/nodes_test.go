@@ -280,3 +280,31 @@ func TestLinkPullNeedsNoPrincipal(t *testing.T) {
 		t.Fatalf("unknown link: got %d want 404", missing.Code)
 	}
 }
+
+func TestPushOverTheQuotaIsAClearErrorAndWritesNothing(t *testing.T) {
+	router, store := newRouter(t)
+	account := dbtest.CreateAccount(t, store, "@neoworks/calendar:read", "@neoworks/calendar:write")
+	owner := account.Principal
+	root := bootstrapRoot(t, router, store, account)
+	rootID := root["id"].(string)
+	store.SetStorageQuota(10)
+
+	first := wireNode(owner, "@neoworks/calendar", "item", &rootID)
+	second := wireNode(owner, "@neoworks/calendar", "item", &rootID)
+	response := router.Do(t, owner, "POST", "/api/v1/nodes/push", map[string]any{"nodes": []map[string]any{first, second}}, nil)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("push over the quota: %d %s", response.Code, response.Body.String())
+	}
+	var body map[string]any
+	handlertest.Decode(t, response, &body)
+	if body["error"] != "quota_exceeded" || body["quotaBytes"] != float64(10) || body["usedBytes"] == nil || body["message"] == "" {
+		t.Fatalf("error body: %v", body)
+	}
+	if used, _ := store.StorageUsedBytes(t.Context(), owner.UserID); used != 0 {
+		t.Fatalf("a refused batch writes nothing: %d bytes", used)
+	}
+	store.SetStorageQuota(0)
+	if results := push(t, router, owner, first, second); results.Results[0].Status != "ok" {
+		t.Fatalf("without the quota: %+v", results)
+	}
+}

@@ -11,7 +11,8 @@ func TestOrganizationStatementsBindEveryParameter(t *testing.T) {
 	userID := uuid.NewString()
 	requireAllBound(t, "claim handle", claimUserHandleStatement, claimUserHandleParams(userID, "acme"))
 	requireAllBound(t, "create organization", createOrganizationStatement, createOrganizationParams(userID, "acme", "Acme"))
-	requireAllBound(t, "audit", recordAuditStatement, recordAuditParams(AuditInput{Organization: "acme", ActorID: userID, Action: "a"}))
+	requireAllBound(t, "audit", recordAuditWithActorStatement, recordAuditParams(AuditInput{Organization: "acme", ActorID: userID, Action: "a"}))
+	requireAllBound(t, "system audit", recordAuditStatement, recordAuditParams(AuditInput{Organization: "acme", Action: "a"}))
 
 	grants := []ownership.Grant{ownership.ForApp(ownership.AppsEdit, "songs")}
 	byEmail := InvitationInput{Email: "a@example.com", Grants: grants}

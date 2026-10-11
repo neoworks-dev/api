@@ -63,17 +63,3 @@ func blobTarget(node *dbNode, objectID string) (*BlobTarget, error) {
 	}
 	return &BlobTarget{OwnerID: node.OwnerID, ObjectID: objectID, Chunks: chunks}, nil
 }
-
-// StorageUsedBytes sums the stored bytes of the owner's live nodes.
-func (s *SurrealStore) StorageUsedBytes(ctx context.Context, ownerID string) (int64, error) {
-	totals, err := queryRows[int64](ctx, s.DB,
-		"SELECT VALUE math::sum(blob_size) FROM node WHERE owner_id = $owner_id AND deleted = false GROUP ALL",
-		map[string]any{"owner_id": ownerID})
-	if err != nil {
-		return 0, fmt.Errorf("storage usage: %w", err)
-	}
-	if len(totals) == 0 {
-		return 0, nil
-	}
-	return totals[0], nil
-}

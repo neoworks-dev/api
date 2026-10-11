@@ -13,6 +13,14 @@ var ErrNotFound = errors.New("not found")
 
 type SurrealStore struct {
 	DB *surrealdb.DB
+	// StorageQuotaBytes is the most node content and blob bytes one account may
+	// store; zero or less turns the limit off.
+	StorageQuotaBytes int64
+}
+
+// SetStorageQuota sets the per-account storage quota in bytes.
+func (s *SurrealStore) SetStorageQuota(bytes int64) {
+	s.StorageQuotaBytes = bytes
 }
 
 func NewSurrealStore(url, user, pass, ns, dbName string) (*SurrealStore, error) {

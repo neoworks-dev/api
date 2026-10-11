@@ -16,6 +16,10 @@ const (
 	StatusOK        = "ok"
 	StatusConflict  = "conflict"
 	StatusForbidden = "forbidden"
+	// StatusQuotaExceeded and StatusAppCapExceeded refuse a write that would
+	// take the account, or one app inside it, over its storage limit.
+	StatusQuotaExceeded  = "quota_exceeded"
+	StatusAppCapExceeded = "app_cap_exceeded"
 
 	pushAttempts = 6
 )
@@ -27,6 +31,9 @@ type PushOutcome struct {
 	Status  string
 	Seq     int64
 	Current *Node
+	// UsedBytes and LimitBytes describe the storage limit a refused write hit.
+	UsedBytes  int64
+	LimitBytes int64
 }
 
 func (outcome PushOutcome) MarshalJSON() ([]byte, error) {
@@ -44,6 +51,8 @@ type dbPushOutcome struct {
 	Status  string  `json:"status"`
 	Seq     int64   `json:"seq"`
 	Current *dbNode `json:"current"`
+	Used    int64   `json:"used"`
+	Limit   int64   `json:"limit"`
 }
 
 // PushNode writes one node on behalf of the principal. The authorization, the
@@ -63,8 +72,8 @@ func (s *SurrealStore) PushNode(ctx context.Context, principal access.Principal,
 		return &PushOutcome{ID: node.ID, Status: StatusForbidden}, nil
 	}
 
-	statement := pushStatement(validated)
-	params := pushParams(principal, validated, writerRoles, targetRoles)
+	statement := pushStatement(validated, principal.ClientID != "")
+	params := pushParams(principal, validated, writerRoles, targetRoles, s.StorageQuotaBytes)
 
 	raw, err := runWithRetry(ctx, func() (*dbPushOutcome, error) {
 		return queryReturned[dbPushOutcome](ctx, s.DB, statement, params)
@@ -73,6 +82,15 @@ func (s *SurrealStore) PushNode(ctx context.Context, principal access.Principal,
 		return nil, fmt.Errorf("push node: %w", err)
 	}
 	return outcomeFromRow(node.ID, raw), nil
+}
+
+// StoredBytes is what a pushed node counts against its owner's storage quota:
+// its content and blob objects, and nothing once it is deleted.
+func StoredBytes(validated *ValidatedNode) int64 {
+	if validated.Node.Deleted {
+		return 0
+	}
+	return int64(len(validated.Node.Content)) + validated.BlobSize
 }
 
 // shortcutTargetRoles are the roles on its target a shortcut's writer must hold
@@ -85,7 +103,7 @@ func shortcutTargetRoles(principal access.Principal, node Node) []string {
 }
 
 func outcomeFromRow(nodeID string, row *dbPushOutcome) *PushOutcome {
-	outcome := &PushOutcome{ID: nodeID, Status: row.Status, Seq: row.Seq}
+	outcome := &PushOutcome{ID: nodeID, Status: row.Status, Seq: row.Seq, UsedBytes: row.Used, LimitBytes: row.Limit}
 	if row.Current != nil {
 		current := row.Current.toNode()
 		outcome.Current = &current
@@ -144,7 +162,7 @@ func actingUserID(principal access.Principal) string {
 	return principal.UserID
 }
 
-func pushParams(principal access.Principal, validated *ValidatedNode, writerRoles, targetRoles []string) map[string]any {
+func pushParams(principal access.Principal, validated *ValidatedNode, writerRoles, targetRoles []string, quotaBytes int64) map[string]any {
 	node := validated.Node
 	isOwner := !principal.IsInstall() && node.OwnerID == principal.UserID
 	scope, name, _ := access.ParseCollection(node.Collection)
@@ -160,6 +178,12 @@ func pushParams(principal access.Principal, validated *ValidatedNode, writerRole
 		"epoch":            node.Epoch,
 		"content":          node.Content,
 		"blob_size":        validated.BlobSize,
+		"stored_bytes":     StoredBytes(validated),
+		"quota_limit":      quotaBytes,
+		"has_client":       principal.ClientID != "",
+		"client_id":        principal.ClientID,
+		"client_ref":       clientRecord(principal.ClientID),
+		"owner_user":       userRecord(node.OwnerID),
 		"blob_objects":     validated.BlobObjects,
 		"is_shortcut":      node.IsShortcut(),
 		"target_roles":     targetRoles,
@@ -209,7 +233,7 @@ func addOptionalPushParams(params map[string]any, validated *ValidatedNode) {
 
 // pushStatement builds the write transaction. Optional fields that are absent
 // are assigned NONE explicitly so an update clears them.
-func pushStatement(validated *ValidatedNode) string {
+func pushStatement(validated *ValidatedNode, hasClient bool) string {
 	node := validated.Node
 	shared := []string{
 		"parent_id = $target_parent_id",
@@ -220,6 +244,8 @@ func pushStatement(validated *ValidatedNode) string {
 		"blob = " + optionalValue(validated.BlobJSON != nil, "$blob"),
 		"blob_json = " + optionalValue(validated.BlobJSON != nil, "$blob_json"),
 		"blob_size = $blob_size",
+		"stored_bytes = $stored_bytes",
+		"client_id = " + optionalValue(hasClient, "$client_id"),
 		"blob_objects = $blob_objects",
 		"deleted = $deleted",
 		"deleted_at = IF $deleted { time::now() } ELSE { NONE }",
@@ -316,11 +342,29 @@ LET $authorized = IF $existing != NONE {
 } ELSE {
 	$may_create_root
 };
+LET $old_bytes = IF $existing != NONE { $existing.stored_bytes } ELSE { 0 };
+LET $grows = $stored_bytes > $old_bytes;
+LET $account_used = IF $quota_limit > 0 AND $grows {
+	math::sum((SELECT VALUE stored_bytes FROM node WHERE owner_id = $owner_id AND record::id(id) != $node_id))
+} ELSE { 0 };
+LET $over_quota = $quota_limit > 0 AND $grows AND $account_used + $stored_bytes > $quota_limit;
+LET $app_cap = IF $has_client {
+	(SELECT VALUE storage_cap_bytes FROM grant WHERE user = $owner_user AND client = $client_ref AND enabled = true)[0]
+} ELSE { NONE };
+LET $app_used = IF $app_cap != NONE AND $grows {
+	math::sum((SELECT VALUE stored_bytes FROM node
+		WHERE owner_id = $owner_id AND client_id = $client_id AND record::id(id) != $node_id))
+} ELSE { 0 };
+LET $over_app_cap = $app_cap != NONE AND $grows AND $app_used + $stored_bytes > $app_cap;
 LET $verdict = IF !$authorized OR !$structure_ok {
 	'forbidden'
 } ELSE IF ($existing = NONE AND $base_seq != 0)
 	OR ($existing != NONE AND ($existing.seq != $base_seq OR $epoch < $existing.epoch)) {
 	'conflict'
+} ELSE IF $over_quota {
+	'quota_exceeded'
+} ELSE IF $over_app_cap {
+	'app_cap_exceeded'
 } ELSE {
 	'ok'
 };
@@ -353,7 +397,9 @@ LET $written_seq = IF $verdict = 'ok' {
 RETURN {
 	status: $verdict,
 	seq: $written_seq,
-	current: IF $verdict = 'conflict' { $existing } ELSE { NONE }
+	current: IF $verdict = 'conflict' { $existing } ELSE { NONE },
+	used: IF $verdict = 'quota_exceeded' { $account_used } ELSE IF $verdict = 'app_cap_exceeded' { $app_used } ELSE { 0 },
+	limit: IF $verdict = 'quota_exceeded' { $quota_limit } ELSE IF $verdict = 'app_cap_exceeded' { $app_cap } ELSE { 0 }
 };
 COMMIT TRANSACTION;`
 }

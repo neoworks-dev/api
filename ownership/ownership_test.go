@@ -111,10 +111,29 @@ func TestGrantChanges(t *testing.T) {
 
 func TestInvitationsCannotOfferMoreThanTheInviterHolds(t *testing.T) {
 	inviter := []ownership.Grant{ownership.OrganizationWide(ownership.MembersManage), ownership.ForApp(ownership.UsageView, "songs")}
-	if got := ownership.CheckGrantsToInvite(inviter, []ownership.Grant{ownership.ForApp(ownership.UsageView, "songs")}); got != "" {
+	if got := ownership.CheckGrantsToInvite("acme", inviter, []ownership.Grant{ownership.ForApp(ownership.UsageView, "songs")}); got != "" {
 		t.Errorf("offering a held grant: %q", got)
 	}
-	if got := ownership.CheckGrantsToInvite(inviter, []ownership.Grant{ownership.OrganizationWide(ownership.SchemasPublish)}); got != ownership.ProblemEscalation {
+	if got := ownership.CheckGrantsToInvite("acme", inviter, []ownership.Grant{ownership.OrganizationWide(ownership.SchemasPublish)}); got != ownership.ProblemEscalation {
 		t.Errorf("offering more: %q", got)
 	}
 }
+
+func TestPlatformAdminExistsOnlyInTheNeoworksOrganization(t *testing.T) {
+	admin := []ownership.Grant{ownership.OrganizationWide(ownership.MembersManage), ownership.OrganizationWide(ownership.PlatformAdmin)}
+	offered := []ownership.Grant{ownership.OrganizationWide(ownership.PlatformAdmin)}
+	if got := ownership.CheckGrantsToInvite("neoworks", admin, offered); got != "" {
+		t.Errorf("platform.admin in neoworks: %q", got)
+	}
+	if got := ownership.CheckGrantsToInvite("acme", admin, offered); got != ownership.ProblemInvalidGrant {
+		t.Errorf("platform.admin in another organization: %q", got)
+	}
+	if ownership.Allows(ownership.AllGrants(), ownership.PlatformAdmin, "") {
+		t.Error("platform.admin must not be part of AllGrants")
+	}
+	if (ownership.Grant{Permission: ownership.PlatformAdmin, AppID: stringPointer("songs")}).IsValid() {
+		t.Error("platform.admin cannot be limited to an app")
+	}
+}
+
+func stringPointer(value string) *string { return &value }

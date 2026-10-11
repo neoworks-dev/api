@@ -46,6 +46,7 @@ type dbOrganization struct {
 	ID          models.RecordID `json:"id"`
 	DisplayName string          `json:"display_name"`
 	ArchivedAt  *time.Time      `json:"archived_at"`
+	VerifiedAt  *time.Time      `json:"verified_at"`
 	CreatedAt   time.Time       `json:"created_at"`
 }
 
@@ -62,6 +63,7 @@ type dbMember struct {
 type dbMembership struct {
 	Organization models.RecordID `json:"organization"`
 	DisplayName  string          `json:"display_name"`
+	Verified     bool            `json:"verified"`
 	Grants       []dbMemberGrant `json:"grants"`
 }
 
@@ -99,7 +101,7 @@ func recordTail(record models.RecordID) string {
 func (row dbOrganization) toOrganization(grants []ownership.Grant) *Organization {
 	handle := recordTail(row.ID)
 	return &Organization{
-		Owner:      Owner{Handle: handle, Kind: OwnerKindOrganization, DisplayName: row.DisplayName},
+		Owner:      Owner{Handle: handle, Kind: OwnerKindOrganization, DisplayName: row.DisplayName, Verified: row.VerifiedAt != nil},
 		CreatedAt:  row.CreatedAt,
 		ArchivedAt: row.ArchivedAt,
 		MyGrants:   grants,
@@ -310,7 +312,8 @@ func (s *SurrealStore) AddMember(ctx context.Context, handle string, userID stri
 
 func (s *SurrealStore) organizationMembershipsOf(ctx context.Context, userID string) ([]OwnerMembership, error) {
 	rows, err := queryRows[dbMembership](ctx, s.DB,
-		`SELECT organization, organization.display_name AS display_name, grants FROM organization_member
+		`SELECT organization, organization.display_name AS display_name,
+			organization.verified_at != NONE AS verified, grants FROM organization_member
 		WHERE user = $user AND organization.archived_at = NONE ORDER BY display_name`,
 		map[string]any{"user": userRecord(userID)})
 	if err != nil {
@@ -318,7 +321,7 @@ func (s *SurrealStore) organizationMembershipsOf(ctx context.Context, userID str
 	}
 	memberships := make([]OwnerMembership, 0, len(rows))
 	for _, row := range rows {
-		owner := Owner{Handle: recordTail(row.Organization), Kind: OwnerKindOrganization, DisplayName: row.DisplayName}
+		owner := Owner{Handle: recordTail(row.Organization), Kind: OwnerKindOrganization, DisplayName: row.DisplayName, Verified: row.Verified}
 		memberships = append(memberships, OwnerMembership{Owner: owner, Grants: memberGrantsFromRows(row.Grants)})
 	}
 	return memberships, nil

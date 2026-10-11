@@ -8,6 +8,7 @@ import (
 	"github.com/neoworks/auth/access"
 	"github.com/neoworks/auth/handlers/contactcodes"
 	"github.com/neoworks/auth/handlers/handlertest"
+	"github.com/neoworks/auth/ratelimit"
 	"github.com/neoworks/auth/storage/database"
 	"github.com/neoworks/auth/storage/database/dbtest"
 	"github.com/neoworks/auth/utils"
@@ -131,5 +132,25 @@ func TestSuccessfulLookupsAreRateLimitedPerUser(t *testing.T) {
 	}
 	if last != http.StatusTooManyRequests {
 		t.Fatalf("31st lookup in a minute: got %d want 429", last)
+	}
+}
+
+func TestInstancesSharingACounterShareTheirLookupLimits(t *testing.T) {
+	store := dbtest.New(t)
+	shared := ratelimit.NewMemoryCounter()
+	first := handlertest.NewAuthenticated(func(router chi.Router) {
+		contactcodes.NewHandler(store).WithCounter(shared).RegisterAuthenticated(router)
+	})
+	second := handlertest.NewAuthenticated(func(router chi.Router) {
+		contactcodes.NewHandler(store).WithCounter(shared).RegisterAuthenticated(router)
+	})
+	caller := handlertest.CreateUser(t, store)
+	code := codeOf(t, first, handlertest.CreateUser(t, store))
+
+	for attempt := 0; attempt < 30; attempt++ {
+		first.Do(t, caller, "GET", "/api/v1/contact-codes/"+code, nil, nil)
+	}
+	if response := second.Do(t, caller, "GET", "/api/v1/contact-codes/"+code, nil, nil); response.Code != http.StatusTooManyRequests {
+		t.Fatalf("a second instance must see the first one's lookups: got %d want 429", response.Code)
 	}
 }

@@ -1,55 +1,70 @@
 package contactcodes
 
 import (
-	"sync"
+	"context"
+	"log/slog"
+	"math"
+	"net/http"
+	"strconv"
 	"time"
+
+	"github.com/neoworks/auth/handlers/respond"
+	"github.com/neoworks/auth/ratelimit"
 )
 
-// windowCounter counts events per key inside a sliding window. State is in
-// memory, so limits hold per api instance.
-type windowCounter struct {
-	mutex  sync.Mutex
-	window time.Duration
-	limit  int
-	events map[string][]time.Time
-	now    func() time.Time
+const (
+	lookupWindow = time.Minute
+	failedWindow = 10 * time.Minute
+)
+
+// lookupLimiter limits contact code lookups per user, per address and for the
+// failed ones of a user, which is what stops guessing. The counters are shared
+// through Redis when the handler has one.
+type lookupLimiter struct {
+	counter ratelimit.Counter
 }
 
-func newWindowCounter(window time.Duration, limit int) *windowCounter {
-	return &windowCounter{window: window, limit: limit, events: map[string][]time.Time{}, now: time.Now}
+// wait is how long the caller must wait before looking up another code; zero
+// when it may. It counts the lookup against the user and address limits. A
+// counter that fails lets the lookup through.
+func (limiter lookupLimiter) wait(ctx context.Context, userID string, address string) time.Duration {
+	wait := limiter.hit(ctx, "contacts:user:"+userID, lookupsPerUserPerMinute, lookupWindow)
+	wait = max(wait, limiter.hit(ctx, "contacts:address:"+address, lookupsPerAddressPerMinute, lookupWindow))
+	return max(wait, limiter.failedWait(ctx, userID))
 }
 
-// prune drops expired events and returns the live ones. The mutex must be held.
-func (counter *windowCounter) prune(key string) []time.Time {
-	cutoff := counter.now().Add(-counter.window)
-	live := counter.events[key][:0]
-	for _, moment := range counter.events[key] {
-		if moment.After(cutoff) {
-			live = append(live, moment)
-		}
-	}
-	if len(live) == 0 {
-		delete(counter.events, key)
-		return nil
-	}
-	counter.events[key] = live
-	return live
-}
-
-// retryAfter is zero while the key is under its limit.
-func (counter *windowCounter) retryAfter(key string) time.Duration {
-	counter.mutex.Lock()
-	defer counter.mutex.Unlock()
-	live := counter.prune(key)
-	if len(live) < counter.limit {
+func (limiter lookupLimiter) hit(ctx context.Context, key string, limit int, window time.Duration) time.Duration {
+	count, remaining, err := limiter.counter.Hit(ctx, key, window)
+	if err != nil {
+		slog.Warn("contact code limiter unavailable", "error", err)
 		return 0
 	}
-	return live[0].Add(counter.window).Sub(counter.now())
+	if count <= int64(limit) {
+		return 0
+	}
+	return remaining
 }
 
-func (counter *windowCounter) record(key string) {
-	counter.mutex.Lock()
-	defer counter.mutex.Unlock()
-	counter.prune(key)
-	counter.events[key] = append(counter.events[key], counter.now())
+func (limiter lookupLimiter) failedWait(ctx context.Context, userID string) time.Duration {
+	count, remaining, err := limiter.counter.Peek(ctx, "contacts:failed:"+userID)
+	if err != nil {
+		slog.Warn("contact code limiter unavailable", "error", err)
+		return 0
+	}
+	if count < failedLookupsPerTenMinutes {
+		return 0
+	}
+	return remaining
+}
+
+// recordFailure counts a lookup that found nothing.
+func (limiter lookupLimiter) recordFailure(ctx context.Context, userID string) {
+	if _, _, err := limiter.counter.Hit(ctx, "contacts:failed:"+userID, failedWindow); err != nil {
+		slog.Warn("contact code limiter unavailable", "error", err)
+	}
+}
+
+func writeLimited(w http.ResponseWriter, wait time.Duration) {
+	w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(wait.Seconds()))))
+	respond.Error(w, http.StatusTooManyRequests, "rate_limited", "too many contact code lookups; try again later")
 }

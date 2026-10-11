@@ -1,6 +1,9 @@
 package config
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 // Every neoworks service URL derives from one base domain so dev and prod differ
 // by a single variable (dev: neoworks.localhost, prod: neoworks.dev). Individual
@@ -53,4 +56,18 @@ func portSuffix(scheme, port string) string {
 		return ""
 	}
 	return ":" + port
+}
+
+// AssetsURL is the public origin the assets listener is served on:
+// ASSETS_PUBLIC_URL, else the derived assets service URL.
+func AssetsURL() string {
+	if value := os.Getenv("ASSETS_PUBLIC_URL"); value != "" {
+		return strings.TrimRight(value, "/")
+	}
+	return ServiceURL("assets")
+}
+
+// AssetURL is the public URL of one asset.
+func AssetURL(assetID string) string {
+	return AssetsURL() + "/assets/" + assetID
 }

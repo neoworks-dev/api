@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/neoworks/auth/config"
 	"github.com/neoworks/auth/crypto"
+	"github.com/neoworks/auth/domainproof"
+	adminhandlers "github.com/neoworks/auth/handlers/admin"
 	approvalhandlers "github.com/neoworks/auth/handlers/approvals"
 	apphandlers "github.com/neoworks/auth/handlers/apps"
 	assethandlers "github.com/neoworks/auth/handlers/assets"
@@ -30,9 +33,11 @@ import (
 	registryhandlers "github.com/neoworks/auth/handlers/registry"
 	renewalhandlers "github.com/neoworks/auth/handlers/renewal"
 	settinghandlers "github.com/neoworks/auth/handlers/settings"
+	storagehandlers "github.com/neoworks/auth/handlers/storage"
 	"github.com/neoworks/auth/middleware"
 	"github.com/neoworks/auth/oauth"
 	"github.com/neoworks/auth/push"
+	"github.com/neoworks/auth/ratelimit"
 	"github.com/neoworks/auth/scheduler"
 	"github.com/neoworks/auth/storage/cache"
 	"github.com/neoworks/auth/storage/database"
@@ -58,15 +63,21 @@ func main() {
 	redis := cache.NewRedisStore(cache.ConfigFromEnv())
 	surreal := connectSurreal()
 	objects := connectObjectStore()
+	surreal.SetStorageQuota(storageQuotaBytes())
 
 	issuer := oauth.NewTokenIssuer(keys.PrivateKey(), env("ISSUER_URL", config.ServiceURL("oauth")))
 	clientAuth := middleware.NewJWTMiddleware(issuer, redis)
 
+	bootstrapPlatformAdmins(surreal)
 	scheduler.NewTombstonePurger(surreal, objects, tombstoneRetention()).Start(context.Background())
+	scheduler.NewDomainRechecker(surreal, domainproof.NewVerifier(surreal, domainproof.NewNetworkProver())).Start(context.Background())
 
+	counter := ratelimit.NewRedisCounter(redis.Client())
+	limiter := ratelimit.New(counter, counter, surreal)
+	assetRouter := limiter.ByIP(ratelimit.BucketAssets)(assethandlers.NewHandler(surreal, redis, objects, clientAuth).Router())
 	servers := []*http.Server{
-		{Addr: ":" + env("PORT", "8081"), Handler: apiRouter(surreal, redis, objects, clientAuth)},
-		{Addr: ":" + env("ASSETS_PORT", "8082"), Handler: assethandlers.NewHandler(surreal, redis, objects, clientAuth).Router()},
+		{Addr: ":" + env("PORT", "8081"), Handler: apiRouter(surreal, redis, objects, clientAuth, limiter, counter)},
+		{Addr: ":" + env("ASSETS_PORT", "8082"), Handler: assetRouter},
 	}
 	for _, server := range servers {
 		go listen(server)
@@ -109,6 +120,16 @@ func connectObjectStore() *objectstore.Store {
 	return objects
 }
 
+// bootstrapPlatformAdmins makes the accounts named in NEOWORKS_ADMIN_EMAILS
+// administrators of the platform. Accounts that do not exist yet are picked up
+// at the next start.
+func bootstrapPlatformAdmins(surreal *database.SurrealStore) {
+	emails := strings.Split(os.Getenv("NEOWORKS_ADMIN_EMAILS"), ",")
+	if err := surreal.EnsurePlatformAdmins(context.Background(), emails); err != nil {
+		slog.Error("bootstrap platform admins", "error", err)
+	}
+}
+
 func tombstoneRetention() time.Duration {
 	days, err := strconv.Atoi(os.Getenv("TOMBSTONE_RETENTION_DAYS"))
 	if err != nil || days < 1 {
@@ -125,7 +146,8 @@ func storageQuotaBytes() int64 {
 	return quota
 }
 
-func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects *objectstore.Store, clientAuth *middleware.ClientAuth) http.Handler {
+func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects *objectstore.Store, clientAuth *middleware.ClientAuth,
+	limiter *ratelimit.Limiter, counter *ratelimit.RedisCounter) http.Handler {
 	router := chi.NewRouter()
 	router.Use(chimiddleware.Logger)
 	router.Use(chimiddleware.Recoverer)
@@ -138,11 +160,12 @@ func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects 
 	})
 
 	nodes := nodehandlers.NewHandler(surreal)
-	blobs := blobhandlers.NewHandler(surreal, objects, storageQuotaBytes())
-	nodes.RegisterPublic(router)
-	blobs.RegisterPublic(router)
+	blobs := blobhandlers.NewHandler(surreal, objects).WithLimiter(limiter)
 	registry := registryhandlers.NewHandler(surreal)
-	registry.RegisterPublic(router)
+	anonymous := router.With(limiter.ByIP(ratelimit.BucketPublic))
+	nodes.RegisterPublic(anonymous)
+	blobs.RegisterPublic(anonymous)
+	registry.RegisterPublic(anonymous)
 
 	router.Group(func(authenticated chi.Router) {
 		authenticated.Use(clientAuth.JWTMiddleware)
@@ -151,8 +174,9 @@ func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects 
 
 		authenticated.Group(func(principals chi.Router) {
 			principals.Use(middleware.PrincipalMiddleware(surreal))
+			principals.Use(limiter.Authenticated)
 			keyhandlers.NewHandler(surreal).RegisterAuthenticated(principals)
-			contactcodehandlers.NewHandler(surreal).RegisterAuthenticated(principals)
+			contactcodehandlers.NewHandler(surreal).WithCounter(counter).RegisterAuthenticated(principals)
 			devicehandlers.NewHandler(surreal).RegisterAuthenticated(principals)
 			installhandlers.NewHandler(surreal).RegisterAuthenticated(principals)
 			renewals := renewalhandlers.NewHandler(surreal)
@@ -160,13 +184,15 @@ func apiRouter(surreal *database.SurrealStore, redis *cache.RedisStore, objects 
 			renewals.RegisterAuthenticator(account.With(middleware.RequireClient(env("AUTHENTICATOR_CLIENT_ID", "neoworks-authenticator"))))
 			dashboard := account.With(middleware.RequireClient(env("WEB_CLIENT_ID", "neoworks.dev")))
 			organizationhandlers.NewHandler(surreal).RegisterAuthenticated(dashboard)
-			apphandlers.NewHandler(surreal).RegisterAuthenticated(dashboard)
+			apphandlers.NewHandler(surreal).WithLogoStorage(objects).WithUsage(counter).RegisterAuthenticated(dashboard)
+			adminhandlers.NewHandler(surreal).RegisterAuthenticated(dashboard)
 			data := principals.With(middleware.RequireDataAccess(env("VAULT_CLIENT_ID", "neoworks.vault")))
 			nodes.RegisterAuthenticated(data)
 			renewals.RegisterVerifier(data)
 			blobs.RegisterAuthenticated(data)
 			registry.RegisterAuthenticated(principals)
 			settinghandlers.NewHandler(surreal).RegisterAuthenticated(principals)
+			storagehandlers.NewHandler(surreal).RegisterAuthenticated(principals)
 			notificationhandlers.NewHandler(surreal, pushSender).RegisterAuthenticated(principals)
 		})
 	})

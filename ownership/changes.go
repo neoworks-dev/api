@@ -15,18 +15,19 @@ const (
 // After are the member's grants; Members maps every member to their grants
 // before the change.
 type GrantChange struct {
-	ActorGrants []Grant
-	Before      []Grant
-	After       []Grant
-	MemberID    string
-	Members     map[string][]Grant
+	Organization string
+	ActorGrants  []Grant
+	Before       []Grant
+	After        []Grant
+	MemberID     string
+	Members      map[string][]Grant
 }
 
 // CheckGrantChange applies the member rules: the actor needs members.manage,
 // may only add or remove grants it holds at the same or a wider reach, and the
 // organization keeps at least one member with members.manage.
 func CheckGrantChange(change GrantChange) ChangeProblem {
-	if !allValid(change.After) {
+	if !allValid(change.After) || !allowedIn(change.Organization, change.After) {
 		return ProblemInvalidGrant
 	}
 	if !Allows(change.ActorGrants, MembersManage, "") {
@@ -46,8 +47,8 @@ func CheckGrantChange(change GrantChange) ChangeProblem {
 
 // CheckGrantsToInvite applies the same reach rule to the grants an invitation
 // offers.
-func CheckGrantsToInvite(actorGrants []Grant, offered []Grant) ChangeProblem {
-	if !allValid(offered) {
+func CheckGrantsToInvite(organization string, actorGrants []Grant, offered []Grant) ChangeProblem {
+	if !allValid(offered) || !allowedIn(organization, offered) {
 		return ProblemInvalidGrant
 	}
 	if !Allows(actorGrants, MembersManage, "") {
@@ -66,6 +67,20 @@ func CheckLeave(members map[string][]Grant, memberID string) ChangeProblem {
 		return ProblemLastManager
 	}
 	return ""
+}
+
+// allowedIn reports whether the grants may be held in the organization:
+// platform.admin only exists in the Neoworks organization.
+func allowedIn(organization string, grants []Grant) bool {
+	if organization == PlatformOrganization {
+		return true
+	}
+	for _, grant := range grants {
+		if grant.Permission == PlatformAdmin {
+			return false
+		}
+	}
+	return true
 }
 
 func allValid(grants []Grant) bool {

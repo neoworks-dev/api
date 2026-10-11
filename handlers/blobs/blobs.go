@@ -11,8 +11,10 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/neoworks/auth/access"
 	"github.com/neoworks/auth/handlers/respond"
 	"github.com/neoworks/auth/middleware"
+	"github.com/neoworks/auth/ratelimit"
 	"github.com/neoworks/auth/storage/database"
 )
 
@@ -28,17 +30,28 @@ type Presigner interface {
 	PresignGet(ctx context.Context, key string, expiry time.Duration) (string, error)
 }
 
-type Handler struct {
-	store           *database.SurrealStore
-	presigner       Presigner
-	quotaBytes      int64
-	storageUsedFunc func(ctx context.Context, ownerID string) (int64, error)
+// Limiter counts a call against a rate limit; when it refuses, it has written
+// the response.
+type Limiter interface {
+	Allow(w http.ResponseWriter, r *http.Request, bucket ratelimit.Bucket) bool
 }
 
-// NewHandler serves presign requests. quotaBytes is the most stored data one
-// owner may hold; a value of zero or less disables the check.
-func NewHandler(store *database.SurrealStore, presigner Presigner, quotaBytes int64) *Handler {
-	return &Handler{store: store, presigner: presigner, quotaBytes: quotaBytes, storageUsedFunc: store.StorageUsedBytes}
+type Handler struct {
+	store     *database.SurrealStore
+	presigner Presigner
+	limiter   Limiter
+}
+
+// WithLimiter makes presigns count against the upload and download limits.
+func (h *Handler) WithLimiter(limiter Limiter) *Handler {
+	h.limiter = limiter
+	return h
+}
+
+// NewHandler serves presign requests. Uploads are refused while the owner is
+// over the store's storage quota or the app is over the cap the user set.
+func NewHandler(store *database.SurrealStore, presigner Presigner) *Handler {
+	return &Handler{store: store, presigner: presigner}
 }
 
 type presignRequest struct {
@@ -77,12 +90,25 @@ func (h *Handler) presign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	upload := request.Op == "put"
+	if !h.allowed(w, r, upload) {
+		return
+	}
 	target, err := h.store.AuthorizeBlob(r.Context(), principal, request.NodeID, request.ObjectID, upload)
 	if err != nil {
 		respond.StoreError(w, "presign", err)
 		return
 	}
-	h.respondWithURLs(w, r, target, request.Chunks, upload)
+	h.respondWithURLs(w, r, principal, target, request.Chunks, upload)
+}
+
+func (h *Handler) allowed(w http.ResponseWriter, r *http.Request, upload bool) bool {
+	if h.limiter == nil {
+		return true
+	}
+	if upload {
+		return h.limiter.Allow(w, r, ratelimit.BucketBlobUpload)
+	}
+	return h.limiter.Allow(w, r, ratelimit.BucketBlobDownload)
 }
 
 // presignForLink answers a presign request for a link's subtree: download only,
@@ -103,7 +129,7 @@ func (h *Handler) presignForLink(w http.ResponseWriter, r *http.Request) {
 		respond.StoreError(w, "presignLink", err)
 		return
 	}
-	h.respondWithURLs(w, r, target, request.Chunks, false)
+	h.respondWithURLs(w, r, access.Principal{}, target, request.Chunks, false)
 }
 
 func validateRequest(request presignRequest) string {
@@ -116,13 +142,16 @@ func validateRequest(request presignRequest) string {
 	return ""
 }
 
-func (h *Handler) respondWithURLs(w http.ResponseWriter, r *http.Request, target *database.BlobTarget, chunks []int, upload bool) {
+func (h *Handler) respondWithURLs(w http.ResponseWriter, r *http.Request, principal access.Principal, target *database.BlobTarget, chunks []int, upload bool) {
 	if err := validateChunks(chunks, target.Chunks); err != nil {
 		respond.Error(w, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
-	if upload && h.overQuota(r.Context(), w, target.OwnerID) {
-		return
+	if upload {
+		if err := h.store.CheckUploadAllowed(r.Context(), principal, target.OwnerID); err != nil {
+			respond.StoreError(w, "quota", err)
+			return
+		}
 	}
 	urls, err := h.signChunks(r.Context(), target, chunks, upload)
 	if err != nil {
@@ -144,28 +173,6 @@ func validateChunks(chunks []int, chunkCount int) error {
 		seenChunks[index] = true
 	}
 	return nil
-}
-
-// overQuota answers 403 quota_exceeded and returns true when the owner already
-// stores more than the quota allows. The node's declared size is part of the
-// usage by the time its chunks are uploaded.
-func (h *Handler) overQuota(ctx context.Context, w http.ResponseWriter, ownerID string) bool {
-	if h.quotaBytes <= 0 {
-		return false
-	}
-	used, err := h.storageUsedFunc(ctx, ownerID)
-	if err != nil {
-		respond.StoreError(w, "quota", err)
-		return true
-	}
-	if used <= h.quotaBytes {
-		return false
-	}
-	respond.JSON(w, http.StatusForbidden, map[string]any{
-		"error": "quota_exceeded", "message": "storage quota exceeded",
-		"usedBytes": used, "quotaBytes": h.quotaBytes,
-	})
-	return true
 }
 
 func (h *Handler) signChunks(ctx context.Context, target *database.BlobTarget, chunks []int, upload bool) ([]presignedURL, error) {

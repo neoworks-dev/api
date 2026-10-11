@@ -91,6 +91,17 @@ func (router *Router) Do(t *testing.T, principal access.Principal, method, path 
 	return recorder
 }
 
+// DoBytes sends a request with a raw body as principal.
+func (router *Router) DoBytes(t *testing.T, principal access.Principal, method, path string, body []byte, contentType string) *httptest.ResponseRecorder {
+	t.Helper()
+	request := httptest.NewRequest(method, path, bytes.NewReader(body))
+	request.Header.Set("Content-Type", contentType)
+	request = request.WithContext(context.WithValue(request.Context(), principalKey{}, principal))
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	return recorder
+}
+
 // DoAnonymous sends a request that carries no principal, as an unauthenticated
 // caller of a public route.
 func (router *Router) DoAnonymous(t *testing.T, method, path string) *httptest.ResponseRecorder {

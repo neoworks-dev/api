@@ -15,6 +15,8 @@ DEFINE TABLE organization SCHEMAFULL;
 DEFINE FIELD display_name ON organization TYPE string ASSERT string::len($value) > 0 AND string::len($value) <= 100;
 DEFINE FIELD created_by   ON organization TYPE option<record<user>> READONLY;
 DEFINE FIELD archived_at  ON organization TYPE option<datetime>;
+-- Set by a Neoworks administrator after review (#35, #36).
+DEFINE FIELD verified_at  ON organization TYPE option<datetime>;
 DEFINE FIELD created_at   ON organization TYPE datetime VALUE $before OR time::now() READONLY;
 
 -- ── organization_member: a user's membership and permission grants ───────────
@@ -53,7 +55,9 @@ DEFINE INDEX organization_invitation_invitee      ON organization_invitation FIE
 -- ── organization_audit: security-relevant actions, append-only ───────────────
 DEFINE TABLE organization_audit SCHEMAFULL;
 DEFINE FIELD organization ON organization_audit TYPE record<organization> READONLY;
-DEFINE FIELD actor        ON organization_audit TYPE record<user> READONLY;
+-- NONE for actions the system takes itself, such as revoking a domain that
+-- stopped verifying.
+DEFINE FIELD actor        ON organization_audit TYPE option<record<user>> READONLY;
 DEFINE FIELD action       ON organization_audit TYPE string READONLY;
 DEFINE FIELD target_kind  ON organization_audit TYPE string READONLY;
 DEFINE FIELD target_id    ON organization_audit TYPE string READONLY;

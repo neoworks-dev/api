@@ -75,16 +75,33 @@ func (h *Handler) push(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := h.store.CheckPushQuota(r.Context(), principal, validated); err != nil {
+		respond.StoreError(w, "pushQuota", err)
+		return
+	}
+	results, err := h.pushAll(r, principal, validated)
+	if err != nil {
+		respond.StoreError(w, "push", err)
+		return
+	}
+	respond.JSON(w, http.StatusOK, map[string]any{"results": results})
+}
+
+// pushAll writes the nodes in order. A write that hits a storage limit stops the
+// batch with the error describing the limit.
+func (h *Handler) pushAll(r *http.Request, principal access.Principal, validated []*database.ValidatedNode) ([]database.PushOutcome, error) {
 	results := make([]database.PushOutcome, 0, len(validated))
 	for _, node := range validated {
 		outcome, err := h.store.PushNode(r.Context(), principal, node)
 		if err != nil {
-			respond.StoreError(w, "push", err)
-			return
+			return nil, err
+		}
+		if overQuota := database.QuotaFromOutcome(outcome); overQuota != nil {
+			return nil, overQuota
 		}
 		results = append(results, *outcome)
 	}
-	respond.JSON(w, http.StatusOK, map[string]any{"results": results})
+	return results, nil
 }
 
 func validateBatch(w http.ResponseWriter, nodes []database.Node, principal access.Principal) ([]*database.ValidatedNode, bool) {

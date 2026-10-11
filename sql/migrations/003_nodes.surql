@@ -51,6 +51,12 @@ DEFINE FIELD blob_json      ON node TYPE option<string>;
 -- node's object are refused, so presigned URLs can never reach a foreign object.
 DEFINE FIELD blob_size      ON node TYPE int DEFAULT 0;
 DEFINE FIELD blob_objects   ON node TYPE array<string> DEFAULT [];
+-- Storage accounting (#33). `stored_bytes` is what the node counts against its
+-- owner's quota: the length of `content` plus `blob_size`, and 0 once deleted.
+-- `client_id` is the OAuth client of the token that wrote the node last, the app
+-- its bytes are attributed to.
+DEFINE FIELD stored_bytes   ON node TYPE int DEFAULT 0;
+DEFINE FIELD client_id      ON node TYPE option<string>;
 DEFINE FIELD deleted        ON node TYPE bool DEFAULT false;
 DEFINE FIELD deleted_at     ON node TYPE option<datetime>;
 DEFINE FIELD base_seq       ON node TYPE int;
@@ -68,6 +74,7 @@ DEFINE FIELD updated_at     ON node TYPE datetime VALUE time::now();
 
 DEFINE INDEX idx_node_seq        ON node FIELDS seq UNIQUE;
 DEFINE INDEX idx_node_owner      ON node FIELDS owner_id;
+DEFINE INDEX idx_node_client     ON node FIELDS client_id;
 DEFINE INDEX idx_node_parent     ON node FIELDS parent_id;
 DEFINE INDEX idx_node_ancestors  ON node FIELDS ancestors;
 DEFINE INDEX idx_node_deleted_at ON node FIELDS deleted_at;

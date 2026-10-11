@@ -42,6 +42,20 @@ func MissingPermission(w http.ResponseWriter, permission ownership.Permission) {
 	})
 }
 
+// QuotaExceeded writes the 403 for a write that would take the account, or one
+// app inside it, over its storage limit.
+func QuotaExceeded(w http.ResponseWriter, exceeded *database.QuotaError) {
+	code := "quota_exceeded"
+	message := "the storage quota of the account is used up"
+	if exceeded.AppCap {
+		code = "app_cap_exceeded"
+		message = "this app reached the storage cap set for it"
+	}
+	JSON(w, http.StatusForbidden, map[string]any{
+		"error": code, "message": message, "usedBytes": exceeded.UsedBytes, "quotaBytes": exceeded.LimitBytes,
+	})
+}
+
 // Decode reads a JSON request body of at most maxBytes into target and reports
 // whether the handler should continue.
 func Decode(w http.ResponseWriter, r *http.Request, target any, maxBytes int64) bool {
@@ -60,7 +74,10 @@ func StoreError(w http.ResponseWriter, operation string, err error) {
 	var headMoved *database.LogHeadMovedError
 	var incompatible *database.IncompatibleSchemaError
 	var missing *database.MissingPermissionError
+	var overQuota *database.QuotaError
 	switch {
+	case errors.As(err, &overQuota):
+		QuotaExceeded(w, overQuota)
 	case errors.As(err, &missing):
 		MissingPermission(w, missing.Permission)
 	case errors.Is(err, database.ErrArchived):

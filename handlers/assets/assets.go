@@ -15,7 +15,6 @@ import (
 	"io"
 	"mime"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -55,16 +54,12 @@ type Handler struct {
 }
 
 func NewHandler(surreal *database.SurrealStore, redis *cache.RedisStore, objects *objectstore.Store, auth *middleware.ClientAuth) *Handler {
-	publicURL := os.Getenv("ASSETS_PUBLIC_URL")
-	if publicURL == "" {
-		publicURL = config.ServiceURL("assets")
-	}
 	return &Handler{
 		surreal:   surreal,
 		redis:     redis,
 		objects:   objects,
 		auth:      auth,
-		publicURL: strings.TrimRight(publicURL, "/"),
+		publicURL: config.AssetsURL(),
 	}
 }
 

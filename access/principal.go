@@ -38,7 +38,9 @@ func IsValidCollection(collection string) bool {
 type Principal struct {
 	UserID    string
 	InstallID string
-	Scopes    []string
+	// ClientID is the OAuth client the token was issued to.
+	ClientID string
+	Scopes   []string
 }
 
 func (principal Principal) IsInstall() bool {

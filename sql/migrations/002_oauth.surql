@@ -22,11 +22,33 @@ DEFINE FIELD homepage          ON client TYPE string DEFAULT '';
 DEFINE FIELD scope_reasons     ON client TYPE array<object> DEFAULT [];
 DEFINE FIELD scope_reasons[*].scope  ON client TYPE string;
 DEFINE FIELD scope_reasons[*].reason ON client TYPE string;
+-- Domain verification (#36), maintained by the API from the owner's verified
+-- domains, the redirect URIs and the homepage; the consent screen reads it.
+DEFINE FIELD verified          ON client TYPE bool DEFAULT false;
+-- App review (#35). `reviewed_scopes` is the scope set the reviewer approved:
+-- changing the requested scopes of an approved app sends it back to review.
+DEFINE FIELD review_status     ON client TYPE string DEFAULT 'none'
+    ASSERT $value IN ['none', 'pending', 'approved', 'rejected', 'suspended'];
+DEFINE FIELD review_reason     ON client TYPE option<string>;
+DEFINE FIELD review_updated_at ON client TYPE option<datetime>;
+DEFINE FIELD privacy_policy_url ON client TYPE option<string>;
+DEFINE FIELD support_contact   ON client TYPE option<string>;
+DEFINE FIELD reviewed_scopes   ON client TYPE option<array<string>>;
+-- Logo (#37): a public asset, its content hashes for the lookalike check, and
+-- whether it is held back until the app is approved.
+DEFINE FIELD logo              ON client TYPE option<record<asset>>;
+DEFINE FIELD logo_sha256       ON client TYPE option<string>;
+DEFINE FIELD logo_ahash        ON client TYPE option<string>;
+DEFINE FIELD logo_held         ON client TYPE bool DEFAULT false;
+-- Rate limit multiplier an operator set for this client (#34); NONE derives it
+-- from the client's verification and review.
+DEFINE FIELD rate_limit_multiplier ON client TYPE option<float>;
 DEFINE FIELD created_at        ON client TYPE datetime DEFAULT time::now() READONLY;
 DEFINE FIELD updated_at        ON client TYPE datetime VALUE time::now();
 
 DEFINE INDEX client_id    ON client FIELDS id UNIQUE;
 DEFINE INDEX client_owner ON client FIELDS owner;
+DEFINE INDEX client_review ON client FIELDS review_status;
 
 -- ── grant: a user's standing authorization of a client for a set of scopes ───
 DEFINE TABLE grant SCHEMAFULL;
@@ -34,6 +56,9 @@ DEFINE FIELD user       ON grant TYPE record<user>;
 DEFINE FIELD client     ON grant TYPE record<client>;
 DEFINE FIELD scopes     ON grant TYPE array<string>;
 DEFINE FIELD enabled    ON grant TYPE bool DEFAULT true;
+-- Optional limit the user sets on the bytes the client may store in their
+-- account (#33); NONE means only the account quota applies.
+DEFINE FIELD storage_cap_bytes ON grant TYPE option<int>;
 DEFINE FIELD created_at ON grant TYPE datetime DEFAULT time::now() READONLY;
 DEFINE FIELD updated_at ON grant TYPE datetime DEFAULT time::now();
 

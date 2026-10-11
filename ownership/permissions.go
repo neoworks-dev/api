@@ -18,7 +18,16 @@ const (
 	AppsDelete         Permission = "apps.delete"
 	AppsReview         Permission = "apps.review"
 	UsageView          Permission = "usage.view"
+
+	// PlatformAdmin lets a member of the seeded neoworks organization review
+	// apps, verify organizations and tune client limits for the whole platform.
+	// It can be granted in that organization only and is not part of AllGrants.
+	PlatformAdmin Permission = "platform.admin"
 )
+
+// PlatformOrganization is the handle of the seeded Neoworks organization, whose
+// members with PlatformAdmin administer the platform.
+const PlatformOrganization = "neoworks"
 
 // organizationOnly permissions cannot be limited to one app.
 var organizationOnly = map[Permission]bool{
@@ -28,6 +37,7 @@ var organizationOnly = map[Permission]bool{
 	AppsCreate:         true,
 	SchemasPublish:     true,
 	AuditView:          true,
+	PlatformAdmin:      true,
 }
 
 var perApp = map[Permission]bool{

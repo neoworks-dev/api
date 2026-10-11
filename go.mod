@@ -13,7 +13,11 @@ require (
 	golang.org/x/crypto v0.51.0
 )
 
-require github.com/kr/text v0.2.0 // indirect
+require (
+	github.com/alicebob/miniredis/v2 v2.39.0 // indirect
+	github.com/kr/text v0.2.0 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
+)
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

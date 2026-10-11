@@ -25,8 +25,14 @@ type fixture struct {
 }
 
 func newFixture(t *testing.T) *fixture {
+	return newFixtureWith(t, func(*apps.Handler) {})
+}
+
+// newFixtureWith lets the test configure the handler before its routes mount.
+func newFixtureWith(t *testing.T, configure func(*apps.Handler)) *fixture {
 	store := dbtest.New(t)
 	handler := apps.NewHandler(store)
+	configure(handler)
 	router := handlertest.NewAuthenticated(func(router chi.Router) { handler.RegisterAuthenticated(router) })
 	return &fixture{t: t, store: store, router: router}
 }
@@ -441,3 +447,5 @@ func TestSeedClientsBelongToNeoworksAndTheSampleHasNoOwner(t *testing.T) {
 	f.expect(staff, "GET", "/api/v1/apps/example-songs", nil, http.StatusNotFound, "not_found")
 	f.expect(staff, "GET", "/api/v1/apps/neoworks-calendar", nil, http.StatusOK, "")
 }
+
+var zeroTime time.Time

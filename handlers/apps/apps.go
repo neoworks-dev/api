@@ -11,20 +11,46 @@ import (
 	"slices"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/neoworks/auth/config"
+	"github.com/neoworks/auth/domainproof"
 	"github.com/neoworks/auth/handlers/respond"
 	"github.com/neoworks/auth/middleware"
 	"github.com/neoworks/auth/ownership"
+	"github.com/neoworks/auth/ratelimit"
 	"github.com/neoworks/auth/storage/database"
 )
 
 const maxRequestBody = 32 << 10
 
 type Handler struct {
-	store *database.SurrealStore
+	store    *database.SurrealStore
+	verifier *domainproof.Verifier
+	logos    LogoStorage
+	usage    ratelimit.UsageRecorder
 }
 
+// NewHandler serves the routes; domains are proven over the network until
+// WithDomainProver says otherwise.
 func NewHandler(store *database.SurrealStore) *Handler {
-	return &Handler{store: store}
+	return &Handler{store: store, verifier: domainproof.NewVerifier(store, domainproof.NewNetworkProver())}
+}
+
+// WithDomainProver sets how domain proofs are looked up.
+func (h *Handler) WithDomainProver(prover domainproof.Prover) *Handler {
+	h.verifier = domainproof.NewVerifier(h.store, prover)
+	return h
+}
+
+// WithLogoStorage sets where logos are stored.
+func (h *Handler) WithLogoStorage(logos LogoStorage) *Handler {
+	h.logos = logos
+	return h
+}
+
+// WithUsage sets the source of the request counts the usage route reports.
+func (h *Handler) WithUsage(usage ratelimit.UsageRecorder) *Handler {
+	h.usage = usage
+	return h
 }
 
 // RegisterAuthenticated mounts the routes. The router must admit only account
@@ -37,11 +63,20 @@ func (h *Handler) RegisterAuthenticated(router chi.Router) {
 	router.Patch("/api/v1/apps/{clientId}", h.update)
 	router.Post("/api/v1/apps/{clientId}/secret", h.rotateSecret)
 	router.Delete("/api/v1/apps/{clientId}", h.delete)
+	router.Post("/api/v1/apps/{clientId}/review", h.submitReview)
+	router.Put("/api/v1/apps/{clientId}/logo", h.putLogo)
+	router.Delete("/api/v1/apps/{clientId}/logo", h.deleteLogo)
+	router.Get("/api/v1/apps/{clientId}/usage", h.getUsage)
+	router.Get("/api/v1/owners/{handle}/domains", h.listDomains)
+	router.Post("/api/v1/owners/{handle}/domains", h.addDomain)
+	router.Post("/api/v1/owners/{handle}/domains/{domain}/verify", h.verifyDomain)
+	router.Delete("/api/v1/owners/{handle}/domains/{domain}", h.removeDomain)
 }
 
-// appView is an app with what the caller may do with it.
+// appView is an app with what the caller may do with it and where its logo is.
 type appView struct {
 	database.App
+	LogoURL       *string                `json:"logoUrl"`
 	MyPermissions []ownership.Permission `json:"myPermissions"`
 }
 
@@ -52,13 +87,22 @@ func viewOf(app *database.App, grants []ownership.Grant) appView {
 			permissions = append(permissions, permission)
 		}
 	}
-	return appView{App: *app, MyPermissions: permissions}
+	return appView{App: *app, LogoURL: logoURL(app), MyPermissions: permissions}
+}
+
+func logoURL(app *database.App) *string {
+	if app.LogoAssetID == nil {
+		return nil
+	}
+	url := config.AssetURL(*app.LogoAssetID)
+	return &url
 }
 
 // acting is a request acting for one owner, and for one app when app is set.
 type acting struct {
 	userID string
 	handle string
+	owner  database.Owner
 	grants []ownership.Grant
 	app    *database.App
 }
@@ -82,7 +126,12 @@ func (h *Handler) ownerOf(w http.ResponseWriter, r *http.Request) (*acting, bool
 		respond.StoreError(w, "grantsFor", err)
 		return nil, false
 	}
-	return &acting{userID: userID, handle: handle, grants: grants}, true
+	owner, err := h.store.GetOwner(r.Context(), handle)
+	if err != nil {
+		respond.StoreError(w, "getOwner", err)
+		return nil, false
+	}
+	return &acting{userID: userID, handle: handle, owner: *owner, grants: grants}, true
 }
 
 // appOf resolves the app in the path, its owner and the caller's grants for it.
@@ -102,7 +151,7 @@ func (h *Handler) appOf(w http.ResponseWriter, r *http.Request) (*acting, bool) 
 		respond.StoreError(w, "grantsFor", err)
 		return nil, false
 	}
-	return &acting{userID: userID, handle: app.Owner.Handle, grants: grants, app: app}, true
+	return &acting{userID: userID, handle: app.Owner.Handle, owner: app.Owner, grants: grants, app: app}, true
 }
 
 // appID is the app the permission is checked for; empty for the owner as a whole.
@@ -302,6 +351,12 @@ func (h *Handler) auditChanges(r *http.Request, a *acting, updated *database.App
 		h.auditApp(r, a, updated, database.AuditAppScopesChanged,
 			map[string]any{"before": database.ScopeNames(a.app.Scopes), "after": database.ScopeNames(updated.Scopes)})
 	}
+	if a.app.Review.Status == database.ReviewStatusApproved && updated.Review.Status == database.ReviewStatusPending {
+		h.auditApp(r, a, updated, database.AuditAppReviewReset, map[string]any{"reason": "the requested scopes changed"})
+	}
+	if a.app.Verified != updated.Verified {
+		h.auditApp(r, a, updated, database.AuditAppVerifiedChanged, map[string]any{"verified": updated.Verified})
+	}
 }
 
 func (h *Handler) rotateSecret(w http.ResponseWriter, r *http.Request) {
@@ -335,22 +390,26 @@ func (h *Handler) delete(w http.ResponseWriter, r *http.Request) {
 		respond.StoreError(w, "deleteApp", err)
 		return
 	}
+	h.discardLogoAsset(r.Context(), a.app.LogoAssetID)
 	h.auditApp(r, a, a.app, database.AuditAppDeleted, nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// auditApp records an action in the organization's audit log; people have none.
-// A failure is logged, since the action already happened.
+// auditApp records an action on an app in the organization's audit log.
 func (h *Handler) auditApp(r *http.Request, a *acting, app *database.App, action string, details map[string]any) {
-	if app.Owner.Kind != database.OwnerKindOrganization {
+	h.audit(r, a, action, database.AuditTarget{Kind: "app", ID: app.ID, Label: app.Name}, details)
+}
+
+// audit records an action in the organization's audit log; people have none.
+// A failure is logged, since the action already happened.
+func (h *Handler) audit(r *http.Request, a *acting, action string, target database.AuditTarget, details map[string]any) {
+	if a.owner.Kind != database.OwnerKindOrganization {
 		return
 	}
 	err := h.store.RecordAudit(r.Context(), database.AuditInput{
-		Organization: a.handle, ActorID: a.userID, Action: action,
-		Target:  database.AuditTarget{Kind: "app", ID: app.ID, Label: app.Name},
-		Details: details,
+		Organization: a.handle, ActorID: a.userID, Action: action, Target: target, Details: details,
 	})
 	if err != nil {
-		slog.Error("record app audit", "organization", a.handle, "action", action, "error", err)
+		slog.Error("record audit", "organization", a.handle, "action", action, "error", err)
 	}
 }

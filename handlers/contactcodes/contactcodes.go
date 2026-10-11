@@ -4,15 +4,13 @@ package contactcodes
 
 import (
 	"errors"
-	"math"
 	"net"
 	"net/http"
-	"strconv"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/neoworks/auth/handlers/respond"
 	"github.com/neoworks/auth/middleware"
+	"github.com/neoworks/auth/ratelimit"
 	"github.com/neoworks/auth/storage/database"
 	"github.com/neoworks/auth/utils"
 )
@@ -24,19 +22,20 @@ const (
 )
 
 type Handler struct {
-	store            *database.SurrealStore
-	userLookups      *windowCounter
-	addressLookups   *windowCounter
-	userFailedLookup *windowCounter
+	store   *database.SurrealStore
+	limiter lookupLimiter
 }
 
+// NewHandler serves the contact code routes. Lookups are limited in the memory
+// of this process until WithCounter shares the counters.
 func NewHandler(store *database.SurrealStore) *Handler {
-	return &Handler{
-		store:            store,
-		userLookups:      newWindowCounter(time.Minute, lookupsPerUserPerMinute),
-		addressLookups:   newWindowCounter(time.Minute, lookupsPerAddressPerMinute),
-		userFailedLookup: newWindowCounter(10*time.Minute, failedLookupsPerTenMinutes),
-	}
+	return &Handler{store: store, limiter: lookupLimiter{counter: ratelimit.NewMemoryCounter()}}
+}
+
+// WithCounter counts lookups in a counter shared by every instance of the api.
+func (h *Handler) WithCounter(counter ratelimit.Counter) *Handler {
+	h.limiter = lookupLimiter{counter: counter}
+	return h
 }
 
 // RegisterAuthenticated mounts the code endpoints behind JWT and principal
@@ -70,47 +69,26 @@ func (h *Handler) regenerateCode(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) resolveCode(w http.ResponseWriter, r *http.Request) {
 	principal, _ := middleware.PrincipalFromContext(r.Context())
-	address := remoteHost(r)
-	if h.rateLimited(w, principal.UserID, address) {
+	if wait := h.limiter.wait(r.Context(), principal.UserID, remoteHost(r)); wait > 0 {
+		writeLimited(w, wait)
 		return
 	}
-	h.userLookups.record(principal.UserID)
-	h.addressLookups.record(address)
 
 	code, valid := utils.NormalizeContactCode(chi.URLParam(r, "code"))
 	if !valid {
-		h.userFailedLookup.record(principal.UserID)
+		h.limiter.recordFailure(r.Context(), principal.UserID)
 		respond.Error(w, http.StatusBadRequest, "invalid_code", "that is not a contact code")
 		return
 	}
 	identity, err := h.store.ResolveContactCode(r.Context(), code)
 	if errors.Is(err, database.ErrNotFound) {
-		h.userFailedLookup.record(principal.UserID)
+		h.limiter.recordFailure(r.Context(), principal.UserID)
 	}
 	if err != nil {
 		respond.StoreError(w, "resolveContactCode", err)
 		return
 	}
 	respond.JSON(w, http.StatusOK, identity)
-}
-
-func (h *Handler) rateLimited(w http.ResponseWriter, userID string, address string) bool {
-	wait := h.userLookups.retryAfter(userID)
-	wait = maxDuration(wait, h.addressLookups.retryAfter(address))
-	wait = maxDuration(wait, h.userFailedLookup.retryAfter(userID))
-	if wait <= 0 {
-		return false
-	}
-	w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(wait.Seconds()))))
-	respond.Error(w, http.StatusTooManyRequests, "rate_limited", "too many contact code lookups; try again later")
-	return true
-}
-
-func maxDuration(first time.Duration, second time.Duration) time.Duration {
-	if first > second {
-		return first
-	}
-	return second
 }
 
 func remoteHost(r *http.Request) string {
