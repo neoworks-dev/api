@@ -56,20 +56,20 @@ func requireAllBound(t *testing.T, name, statement string, bound map[string]any,
 }
 
 func TestPushStatementBindsEveryParameter(t *testing.T) {
-	owner := access.Principal{UserID: uuid.NewString(), Scopes: []string{"@neoworks/files:write"}}
+	owner := access.Principal{UserID: uuid.NewString(), Scopes: []string{"@neoworks/photos:write"}}
 	parent := uuid.NewString()
 	wrapped, cert := "wrapped", uuid.NewString()
 	target, role := uuid.NewString(), "read"
 	blobJSON := `{"objectId":"` + uuid.NewString() + `","chunks":1,"size":1}`
 	variants := map[string]Node{
-		"root": {ID: uuid.NewString(), OwnerID: owner.UserID, Collection: "@neoworks/files", Kind: KindRoot, Epoch: 1,
+		"root": {ID: uuid.NewString(), OwnerID: owner.UserID, Collection: "@neoworks/photos", Kind: KindRoot, Epoch: 1,
 			AuthorType: "user", AuthorID: owner.UserID, Signature: "s"},
-		"item with blob and cert": {ID: uuid.NewString(), ParentID: &parent, OwnerID: owner.UserID, Collection: "@neoworks/files",
+		"item with blob and cert": {ID: uuid.NewString(), ParentID: &parent, OwnerID: owner.UserID, Collection: "@neoworks/photos",
 			Kind: KindItem, Epoch: 1, WrappedKey: &wrapped, CertID: &cert, Blob: []byte(blobJSON),
 			AuthorType: "user", AuthorID: owner.UserID, Signature: "s"},
-		"plain item": {ID: uuid.NewString(), ParentID: &parent, OwnerID: owner.UserID, Collection: "@neoworks/files",
+		"plain item": {ID: uuid.NewString(), ParentID: &parent, OwnerID: owner.UserID, Collection: "@neoworks/photos",
 			Kind: KindItem, Epoch: 1, WrappedKey: &wrapped, AuthorType: "user", AuthorID: owner.UserID, Signature: "s"},
-		"shortcut": {ID: uuid.NewString(), ParentID: &parent, OwnerID: owner.UserID, Collection: "@neoworks/files",
+		"shortcut": {ID: uuid.NewString(), ParentID: &parent, OwnerID: owner.UserID, Collection: "@neoworks/photos",
 			Kind: KindItem, Epoch: 1, WrappedKey: &wrapped, TargetID: &target, TargetRole: &role,
 			AuthorType: "user", AuthorID: owner.UserID, Signature: "s"},
 	}

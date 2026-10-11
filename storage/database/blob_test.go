@@ -11,8 +11,8 @@ import (
 func TestStorageUsageCountsLiveBlobsOnly(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
-	root := f.createRoot(owner, "@neoworks/files")
-	file := newNode(owner, owner.UserID, "@neoworks/files", database.KindItem, &root.ID)
+	root := f.createRoot(owner, "@neoworks/photos")
+	file := newNode(owner, owner.UserID, "@neoworks/photos", database.KindItem, &root.ID)
 	file.Blob = []byte(`{"objectId":"` + uuid.NewString() + `","chunks":1,"size":70}`)
 	seq := f.pushOK(owner, file)
 

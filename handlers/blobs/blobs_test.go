@@ -44,7 +44,7 @@ func newFixture(t *testing.T, quotaBytes int64) *fixture {
 		handler.RegisterAuthenticated(router)
 		handler.RegisterPublic(router)
 	})
-	account := dbtest.CreateAccount(t, store, "@neoworks/files:read", "@neoworks/files:write")
+	account := dbtest.CreateAccount(t, store, "@neoworks/photos:read", "@neoworks/photos:write")
 	fx := &fixture{t: t, router: router, store: store, account: account, owner: account.Principal, object: uuid.NewString()}
 	fx.nodeID = fx.storeFile(fx.owner, fx.object)
 	return fx
@@ -52,7 +52,7 @@ func newFixture(t *testing.T, quotaBytes int64) *fixture {
 
 func (fx *fixture) storeFile(owner access.Principal, objectID string) string {
 	root := database.Node{
-		ID: uuid.NewString(), OwnerID: owner.UserID, Collection: "@neoworks/files", Kind: database.KindRoot, Epoch: 1,
+		ID: uuid.NewString(), OwnerID: owner.UserID, Collection: "@neoworks/photos", Kind: database.KindRoot, Epoch: 1,
 		AuthorType: "user", AuthorID: owner.UserID, Signature: "sig",
 	}
 	fx.push(owner, root)
@@ -147,7 +147,7 @@ func TestPresignValidatesChunksAndObject(t *testing.T) {
 
 func TestPresignChecksNodeAccessAndScope(t *testing.T) {
 	fx := newFixture(t, 1000)
-	strangerAccount := dbtest.CreateAccount(t, fx.store, "@neoworks/files:read", "@neoworks/files:write")
+	strangerAccount := dbtest.CreateAccount(t, fx.store, "@neoworks/photos:read", "@neoworks/photos:write")
 	stranger := strangerAccount.Principal
 	if code, _ := fx.presign(stranger, "get", 0); code != http.StatusNotFound {
 		t.Fatalf("stranger get: got %d want 404", code)
@@ -165,13 +165,13 @@ func TestPresignChecksNodeAccessAndScope(t *testing.T) {
 		t.Fatalf("reader put: got %d want 403", code)
 	}
 
-	readScoped := access.Principal{UserID: fx.owner.UserID, Scopes: []string{"@neoworks/files:read"}}
+	readScoped := access.Principal{UserID: fx.owner.UserID, Scopes: []string{"@neoworks/photos:read"}}
 	if code, _ := fx.presign(readScoped, "put", 0); code != http.StatusForbidden {
 		t.Fatalf("read-scoped owner put: got %d want 403", code)
 	}
-	wrongCollection := access.Principal{UserID: fx.owner.UserID, Scopes: []string{"@neoworks/photos:write"}}
+	wrongCollection := access.Principal{UserID: fx.owner.UserID, Scopes: []string{"@neoworks/calendar:write"}}
 	if code, _ := fx.presign(wrongCollection, "get", 0); code != http.StatusNotFound {
-		t.Fatalf("photos-scoped get of a file: got %d want 404", code)
+		t.Fatalf("calendar-scoped get of a file: got %d want 404", code)
 	}
 }
 

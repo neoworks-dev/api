@@ -103,9 +103,9 @@ func TestValidateNodeInputRejectsMalformedNodes(t *testing.T) {
 }
 
 func TestValidateNodeInputAcceptsBlobAndKeepsItCompact(t *testing.T) {
-	owner := userPrincipal(uuid.NewString(), "@neoworks/files:write")
+	owner := userPrincipal(uuid.NewString(), "@neoworks/photos:write")
 	node := validItem(owner)
-	node.Collection = "@neoworks/files"
+	node.Collection = "@neoworks/photos"
 	objectID, variantID := uuid.NewString(), uuid.NewString()
 	node.Blob = []byte(`{ "objectId": "` + objectID + `", "chunks": 2, "size": 100,
 		"variants": [{"name": "thumb", "objectId": "` + variantID + `", "chunks": 1, "size": 10}] }`)

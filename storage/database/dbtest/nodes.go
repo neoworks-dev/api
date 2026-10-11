@@ -11,7 +11,7 @@ import (
 // NodeCollections are the collections whose node schemas every test database
 // publishes, so tests can create roots in them.
 var NodeCollections = []string{
-	"@neoworks/calendar", "@neoworks/contacts", "@neoworks/photos", "@neoworks/files", "@neoworks/google",
+	"@neoworks/calendar", "@neoworks/contacts", "@neoworks/photos", "@neoworks/google",
 }
 
 // Content frames ciphertext as the default facet (tag 1) of a node's content,

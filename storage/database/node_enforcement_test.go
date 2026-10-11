@@ -189,9 +189,9 @@ func TestTombstonePurgeRaisesHorizonAnd410(t *testing.T) {
 func TestPurgeReportsOnlyUnreferencedObjects(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
-	root := f.createRoot(owner, "@neoworks/files")
+	root := f.createRoot(owner, "@neoworks/photos")
 	objectID := uuid.NewString()
-	file := newNode(owner, owner.UserID, "@neoworks/files", database.KindItem, &root.ID)
+	file := newNode(owner, owner.UserID, "@neoworks/photos", database.KindItem, &root.ID)
 	file.Blob = []byte(`{"objectId":"` + objectID + `","chunks":1,"size":50}`)
 	seq := f.pushOK(owner, file)
 	file.BaseSeq = seq
@@ -312,16 +312,16 @@ func TestABlobObjectBelongsToOneOwner(t *testing.T) {
 	f := newFixture(t)
 	owner := f.createUser()
 	other := f.createUser()
-	ownerRoot := f.createRoot(owner, "@neoworks/files")
-	otherRoot := f.createRoot(other, "@neoworks/files")
+	ownerRoot := f.createRoot(owner, "@neoworks/photos")
+	otherRoot := f.createRoot(other, "@neoworks/photos")
 	objectID := uuid.NewString()
 	blob := []byte(`{"objectId":"` + objectID + `","chunks":1,"size":10}`)
 
-	mine := newNode(owner, owner.UserID, "@neoworks/files", database.KindItem, &ownerRoot.ID)
+	mine := newNode(owner, owner.UserID, "@neoworks/photos", database.KindItem, &ownerRoot.ID)
 	mine.Blob = blob
 	seq := f.pushOK(owner, mine)
 
-	stolen := newNode(other, other.UserID, "@neoworks/files", database.KindItem, &otherRoot.ID)
+	stolen := newNode(other, other.UserID, "@neoworks/photos", database.KindItem, &otherRoot.ID)
 	stolen.Blob = blob
 	if outcome := f.push(other, stolen); outcome.Status != database.StatusForbidden {
 		t.Fatalf("claiming another node's object: got %s want forbidden", outcome.Status)
